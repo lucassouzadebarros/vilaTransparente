@@ -8,9 +8,9 @@ services:
     healthCheckPath: /api/residents/registration-houses
     envVars:
       - key: PORT
-        value: 8080
+        value: "8080"
       - key: PORTAL_SEED_ENABLED
-        value: true
+        value: "true"
       - key: PORTAL_ADMIN_EMAIL
         value: admin@vila.com
       - key: PORTAL_ADMIN_PASSWORD
@@ -18,7 +18,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRATION_MINUTES
-        value: 480
+        value: "480"
       - key: ASAAS_BASE_URL
         value: https://api-sandbox.asaas.com/v3
       - key: ASAAS_API_KEY
@@ -48,7 +48,7 @@ services:
         value: https://portal-vila-api.onrender.com/api
     routes:
       - type: rewrite
-        source: /*
+        source: "/*"
         destination: /index.html
 
 databases:
