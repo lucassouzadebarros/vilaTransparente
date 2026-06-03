@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:portalvila;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password:
+  flyway:
+    enabled: false
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+portal:
+  seed:
+    enabled: false
+  asaas:
+    api-key:
+    webhook-token: test-webhook-token

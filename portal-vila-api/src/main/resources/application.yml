@@ -1,0 +1,36 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: portal-vila-api
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/portal_vila}
+    username: ${DATABASE_USERNAME:portal_vila}
+    password: ${DATABASE_PASSWORD:portal_vila}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+
+portal:
+  seed:
+    enabled: ${PORTAL_SEED_ENABLED:true}
+  admin:
+    email: ${PORTAL_ADMIN_EMAIL:admin@vila.com}
+    password: ${PORTAL_ADMIN_PASSWORD:123456}
+  jwt:
+    secret: ${JWT_SECRET:portal-vila-dev-secret-with-32-chars-minimum}
+    expiration-minutes: ${JWT_EXPIRATION_MINUTES:480}
+  asaas:
+    base-url: ${ASAAS_BASE_URL:https://api-sandbox.asaas.com/v3}
+    api-key: ${ASAAS_API_KEY:}
+    webhook-token: ${ASAAS_WEBHOOK_TOKEN:dev-webhook-token}
+    user-agent: ${ASAAS_USER_AGENT:Portal da Vila}
+  uploads:
+    dir: ${PORTAL_UPLOAD_DIR:uploads/documents}

@@ -1,0 +1,224 @@
+import { useEffect, useState } from 'react';
+import { Alert } from 'react-native';
+import { Edit3, Plus, RefreshCw, Save, X } from 'lucide-react-native';
+import { Badge, Button, Card, Field, Label, Row, Screen, Stack, Value } from '../components/ui';
+import { api, apiErrorMessage } from '../services/api';
+import { Resident } from '../types';
+
+export function ResidentsScreen() {
+  const [items, setItems] = useState<Resident[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [draft, setDraft] = useState<Resident | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [syncingId, setSyncingId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ residentId: number; text: string; type: 'success' | 'error' } | null>(null);
+
+  async function load() {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      setItems(await api.residents());
+    } catch (error) {
+      setLoadError(apiErrorMessage(error, 'Nao consegui carregar os moradores.'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function startEdit(item: Resident) {
+    setCreating(false);
+    setEditingId(item.id ?? null);
+    setDraft({ ...item, documentNumber: '' });
+    setMessage(null);
+  }
+
+  function startCreate() {
+    const usedHouses = new Set(items.map((item) => item.houseId));
+    const nextHouse = Array.from({ length: 10 }, (_, index) => index + 1).find((house) => !usedHouses.has(house)) ?? 0;
+    setCreating(true);
+    setEditingId(null);
+    setDraft({ houseId: nextHouse, name: '', email: '', phone: '', documentNumber: '', status: 'ACTIVE' });
+    setMessage(null);
+  }
+
+  function changeDraft(field: keyof Resident, value: string | number) {
+    setDraft((current) => current ? { ...current, [field]: value } : current);
+  }
+
+  async function save() {
+    if (!draft?.id) {
+      if (!draft || !draft.houseId || !draft.name.trim() || !draft.email.trim()) {
+        setMessage({ residentId: 0, type: 'error', text: 'Informe casa, nome e email para cadastrar o morador.' });
+        return;
+      }
+      if (items.some((item) => item.houseId === draft.houseId)) {
+        setMessage({ residentId: 0, type: 'error', text: `Casa ${String(draft.houseId).padStart(2, '0')} ja possui morador cadastrado.` });
+        return;
+      }
+    }
+    const documentDigits = (draft.documentNumber ?? '').replace(/\D/g, '');
+    if (documentDigits && documentDigits.length !== 11 && documentDigits.length !== 14) {
+      setMessage({ residentId: draft.id ?? 0, type: 'error', text: 'Informe um CPF com 11 digitos ou CNPJ com 14 digitos.' });
+      return;
+    }
+    if (!draft.id && !documentDigits) {
+      setMessage({ residentId: 0, type: 'error', text: 'Informe CPF/CNPJ completo para criar o cliente no Asaas.' });
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = { ...draft, documentNumber: documentDigits };
+      const saved = draft.id
+        ? await api.updateResident(draft.id, payload)
+        : await api.createResident(payload);
+      setItems((current) => {
+        const next = draft.id ? current.map((item) => item.id === saved.id ? saved : item) : [...current, saved];
+        return next.sort((a, b) => a.houseId - b.houseId);
+      });
+      setCreating(false);
+      setEditingId(null);
+      setDraft(null);
+      setMessage({ residentId: saved.id ?? draft.id ?? 0, type: 'success', text: 'Dados salvos e cliente sincronizado no Asaas Sandbox.' });
+      Alert.alert('Moradores', 'Dados salvos e cliente sincronizado no Asaas Sandbox.');
+    } catch (error) {
+      const text = apiErrorMessage(error, 'Nao consegui salvar o morador.');
+      setMessage({ residentId: draft.id ?? 0, type: 'error', text });
+      Alert.alert('Moradores', text);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function syncAsaas(item: Resident) {
+    if (!item.id) {
+      return;
+    }
+    setSyncingId(item.id);
+    setMessage(null);
+    try {
+      const saved = await api.syncResidentAsaas(item.id);
+      setItems((current) => current.map((resident) => resident.id === saved.id ? saved : resident));
+      setMessage({ residentId: saved.id ?? item.id, type: 'success', text: 'Cliente sincronizado no Asaas Sandbox.' });
+      Alert.alert('Asaas', 'Cliente sincronizado no Asaas Sandbox.');
+    } catch (error) {
+      const text = apiErrorMessage(error, 'Nao consegui sincronizar com o Asaas.');
+      setMessage({ residentId: item.id, type: 'error', text });
+      Alert.alert('Asaas', text);
+    } finally {
+      setSyncingId(null);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  return (
+    <Screen title="Moradores" subtitle="10 casas da vila" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
+      <Button title="Novo morador" icon={Plus} onPress={startCreate} />
+      {creating && draft ? (
+        <Card>
+          <Value>Cadastrar morador</Value>
+          <Field
+            label="Casa"
+            value={draft.houseId ? String(draft.houseId) : ''}
+            onChangeText={(value) => changeDraft('houseId', Number(value.replace(/\D/g, '')) || 0)}
+            keyboardType="numeric"
+          />
+          <Field label="Nome" value={draft.name} onChangeText={(value) => changeDraft('name', value)} />
+          <Field label="Email" value={draft.email} onChangeText={(value) => changeDraft('email', value)} keyboardType="email-address" />
+          <Field label="Telefone" value={draft.phone ?? ''} onChangeText={(value) => changeDraft('phone', value)} />
+          <Field
+            label="CPF/CNPJ completo para Asaas"
+            value={draft.documentNumber ?? ''}
+            onChangeText={(value) => changeDraft('documentNumber', value)}
+            keyboardType="numeric"
+          />
+          <Row>
+            <Button title="Cancelar" icon={X} variant="ghost" onPress={() => { setCreating(false); setDraft(null); }} disabled={saving} />
+            <Button title={saving ? 'Salvando...' : 'Salvar'} icon={Save} onPress={save} disabled={saving} />
+          </Row>
+          {message && message.residentId === 0 ? <Label>{message.text}</Label> : null}
+        </Card>
+      ) : null}
+      {loading ? (
+        <Card>
+          <Value>Carregando moradores...</Value>
+          <Label>Buscando dados reais na API.</Label>
+        </Card>
+      ) : null}
+      {!loading && loadError ? (
+        <Card>
+          <Value>Nao consegui carregar moradores</Value>
+          <Label>{loadError}</Label>
+          <Button title="Tentar novamente" icon={RefreshCw} variant="ghost" onPress={load} />
+        </Card>
+      ) : null}
+      {!loading && !loadError && items.length === 0 ? (
+        <Card>
+          <Value>Nenhum morador cadastrado</Value>
+          <Label>Cadastre os moradores reais para gerar clientes e cobrancas no Asaas Sandbox.</Label>
+        </Card>
+      ) : null}
+      {items.map((item) => (
+        <Card key={item.id}>
+          <Row>
+            <Value>{item.name}</Value>
+            <Badge status={item.status} />
+          </Row>
+          <Label>Casa {String(item.houseId).padStart(2, '0')}</Label>
+          {editingId === item.id && draft ? (
+            <Stack>
+              <Field label="Nome" value={draft.name} onChangeText={(value) => changeDraft('name', value)} />
+              <Field label="Email" value={draft.email} onChangeText={(value) => changeDraft('email', value)} keyboardType="email-address" />
+              <Field label="Telefone" value={draft.phone ?? ''} onChangeText={(value) => changeDraft('phone', value)} />
+              <Field
+                label="CPF/CNPJ completo para Asaas"
+                value={draft.documentNumber ?? ''}
+                onChangeText={(value) => changeDraft('documentNumber', value)}
+                keyboardType="numeric"
+              />
+              <Row>
+                <Button title="Cancelar" icon={X} variant="ghost" onPress={() => { setEditingId(null); setDraft(null); }} disabled={saving} />
+                <Button title={saving ? 'Salvando...' : 'Salvar'} icon={Save} onPress={save} disabled={saving} />
+              </Row>
+              {message && message.residentId === item.id ? <Label>{message.text}</Label> : null}
+            </Stack>
+          ) : (
+            <Stack>
+              <Label>{item.email}</Label>
+              <Label>{item.phone}</Label>
+              <Label>
+                {item.documentRegistered
+                  ? `CPF/CNPJ Asaas cadastrado (${item.documentMasked ?? 'documento protegido'})`
+                  : 'CPF/CNPJ Asaas pendente'}
+              </Label>
+              <Label>
+                {item.gatewayCustomerId
+                  ? `Cliente Asaas sincronizado (${item.gatewayCustomerId})`
+                  : 'Cliente Asaas ainda nao sincronizado'}
+              </Label>
+              {message && message.residentId === item.id ? <Label>{message.text}</Label> : null}
+              <Button
+                title="Editar dados"
+                icon={Edit3}
+                variant="ghost"
+                onPress={() => startEdit(item)}
+              />
+              <Button
+                title={syncingId === item.id ? 'Sincronizando...' : 'Sincronizar Asaas'}
+                icon={RefreshCw}
+                variant="ghost"
+                onPress={() => syncAsaas(item)}
+                disabled={syncingId === item.id || saving || !item.documentRegistered}
+              />
+            </Stack>
+          )}
+        </Card>
+      ))}
+    </Screen>
+  );
+}

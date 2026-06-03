@@ -1,0 +1,1331 @@
+--- PAGE 1 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 1
+ Portal da Vila
+ App React Native com integração Pix via Gateway de Pagamento
+Objetivo
+Criar um aplicativo mobile para os moradores acompanharem a caixinha da vila, com
+cobranças Pix por casa/mês, confirmação automática via webhook, despesas, orçamentos,
+serviços e documentos.
+Projeto
+Portal de Transparência da Vila
+Público
+10 casas / moradores / administrador
+App
+React Native + Expo
+Backend
+Java 17+ / Spring Boot / PostgreSQL
+Pix
+Gateway Asaas como implementação inicial
+Entrega
+Instrução completa para o Codex + wireframes
+Observação: este documento propõe Asaas como gateway inicial porque a documentação oficial expõe cobrança Pix, QR
+Code dinâmico e webhooks de pagamento. A arquitetura foi desenhada com interface de provedor para trocar por Efí,
+Mercado Pago ou outro gateway futuramente.
+
+
+--- PAGE 2 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 2
+1. Visão geral da solução
+A versão anterior do wireframe estava correta visualmente. A alteração principal agora é que a
+contribuição mensal deixa de ser apenas um lançamento manual e passa a ser uma cobrança Pix
+individual para cada casa e mês.
+A confirmação do pagamento deve acontecer de forma automática por webhook do gateway. O
+administrador ainda pode lançar manualmente uma exceção, mas o fluxo principal será: gerar cobrança,
+exibir QR Code/Copia e Cola, receber webhook, atualizar status e recalcular saldo.
+Etapa
+Descrição
+1. Admin gera cobranças
+Sistema cria 10 cobranças Pix, uma para cada casa, usando o valor mensal
+configurado.
+2. Morador visualiza Pix
+No app aparece a contribuição do mês com QR Code, Pix Copia e Cola,
+vencimento e status.
+3. Morador paga
+Pagamento é feito pelo banco do morador, fora do app.
+4. Gateway notifica
+Asaas envia webhook para o backend avisando PAYMENT_RECEIVED ou evento
+equivalente.
+5. App atualiza
+Backend marca a cobrança como paga e o app passa a exibir status Pago.
+6. Portal dá
+transparência
+Todos veem valores arrecadados, pendências, despesas, documentos e saldo
+calculado.
+Base usada para o desenho: a documentação do Asaas informa suporte a recebimento Pix por QR Code dinâmico/estático,
+criação de cobrança com billingType PIX, recuperação de QR Code Pix por cobrança e webhooks para eventos como
+PAYMENT_CREATED, PAYMENT_RECEIVED e PAYMENT_OVERDUE. A documentação da Efí também informa Pix Cob/CobV,
+sandbox e conciliação como alternativa futura.
+2. Decisão técnica recomendada
+Para o Codex, peça para criar dois projetos: app mobile e backend. O React Native não deve falar direto
+com o gateway, porque isso exporia token/API key e deixaria regras financeiras no celular. O app chama
+o backend, e o backend chama o gateway.
+Camada
+Tecnologia
+Responsabilidade
+App mobile
+React Native + Expo +
+TypeScript
+Login, telas, QR Code Pix, status da cobrança, documentos
+e transparência.
+API backend
+Java 17+ + Spring Boot
+Regras, autenticação, geração de cobranças, webhook,
+cálculos e permissões.
+Banco
+PostgreSQL
+Casas, moradores, contribuições, cobranças Pix, despesas,
+serviços e documentos.
+Gateway
+Asaas no MVP
+Criar cobrança Pix, obter QR Code/Copia e Cola e enviar
+webhook de pagamento.
+Storage
+S3/MinIO/local no MVP
+Guardar notas fiscais, recibos, comprovantes e
+orçamentos.
+Estratégia importante: criar uma interface PixGatewayClient no backend. A primeira implementação
+será AsaasPixGatewayClient, mas o domínio interno do sistema não deve depender de classes
+específicas do Asaas.
+
+
+--- PAGE 3 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 3
+public interface PixGatewayClient {
+    GatewayCustomer createOrUpdateCustomer(Resident resident);
+    GatewayCharge createPixCharge(CreatePixChargeRequest request);
+    PixQrCode getPixQrCode(String gatewayPaymentId);
+    GatewayPayment getPayment(String gatewayPaymentId);
+}
+
+
+--- PAGE 4 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 4
+3. Wireframe mobile colorido - base visual do app
+Este é o wireframe que deve ser mantido como referência visual. As telas continuam com cards, navegação inferior, cores claras, status coloridos e foco em uso no
+celular.
+
+
+--- PAGE 5 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 5
+
+
+--- PAGE 6 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 6
+4. Ajustes no wireframe por causa do Pix
+As telas principais continuam iguais, mas o app precisa incluir fluxo de cobrança Pix. O ideal é adicionar
+uma tela de pagamento da contribuição e uma tela administrativa de cobranças Pix.
+Caixa
+Maio/2026
+Saldo atual
+Disponível no sistema
+R$ 2.350,00
+Minha contribuição
+Casa 01 - Maio
+Vence em 10/05
+Pendente
+Ver Pix do mês
+Transparência
+Arrecadado
+7 casas pagas
+R$ 700,00
+Pendente
+3 casas
+R$ 300,00
+Início
+Caixa
+Serv.
+Docs
+Mais
+Pagar contribuição
+Casa 01 - Maio/2026
+Valor
+Cobrança Pix
+R$ 100,00
+QR Code Pix
+Copiar Pix Copia e Cola
+Status
+Aguardando pagamento
+Pendente
+Após pagar
+A confirmação será automática.
+Início
+Caixa
+Serv.
+Docs
+Mais
+Admin Pix
+Cobranças do mês
+Maio/2026
+10 cobranças geradas
+7 pagas
+Gerar cobranças do mês
+Casa 01
+Pago via webhook
+R$ 100,00
+Casa 03
+Pendente
+R$ 100,00
+Casa 06
+Vencida
+R$ 100,00
+Reconciliar com gateway
+Início
+Caixa
+Serv.
+Docs
+Mais
+Log Webhook
+Últimos eventos
+PAYMENT_RECEIVED
+Casa 01
+Processado
+PAYMENT_CREATED
+Casa 02
+Processado
+PAYMENT_OVERDUE
+Casa 06
+Processado
+Segurança
+Idempotência
+Evento duplicado ignorado
+OK
+Ver detalhes
+Início
+Caixa
+Serv.
+Docs
+Mais
+Mudanças de navegação:
+●
+No menu Caixa, incluir o bloco Minha contribuição do mês com botão Ver Pix do mês.
+●
+Na tela Contribuições, cada card deve ter ações: Ver Pix, Copiar código Pix, Ver comprovante/transação
+e Marcar manualmente como pago somente para ADMIN.
+●
+No menu Mais, adicionar Cobranças Pix/Admin Pix visível apenas para ADMIN.
+●
+Adicionar uma tela de Log de Webhooks para ADMIN acompanhar eventos recebidos, erros e
+duplicidades.
+5. Fluxos principais do usuário
+5.1 Morador pagando a mensalidade
+●
+Morador entra no app.
+●
+Na tela Início ou Caixa, vê a contribuição do mês.
+●
+Toca em Ver Pix do mês.
+●
+App exibe QR Code, Pix Copia e Cola, valor, vencimento e status.
+●
+Morador copia o código ou escaneia o QR Code usando o app do banco.
+●
+Gateway confirma o pagamento por webhook.
+●
+Backend atualiza a cobrança e a contribuição.
+●
+App mostra Status: Pago e data/hora de confirmação.
+
+
+--- PAGE 7 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 7
+5.2 Administrador gerando cobranças
+●
+Admin acessa Mais > Cobranças Pix.
+●
+Seleciona mês e valor padrão.
+●
+Clica em Gerar cobranças do mês.
+●
+Backend verifica se já existem cobranças para aquela casa/mês para evitar duplicidade.
+●
+Backend cria/atualiza o cliente no gateway para cada morador.
+●
+Backend cria cobrança Pix para cada casa.
+●
+Backend busca QR Code/Copia e Cola de cada cobrança.
+●
+Sistema salva tudo no PostgreSQL.
+●
+Cada morador passa a ver sua cobrança no app.
+5.3 Webhook de pagamento
+●
+Gateway chama POST /api/webhooks/asaas.
+●
+Backend valida o token/cabeçalho configurado.
+●
+Backend registra o evento em pix_webhook_events.
+●
+Se o evento já foi processado, ignora com sucesso para garantir idempotência.
+●
+Se o evento for PAYMENT_RECEIVED, marca a cobrança como PAID.
+●
+Atualiza contribution.status para PAID.
+●
+Recalcula os totais exibidos no app.
+6. Regras de negócio
+Regra
+Descrição
+Cobrança única
+Cada casa só pode ter uma cobrança Pix ativa por mês. Usar índice único
+house_id + reference_month.
+Valor padrão
+Usar o valor mensal configurado, permitindo ajuste individual antes de gerar
+cobranças.
+Status financeiro
+A contribuição só entra no saldo quando a cobrança estiver PAID/RECEIVED.
+Pendente
+Cobranças criadas e não pagas ficam PENDING.
+Vencida
+Se passar do vencimento ou vier evento PAYMENT_OVERDUE, status OVERDUE.
+Cancelamento
+Admin pode cancelar cobrança, mas deve registrar motivo.
+Pagamento manual
+Admin pode marcar como pago manualmente em exceção, mas o sistema deve
+registrar manualPayment=true e motivo.
+Estorno
+Se houver evento de estorno, status REFUNDED e contribuição deixa de compor
+saldo.
+Idempotência
+Todo evento de webhook deve ser processado uma única vez por event_id.
+Transparência
+Moradores veem valores e status, mas não veem dados sensíveis de tokens, CPF
+completo ou chaves de API.
+7. Modelo de domínio
+Entidades principais para implementar no backend e refletir no app:
+
+
+--- PAGE 8 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 8
+Entidade
+Campos principais
+User
+id, name, email, passwordHash, role ADMIN/RESIDENT, residentId, active
+House
+id, number, label, active
+Resident
+id, houseId, name, email, phone, documentMasked, gatewayCustomerId, status
+Contribution
+id, houseId, residentId, month, amount, paidAmount, status, paymentDate,
+paymentMethod, pixChargeId
+PixCharge
+id, contributionId, gateway, gatewayPaymentId, externalReference, txid/correlation,
+value, dueDate, status, qrCodeBase64, pixCopyPaste, invoiceUrl, receiptUrl,
+createdAt, paidAt
+Expense
+id, description, category, amount, date, supplier, paymentMethod, documentId
+Budget
+id, serviceId, supplier, phone, amount, status, attachmentDocumentId
+ServiceOrder
+id, title, description, status, expectedValue, finalValue, supplier, plannedDate,
+completedDate
+Document
+id, type, name, url, relatedType, relatedId, uploadedBy, createdAt
+WebhookEvent
+id, gateway, eventId, eventType, payloadJson, processed, processedAt,
+errorMessage
+Settings
+id, villageName, monthlyAmount, paymentDueDay, gatewayProvider,
+webhookSecret
+8. Banco de dados - tabelas sugeridas
+-- Principais tabelas PostgreSQL
+users(id, name, email, password_hash, role, resident_id, active, created_at)
+houses(id, number, label, active, created_at)
+residents(id, house_id, name, email, phone, document_masked, gateway_customer_id, status, 
+  created_at)
+settings(id, village_name, monthly_amount, payment_due_day, gateway_provider, created_at, 
+  updated_at)
+contributions(
+  id, house_id, resident_id, reference_month, amount, paid_amount,
+  status, payment_date, payment_method, manual_payment, manual_reason,
+  created_at, updated_at
+)
+pix_charges(
+  id, contribution_id, gateway, gateway_payment_id, external_reference,
+  txid, value, due_date, status, qr_code_base64, pix_copy_paste,
+  invoice_url, receipt_url, created_at, paid_at, updated_at
+)
+webhook_events(
+  id, gateway, event_id, event_type, gateway_payment_id,
+  payload_json, processed, processed_at, error_message, created_at
+)
+expenses(id, description, category, amount, expense_date, supplier, payment_method, notes, 
+  document_id)
+budgets(id, service_id, title, supplier, phone, amount, budget_date, expected_date, status, 
+  document_id, notes)
+service_orders(id, title, description, status, expected_value, final_value, supplier, 
+  planned_date, completed_date)
+documents(id, name, type, url, related_type, related_id, description, created_at)
+-- Índices importantes
+unique(contributions.house_id, contributions.reference_month)
+unique(pix_charges.gateway, pix_charges.gateway_payment_id)
+unique(webhook_events.gateway, webhook_events.event_id)
+index(pix_charges.status)
+index(contributions.reference_month)
+
+
+--- PAGE 9 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 9
+9. Endpoints do backend
+Método
+Endpoint
+Uso
+POST
+/api/auth/login
+Login do app.
+GET
+/api/dashboard?month=2026-05
+Resumo: saldo, arrecadado, despesas, pendências e
+movimentações.
+GET
+/api/contributions?month=2026-05
+Lista cards de contribuições.
+POST
+/api/admin/contributions/monthly
+Gera contribuições do mês sem criar Pix ainda, se
+necessário.
+POST
+/api/admin/pix/monthly-charges
+Gera cobranças Pix para todas as casas no mês.
+GET
+/api/pix/charges?month=2026-05
+Lista cobranças Pix do mês.
+GET
+/api/pix/charges/{id}
+Detalhe da cobrança com QR Code e Pix Copia e Cola.
+POST
+/api/admin/pix/charges/{id}/refresh
+-qrcode
+Atualiza QR Code se expirar ou cobrança mudar.
+POST
+/api/admin/pix/charges/{id}/cancel
+Cancela cobrança com motivo.
+POST
+/api/admin/contributions/{id}/manu
+al-payment
+Marca pagamento manual em exceção.
+POST
+/api/webhooks/asaas
+Recebe eventos do gateway Asaas.
+GET
+/api/admin/webhook-events
+Lista eventos para auditoria.
+GET/POST
+/api/expenses
+Listar e cadastrar despesas.
+GET/POST
+/api/budgets
+Listar e cadastrar orçamentos.
+GET/POST
+/api/services
+Listar e cadastrar serviços.
+GET/POST
+/api/documents
+Listar e cadastrar documentos.
+10. Integração com Asaas - fluxo técnico
+O backend deve usar variáveis de ambiente para credenciais e URLs. Nunca colocar API key no app
+React Native.
+ASAAS_ENV=sandbox
+ASAAS_BASE_URL=https://api-sandbox.asaas.com/v3
+ASAAS_API_KEY=colocar_no_secret_manager_ou_env
+ASAAS_WEBHOOK_TOKEN=token_secreto_configurado_no_webhook
+APP_PUBLIC_API_URL=https://api.sua-vila.com.br
+10.1 Criar cobrança Pix
+Para cada casa/mês, o backend deve criar uma cobrança com billingType PIX, valor, vencimento e
+externalReference. A externalReference deve ser previsível para conciliação, por exemplo:
+VILA-2026-05-HOUSE-01.
+POST /v3/payments
+{
+  "customer": "cus_xxx",
+  "billingType": "PIX",
+  "value": 100.00,
+  "dueDate": "2026-05-10",
+  "description": "Caixinha da Vila - Casa 01 - Maio/2026",
+  "externalReference": "VILA-2026-05-HOUSE-01"
+}
+
+
+--- PAGE 10 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 10
+10.2 Obter QR Code Pix
+Depois de criar a cobrança, buscar o QR Code Pix e salvar no banco o payload Pix Copia e Cola e a
+imagem em Base64. O app deve consumir esses dados pelo backend.
+GET /v3/payments/{paymentId}/pixQrCode
+Resposta esperada do gateway:
+{
+  "encodedImage": "base64-do-qrcode",
+  "payload": "000201...PIX COPIA E COLA...",
+  "expirationDate": "2026-05-10 23:59:59"
+}
+10.3 Webhook
+Configurar no Asaas o webhook apontando para /api/webhooks/asaas. Processar principalmente
+PAYMENT_CREATED, PAYMENT_RECEIVED, PAYMENT_OVERDUE, PAYMENT_REFUNDED e
+PAYMENT_DELETED.
+POST /api/webhooks/asaas
+Header: asaas-access-token: <ASAAS_WEBHOOK_TOKEN>
+{
+  "id": "evt_123",
+  "event": "PAYMENT_RECEIVED",
+  "dateCreated": "2026-05-10 14:32:00",
+  "payment": {
+    "id": "pay_123",
+    "customer": "cus_123",
+    "value": 100.00,
+    "netValue": 98.01,
+    "description": "Caixinha da Vila - Casa 01 - Maio/2026",
+    "externalReference": "VILA-2026-05-HOUSE-01",
+    "billingType": "PIX",
+    "status": "RECEIVED",
+    "paymentDate": "2026-05-10",
+    "transactionReceiptUrl": "https://..."
+  }
+}
+11. Segurança e auditoria
+●
+API key do gateway apenas no backend, nunca no app.
+●
+Webhook com validação do header asaas-access-token ou mecanismo equivalente definido no painel do
+gateway.
+●
+Registrar todos os payloads de webhook em webhook_events para auditoria.
+●
+Implementar idempotência por event_id e também por gateway_payment_id + eventType.
+●
+Não armazenar CPF completo no app. Se necessário, armazenar apenas mascarado.
+●
+Permitir que moradores vejam a transparência financeira, mas não dados sensíveis de outros
+moradores.
+●
+Usar roles: ADMIN e RESIDENT.
+●
+Gerar logs de ações administrativas: quem marcou manualmente, quem cancelou, quem alterou valor.
+●
+Usar HTTPS obrigatório em produção.
+
+
+--- PAGE 11 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 11
+12. Telas React Native - comportamento
+detalhado
+Tela
+Alteração para Pix
+Início
+Adicionar card Minha contribuição com status e botão Ver Pix se estiver pendente.
+Caixa
+Mostrar saldo, total arrecadado, pendências, e lista das contribuições com status
+do Pix.
+Contribuições
+Cards com Ver Pix, Copiar Pix, Pago, Pendente, Vencido, Pago manual.
+Pagar contribuição
+Nova tela/modal com QR Code, copia e cola, vencimento, valor e status.
+Admin Pix
+Nova tela para gerar cobranças do mês, cancelar, reemitir QR Code e reconciliar.
+Log Webhook
+Nova tela administrativa para listar eventos recebidos e erros.
+Despesas
+Sem mudança principal; despesas continuam como saída manual com documento.
+Relatórios
+Adicionar totais: arrecadado confirmado pelo gateway, manual, pendente e
+vencido.
+Componentes novos no app:
+components/pix/PixChargeCard.tsx
+components/pix/PixQrCodeBox.tsx
+components/pix/CopyPixButton.tsx
+components/pix/ChargeStatusTimeline.tsx
+components/admin/AdminPixMonthPanel.tsx
+components/admin/WebhookEventCard.tsx
+screens/PixPaymentScreen.tsx
+screens/AdminPixChargesScreen.tsx
+screens/WebhookEventsScreen.tsx
+13. Estrutura dos projetos
+13.1 App React Native
+
+
+--- PAGE 12 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 12
+portal-vila-app/
+  src/
+    components/
+      cards/
+      pix/
+      layout/
+      feedback/
+    screens/
+      LoginScreen.tsx
+      HomeScreen.tsx
+      CashBoxScreen.tsx
+      ContributionsScreen.tsx
+      PixPaymentScreen.tsx
+      ExpensesScreen.tsx
+      BudgetsScreen.tsx
+      ServicesScreen.tsx
+      ServiceDetailsScreen.tsx
+      DocumentsScreen.tsx
+      ResidentsScreen.tsx
+      ReportsScreen.tsx
+      MoreScreen.tsx
+      AdminPixChargesScreen.tsx
+      WebhookEventsScreen.tsx
+    navigation/
+      AppNavigator.tsx
+      BottomTabs.tsx
+    services/
+      api.ts
+      authService.ts
+      pixService.ts
+    types/
+    utils/
+  app.json
+  package.json
+13.2 Backend Spring Boot
+portal-vila-api/
+  src/main/java/br/com/portalvila/
+    auth/
+    residents/
+    houses/
+    contributions/
+    pix/
+      domain/
+      application/
+      infra/asaas/
+      web/
+    expenses/
+    budgets/
+    services/
+    documents/
+    dashboard/
+    reports/
+    common/
+  src/main/resources/
+    application.yml
+    db/migration/
+  docker-compose.yml
+  README.md
+14. Prompt completo para enviar ao Codex
+Copie o bloco abaixo e envie ao Codex. Ele já contém as decisões de arquitetura, telas, fluxo Pix,
+entidades, endpoints e regras.
+
+
+--- PAGE 13 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 13
+Crie dois projetos para o sistema "Portal da Vila":
+1) App mobile React Native com Expo + TypeScript
+2) Backend Java 17+ com Spring Boot + PostgreSQL
+Objetivo do sistema:
+Será um app de transparência para uma vila com 10 casas. Os moradores contribuem mensalmente 
+  com uma caixinha para manutenção. O app deve mostrar saldo, contribuições, despesas, 
+  orçamentos, serviços realizados, documentos e cobranças Pix. O pagamento Pix precisa ser 
+  gerado automaticamente por casa/mês por meio de um gateway de pagamento. Use Asaas como 
+  implementação inicial do gateway.
+Base visual:
+Usar o wireframe mobile colorido do Portal da Vila como referência. O app deve ter aparência de
+   aplicativo de celular, com cards, cores claras, status coloridos e navegação inferior. 
+  Evitar tabelas grandes. Listas devem ser cards.
+Navegação inferior:
+- Início
+- Caixa
+- Serviços
+- Docs
+- Mais
+Menu Mais:
+- Contribuições
+- Despesas
+- Orçamentos
+- Moradores
+- Relatórios
+- Cobranças Pix (somente ADMIN)
+- Logs Webhook (somente ADMIN)
+- Configurações
+- Sair
+Perfis:
+- ADMIN: pode criar, editar, excluir, gerar cobranças Pix, cancelar cobranças, marcar pagamento
+   manual, cadastrar despesas, orçamentos, serviços, documentos e moradores.
+- RESIDENT: pode visualizar transparência e pagar/ver sua própria cobrança Pix. Não pode 
+  editar.
+App React Native:
+Usar:
+- Expo
+- React Native
+- TypeScript
+- React Navigation
+- Axios
+- AsyncStorage ou SecureStore para token
+- expo-clipboard para copiar Pix Copia e Cola
+- QR Code exibido a partir da imagem Base64 retornada pelo backend
+- Design mobile-first com cards arredondados, botões grandes, badges coloridas e navegação 
+  inferior
+
+
+--- PAGE 14 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 14
+Backend:
+Usar:
+- Java 17+
+- Spring Boot
+- Spring Web
+- Spring Security com JWT
+- Spring Data JPA
+- PostgreSQL
+- Flyway
+- Bean Validation
+- WebClient para chamar Asaas
+- Docker Compose para PostgreSQL
+Gateway Pix:
+Implementar Asaas como gateway inicial.
+Não colocar token Asaas no app. O app chama o backend, e o backend chama o Asaas.
+Criar interface PixGatewayClient para facilitar troca futura por Efí, Mercado Pago ou outro 
+  gateway.
+Variáveis de ambiente:
+ASAAS_ENV=sandbox
+ASAAS_BASE_URL=https://api-sandbox.asaas.com/v3
+ASAAS_API_KEY=...
+ASAAS_WEBHOOK_TOKEN=...
+JWT_SECRET=...
+Fluxo de geração de cobrança Pix:
+1. Admin acessa Cobranças Pix.
+2. Seleciona o mês, exemplo 2026-05.
+3. Clica em "Gerar cobranças do mês".
+4. Backend verifica as 10 casas ativas.
+5. Backend cria uma contribuição para cada casa/mês se ainda não existir.
+6. Backend cria ou atualiza customer no Asaas para o morador responsável.
+7. Backend cria cobrança no Asaas com billingType PIX.
+8. Backend salva gatewayPaymentId, externalReference e status.
+9. Backend chama /v3/payments/{id}/pixQrCode.
+10. Backend salva qrCodeBase64, pixCopyPaste e expirationDate.
+11. O morador passa a ver QR Code e Pix Copia e Cola no app.
+Endpoint Asaas para criar cobrança:
+POST /v3/payments
+Body esperado:
+{
+  "customer": "cus_xxx",
+  "billingType": "PIX",
+  "value": 100.00,
+  "dueDate": "2026-05-10",
+  "description": "Caixinha da Vila - Casa 01 - Maio/2026",
+  "externalReference": "VILA-2026-05-HOUSE-01"
+}
+Endpoint Asaas para obter QR Code:
+GET /v3/payments/{paymentId}/pixQrCode
+Salvar:
+- encodedImage
+- payload Pix Copia e Cola
+- expirationDate
+Webhook:
+Criar endpoint:
+POST /api/webhooks/asaas
+Validar header:
+asaas-access-token deve bater com ASAAS_WEBHOOK_TOKEN.
+Eventos relevantes:
+- PAYMENT_CREATED
+- PAYMENT_RECEIVED
+- PAYMENT_OVERDUE
+- PAYMENT_REFUNDED
+- PAYMENT_DELETED
+
+
+--- PAGE 15 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 15
+Regra:
+- PAYMENT_RECEIVED marca PixCharge como PAID e Contribution como PAID.
+- PAYMENT_OVERDUE marca PixCharge como OVERDUE e Contribution como PENDING/OVERDUE.
+- PAYMENT_REFUNDED marca PixCharge como REFUNDED e remove valor do saldo calculado.
+- PAYMENT_DELETED marca PixCharge como CANCELLED.
+Idempotência:
+Salvar todo webhook em webhook_events.
+Criar unique por gateway + eventId.
+Se receber evento duplicado, responder HTTP 200 e ignorar.
+Modelo de dados principal:
+User
+- id
+- name
+- email
+- passwordHash
+- role
+- residentId
+- active
+House
+- id
+- number
+- label
+- active
+Resident
+- id
+- houseId
+- name
+- email
+- phone
+- documentMasked
+- gatewayCustomerId
+- status
+
+
+--- PAGE 16 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 16
+Contribution
+- id
+- houseId
+- residentId
+- referenceMonth
+- amount
+- paidAmount
+- status: PENDING, PAID, PARTIAL, EXEMPT, OVERDUE, CANCELLED
+- paymentDate
+- paymentMethod
+- manualPayment
+- manualReason
+PixCharge
+- id
+- contributionId
+- gateway
+- gatewayPaymentId
+- externalReference
+- txid
+- value
+- dueDate
+- status: PENDING, PAID, OVERDUE, CANCELLED, REFUNDED, EXPIRED
+- qrCodeBase64
+- pixCopyPaste
+- invoiceUrl
+- receiptUrl
+- createdAt
+- paidAt
+WebhookEvent
+- id
+- gateway
+- eventId
+- eventType
+- gatewayPaymentId
+- payloadJson
+- processed
+- processedAt
+- errorMessage
+Expense
+- id, description, category, amount, date, supplier, paymentMethod, notes, documentId
+Budget
+- id, serviceId, title, supplier, phone, amount, budgetDate, expectedDate, status, documentId, 
+  notes
+ServiceOrder
+- id, title, description, status, expectedValue, finalValue, supplier, plannedDate, 
+  completedDate
+Document
+- id, name, type, url, relatedType, relatedId, description, createdAt
+Settings
+- id, villageName, monthlyAmount, paymentDueDay, gatewayProvider
+
+
+--- PAGE 17 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 17
+Endpoints backend:
+POST /api/auth/login
+GET /api/dashboard?month=2026-05
+GET /api/contributions?month=2026-05
+GET /api/contributions/{id}
+POST /api/admin/contributions/monthly
+POST /api/admin/pix/monthly-charges
+GET /api/pix/charges?month=2026-05
+GET /api/pix/charges/{id}
+POST /api/admin/pix/charges/{id}/refresh-qrcode
+POST /api/admin/pix/charges/{id}/cancel
+POST /api/admin/contributions/{id}/manual-payment
+POST /api/webhooks/asaas
+GET /api/admin/webhook-events
+GET/POST /api/expenses
+GET/POST /api/budgets
+GET/POST /api/services
+GET/POST /api/documents
+GET/POST /api/residents
+GET/PUT /api/settings
+Telas do app:
+1. Login
+2. Início
+3. Caixa
+4. Contribuições
+5. Pagar contribuição Pix
+6. Despesas
+7. Orçamentos
+8. Serviços
+9. Detalhes do Serviço
+10. Documentos
+11. Moradores
+12. Relatórios
+13. Mais
+14. Configurações
+15. Cobranças Pix Admin
+16. Logs Webhook Admin
+Tela Pagar contribuição Pix:
+Mostrar:
+- Casa
+- Mês
+- Valor
+- Vencimento
+- Status
+- QR Code
+- Pix Copia e Cola
+- Botão Copiar código Pix
+- Botão Atualizar status
+- Link/recibo quando pago
+Tela Cobranças Pix Admin:
+Mostrar:
+- Filtro mês
+- Total gerado
+- Total pago
+- Total pendente
+- Total vencido
+- Botão Gerar cobranças do mês
+- Botão Reconciliar com gateway
+- Lista de cobranças por casa
+- Ações: ver, cancelar, atualizar QR Code, marcar manualmente
+
+
+--- PAGE 18 ---
+Portal da Vila - React Native + Pix via Gateway
+Especificação para Codex
+Página 18
+Tela Logs Webhook Admin:
+Mostrar:
+- Data/hora
+- Tipo do evento
+- gatewayPaymentId
+- externalReference
+- status processado/erro
+- payload completo em tela de detalhe
+Cálculo de saldo:
+Saldo = total de contribuições pagas + pagamentos manuais aprovados - total de despesas.
+Cobranças pendentes não entram no saldo.
+Estornos removem valor do saldo.
+Orçamentos não entram no saldo até virarem despesa/serviço finalizado.
+Dados mockados/seed:
+- Criar 10 casas.
+- Criar 10 moradores.
+- Criar usuário admin@vila.com senha 123456.
+- Criar usuário morador@vila.com senha 123456 vinculado à Casa 01.
+- Criar algumas despesas, orçamentos, serviços e documentos.
+Entrega esperada:
+- Projeto app funcionando com npm install e npx expo start.
+- Projeto backend funcionando com docker-compose up e mvn spring-boot:run.
+- README nos dois projetos.
+- Instruções para configurar sandbox Asaas.
+- Instruções para configurar webhook.
+- Testes unitários básicos para cálculo de saldo e processamento de webhook.
+- Testes de integração simples para endpoint de webhook.
+15. Roadmap recomendado
+Fase
+Entrega
+1. Base visual
+React Native com telas, navegação, mock data e cards iguais ao wireframe.
+2. Backend base
+Auth, moradores, casas, contribuições, despesas, documentos e dashboard.
+3. Pix sandbox
+Integração Asaas sandbox criando cobranças e exibindo QR Code no app.
+4. Webhook
+Receber PAYMENT_RECEIVED, atualizar status e registrar eventos.
+5. Auditoria
+Log de eventos, idempotência, pagamento manual com motivo e relatórios.
+6. Produção
+HTTPS, variáveis seguras, monitoramento, backup PostgreSQL e conta/gateway real.
+Minha recomendação prática: primeiro peça ao Codex para fazer app + backend com mocks e endpoints
+locais. Depois peça a integração Asaas em branch separada, para isolar o risco da parte financeira.
+16. Fontes oficiais consultadas
+Asaas - Introdução ao Pix: https://docs.asaas.com/docs/pix
+Asaas - Criar nova cobrança: https://docs.asaas.com/reference/criar-nova-cobranca
+Asaas - Obter QR Code Pix da cobrança: https://docs.asaas.com/reference/obter-qr-code-para-pagamentos-via-pix
+Asaas - Webhooks: https://docs.asaas.com/docs/sobre-os-webhooks
+Asaas - Eventos para cobranças: https://docs.asaas.com/docs/webhook-para-cobrancas
+Efí Bank - API Pix: https://sejaefi.com.br/efi-pay/api-pix
+Efí Developers - API Pix: https://dev.efipay.com.br/
+Nota: os nomes exatos de campos e endpoints do gateway devem ser conferidos novamente no momento da
+implementação, porque APIs financeiras podem mudar. O desenho do sistema usa as informações oficiais consultadas em
+31/05/2026.
+
+
+--- PAGE 19 ---
+Portal da Vila - Complemento de Orçamentos e Serviços
+Integração Pix via API Asaas mantida
+Página 19
+Complemento sem alterar o documento existente
+Este complemento adiciona as telas e regras que faltavam para cadastro de serviços/manutenções e
+orçamentos. As páginas anteriores do documento original permanecem preservadas; este material entra como
+apêndice para orientar o Codex com mais precisão.
+O que foi mantido
+A arquitetura do app React Native + Expo e backend Java 17+ com Spring Boot e PostgreSQL continua a
+mesma.
+A integração Pix permanece centralizada no backend usando a API do Asaas, com QR Code, Pix Copia e
+Cola e webhook de pagamento.
+O app continua sem acessar diretamente o token do Asaas; o celular chama o backend e o backend
+chama o gateway.
+O cálculo de saldo continua considerando apenas contribuições pagas/confirmadas e despesas lançadas.
+O que foi adicionado
+Tela/fluxo
+Finalidade
+ServiceFormScreen
+Cadastro e edição de manutenção/serviço planejado.
+BudgetFormScreen
+Cadastro e edição de orçamentos vinculados a um serviço
+BudgetDetailsScreen
+Aprovação, rejeição e visualização do anexo do orçament
+FinishServiceScreen
+Finalização do serviço, upload de nota/recibo e geração
+Fluxo completo
+Serviço planejado -> orçamentos -> aprovado -> execução
+Regra principal
+Orçamento não reduz saldo. Serviço planejado não reduz saldo. Somente uma despesa cadastrada ou um
+serviço finalizado com geração de despesa deve reduzir o saldo da caixinha. As entradas financeiras
+continuam vindo das contribuições confirmadas pelo webhook do Asaas ou por exceção manual aprovada pelo
+ADMIN.
+
+
+--- PAGE 20 ---
+
+
+--- PAGE 21 ---
+Portal da Vila - Complemento de Orçamentos e Serviços
+Integração Pix via API Asaas mantida
+Página 21
+Fluxo funcional que o Codex deve implementar
+O objetivo é evitar que o Codex crie apenas listas genéricas. O app precisa ter um fluxo administrativo
+completo para administrar melhorias da vila, desde a ideia inicial até a prestação de contas final.
+1. Serviço
+planejado
+2. Orçamentos
+cotações
+3. Aprovação
+ADMIN
+4. Execução
+em andamento
+5. Despesa
+saldo
+Passo a passo
+ADMIN cadastra uma manutenção ou melhoria planejada, por exemplo: troca do cabo de aço do portão,
+pintura da vila, avaliação estrutural, interfone ou toldo.
+Dentro do serviço, o ADMIN cadastra um ou mais orçamentos, com fornecedor, valor, validade, previsão
+e documento/anexo.
+O ADMIN aprova um orçamento. O orçamento aprovado fica vinculado ao serviço como
+approvedBudgetId.
+O serviço pode mudar para APROVADO, EM_ANDAMENTO, FINALIZADO ou CANCELADO, conforme a
+evolução real.
+Ao finalizar, o ADMIN informa valor final, data de conclusão, fornecedor executado, nota fiscal/recibo e
+decide se deseja gerar uma despesa automaticamente.
+Quando uma despesa é gerada, ela passa a reduzir o saldo do dashboard e fica vinculada ao serviço, ao
+orçamento e ao documento.
+Relação com a API Asaas
+A API Asaas continua responsável pelas cobranças Pix das contribuições mensais. Orçamentos e serviços não
+criam cobrança Pix automaticamente. Eles apenas consomem o saldo da caixinha quando viram despesa. O
+saldo exibido deve combinar: entradas confirmadas pelo Asaas via webhook menos despesas cadastradas ou
+geradas ao finalizar serviços.
+
+
+--- PAGE 22 ---
+Portal da Vila - Complemento de Orçamentos e Serviços
+Integração Pix via API Asaas mantida
+Página 22
+Telas novas - comportamento detalhado
+Tela
+Comportamento obrigatório
+ServicesScreen
+Lista serviços por status; mostra título, prioridade, v
+ServiceFormScreen
+Cadastro/edição de serviço com título, descrição, categ
+ServiceDetailsScreen
+Exibe dados do serviço, lista orçamentos, documentos, h
+BudgetsScreen
+Lista orçamentos com serviço vinculado, fornecedor, val
+BudgetFormScreen
+Cadastro/edição de orçamento com fornecedor, telefone, 
+BudgetDetailsScreen
+Permite aprovar, rejeitar, editar, excluir e visualizar
+FinishServiceScreen
+Finaliza serviço, recebe valor final, nota/recibo e ger
+DocumentUpload
+Upload de PDF, foto, nota fiscal, recibo e orçamento vi
+Permissões
+RESIDENT pode visualizar serviços, orçamentos aprovados, status, documentos públicos e prestação de
+contas.
+ADMIN pode criar, editar, aprovar, rejeitar, finalizar, cancelar, anexar documentos e gerar despesas.
+Botões de ação administrativa devem ficar ocultos para RESIDENT, não apenas desabilitados
+visualmente.
+
+
+--- PAGE 23 ---
+Portal da Vila - Complemento de Orçamentos e Serviços
+Integração Pix via API Asaas mantida
+Página 23
+Campos obrigatórios das telas
+ServiceFormScreen
+Campo
+Regra
+Observação
+title
+Obrigatório
+Ex.: Troca do cabo de aço do portão
+description
+Obrigatório
+Descrição do problema ou melhoria
+category
+Opcional
+Portão, pintura, interfone, estrutura, internet, outros
+priority
+Obrigatório
+BAIXA, MEDIA, ALTA, URGENTE
+status
+Automático
+Iniciar como PLANEJADO
+expectedValue
+Opcional
+Valor previsto antes dos orçamentos
+plannedDate
+Opcional
+Data planejada
+BudgetFormScreen
+Campo
+Regra
+Observação
+serviceId
+Obrigatório
+Orçamento sempre precisa estar ligado a um serviço
+supplier
+Obrigatório
+Nome do fornecedor/profissional
+phone
+Opcional
+Telefone ou WhatsApp
+amount
+Obrigatório
+Valor do orçamento
+budgetDate
+Opcional
+Data do orçamento
+validUntil
+Opcional
+Validade da proposta
+documentId
+Opcional
+PDF ou foto do orçamento
+FinishServiceScreen
+Campo
+Regra
+Observação
+finalValue
+Obrigatório
+Valor final efetivamente pago
+completedDate
+Obrigatório
+Data de conclusão
+supplier
+Obrigatório
+Fornecedor executado
+documentId
+Recomendado
+Nota fiscal, recibo ou comprovante
+generateExpense
+Obrigatório
+Se true, cria despesa e reduz saldo
+
+
+--- PAGE 24 ---
+Portal da Vila - Complemento de Orçamentos e Serviços
+Integração Pix via API Asaas mantida
+Página 24
+Endpoints adicionais no backend
+Método
+Endpoint
+Uso
+GET
+/api/services/{id}
+Detalhe do serviço
+POST
+/api/services
+Cadastrar serviço
+PUT
+/api/services/{id}
+Editar serviço
+DELETE
+/api/services/{id}
+Excluir/cancelar conforme regra
+GET
+/api/services/{id}/budgets
+Listar orçamentos do serviço
+POST
+/api/services/{id}/budgets
+Cadastrar orçamento vinculado
+GET
+/api/budgets/{id}
+Detalhe do orçamento
+PUT
+/api/budgets/{id}
+Editar orçamento
+POST
+/api/budgets/{id}/approve
+Aprovar orçamento
+POST
+/api/budgets/{id}/reject
+Rejeitar orçamento
+POST
+/api/services/{id}/finish
+Finalizar e opcionalmente gerar despesa
+POST
+/api/documents/upload
+Enviar orçamento, nota ou recibo
+Atualizações no modelo
+ServiceOrder
+- id, title, description, category, priority, status
+- expectedValue, finalValue, supplier, plannedDate, completedDate
+- approvedBudgetId, notes, createdBy, createdAt, updatedAt
+Budget
+- id, serviceId, title, supplier, phone, amount
+- budgetDate, validUntil, expectedDate, status
+- documentId, notes, createdBy, createdAt, updatedAt
+Expense
+- manter campos existentes
+- adicionar serviceOrderId, budgetId e documentId para rastreabilidade
+Document
+- relatedType: SERVICE, BUDGET, EXPENSE, CONTRIBUTION
+- relatedId: id do registro relacionado
+
+
+--- PAGE 25 ---
+Portal da Vila - Complemento de Orçamentos e Serviços
+Integração Pix via API Asaas mantida
+Página 25
+Bloco adicional para enviar ao Codex
+Copie este bloco junto com a instrução original. Ele reforça que o Codex deve adicionar as novas telas sem
+mexer no que já existe e mantendo a integração Asaas para o Pix.
+Complemento obrigatório - Orçamentos e Serviços
+Não alterar o que já foi definido no documento original. Manter o app React Native, o
+backend Spring Boot, o banco PostgreSQL e a integração Pix via API Asaas exatamente como
+planejado. Apenas adicionar o fluxo completo de cadastro, aprovação e execução de
+serviços/manutenções e orçamentos.
+A integração financeira continua assim:
+- Entradas de dinheiro: contribuições mensais pagas por Pix via API Asaas, confirmadas por
+webhook PAYMENT_RECEIVED, ou pagamento manual feito por ADMIN com motivo.
+- Saídas de dinheiro: despesas cadastradas manualmente ou despesas geradas automaticamente
+ao finalizar um serviço.
+- Orçamentos não reduzem saldo.
+- Serviços planejados não reduzem saldo.
+- Serviço só reduz saldo quando for finalizado e gerar uma despesa vinculada.
+Implementar as telas:
+1. ServicesScreen
+- Lista serviços/manutenções.
+- Filtros por status: PLANEJADO, APROVADO, EM_ANDAMENTO, FINALIZADO, CANCELADO.
+- Card com título, descrição curta, prioridade, valor previsto, valor final, data planejada e status.
+- Botão Novo Serviço visível somente para ADMIN.
+2. ServiceFormScreen
+- Tela de cadastrar e editar serviço.
+- Campos: título, descrição, categoria, prioridade, valor previsto, data planejada e observações.
+- Status inicial deve ser PLANEJADO.
+- Somente ADMIN acessa.
+3. ServiceDetailsScreen
+- Mostrar dados do serviço, status, valor previsto, valor final, fornecedor, datas e documentos.
+- Mostrar lista de orçamentos vinculados ao serviço.
+- Mostrar histórico de alterações.
+- Ações ADMIN: adicionar orçamento, editar serviço, aprovar orçamento, iniciar execução,
+finalizar serviço e cancelar serviço.
+4. BudgetsScreen
+- Lista orçamentos.
+- Card com serviço vinculado, fornecedor, telefone, valor, data, validade, previsão de execução e status.
+- Botão Novo Orçamento visível somente para ADMIN.
+5. BudgetFormScreen
+- Tela de cadastrar e editar orçamento.
+- Campos: serviço vinculado, fornecedor, telefone, valor, data do orçamento, validade,
+previsão de execução, descrição do que está incluso, observações e anexo.
+- Permitir anexar PDF ou imagem do orçamento.
+- Somente ADMIN acessa.
+6. BudgetDetailsScreen
+- Mostrar fornecedor, valor, serviço vinculado, status, validade, documento/anexo e observações.
+- Ações ADMIN: aprovar, rejeitar, editar e excluir.
+- Ao aprovar, definir approvedBudgetId no ServiceOrder e rejeitar automaticamente outros
+orçamentos se essa opção for escolhida.
+7. FinishServiceScreen
+- Tela para finalizar serviço.
+- Campos: valor final pago, data de conclusão, fornecedor executado, nota fiscal/recibo,
+observações finais e checkbox "gerar despesa automaticamente".
+
+
+--- PAGE 26 ---
+Portal da Vila - Complemento de Orçamentos e Serviços
+Integração Pix via API Asaas mantida
+Página 26
+- Ao confirmar, atualizar ServiceOrder para FINALIZADO.
+- Se generateExpense=true, criar Expense vinculada ao serviço, orçamento aprovado e documento.
+- Atualizar dashboard e saldo.
+Permissões:
+- RESIDENT pode visualizar serviços, orçamentos, documentos e status.
+- ADMIN pode criar, editar, aprovar, rejeitar, cancelar, finalizar e anexar documentos.
+- Botões de ADMIN devem ficar ocultos para RESIDENT.
+
+
+--- PAGE 27 ---
+Portal da Vila - Complemento de Orçamentos e Serviços
+Integração Pix via API Asaas mantida
+Página 27
+Complemento técnico para o Codex
+Criar/ajustar endpoints:
+GET /api/services/{id}
+POST /api/services
+PUT /api/services/{id}
+DELETE /api/services/{id}
+GET /api/services/{id}/budgets
+POST /api/services/{id}/budgets
+GET /api/budgets/{id}
+PUT /api/budgets/{id}
+DELETE /api/budgets/{id}
+POST /api/budgets/{id}/approve
+POST /api/budgets/{id}/reject
+POST /api/services/{id}/finish
+POST /api/services/{id}/cancel
+POST /api/documents/upload
+GET /api/documents?relatedType=SERVICE&relatedId={id}
+GET /api/documents?relatedType=BUDGET&relatedId={id}
+GET /api/documents?relatedType=EXPENSE&relatedId={id}
+Status ServiceOrder:
+PLANEJADO, APROVADO, EM_ANDAMENTO, FINALIZADO, CANCELADO
+Status Budget:
+EM_ANALISE, APROVADO, REJEITADO, CANCELADO
+Priority:
+BAIXA, MEDIA, ALTA, URGENTE
+Critérios de aceite:
+- ADMIN consegue criar um serviço e adicionar três orçamentos.
+- ADMIN consegue aprovar um orçamento e visualizar o orçamento aprovado no detalhe do serviço.
+- ADMIN consegue finalizar o serviço, anexar nota/recibo e gerar uma despesa automaticamente.
+- O dashboard passa a reduzir o saldo somente depois que a despesa é criada.
+- RESIDENT consegue visualizar a prestação de contas, mas não consegue criar/editar/excluir.
+- A integração Pix via Asaas continua funcionando sem alteração no fluxo de cobrança mensal.
+- Testar cálculo de saldo considerando: contribuições pagas via Asaas, pagamentos manuais,
+despesas, estornos e serviço finalizado com despesa.
+Observação final
+Este complemento deve ser implementado como evolução do projeto, preferencialmente em uma branch
+separada, por exemplo feature/servicos-orcamentos. A integração Asaas deve permanecer isolada no backend
+e não deve ser chamada pelas telas de orçamento/serviço, exceto indiretamente pelo dashboard ao calcular o
+saldo consolidado.
