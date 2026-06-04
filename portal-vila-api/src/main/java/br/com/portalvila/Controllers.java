@@ -71,7 +71,7 @@ class AuthController {
         if (house.number == null || house.number < 2 || house.number > 10) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cadastro publico permitido apenas para as casas 02 a 10.");
         }
-        if (residents.findByHouseId(house.id).isPresent()) {
+        if (residents.findFirstByHouseIdAndStatusOrderByCreatedAtDesc(house.id, "ACTIVE").isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Casa ja possui morador cadastrado.");
         }
         String normalizedEmail = request.email().trim().toLowerCase();
@@ -577,7 +577,7 @@ class ResidentController {
                 house.id,
                 house.number,
                 house.label,
-                residents.findByHouseId(house.id).isEmpty()
+                residents.findFirstByHouseIdAndStatusOrderByCreatedAtDesc(house.id, "ACTIVE").isEmpty()
             ))
             .toList();
     }
@@ -685,7 +685,7 @@ class ResidentController {
         if (!allowAnyHouse && (house.number == null || house.number < 2 || house.number > 10)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cadastro publico permitido apenas para as casas 02 a 10.");
         }
-        if (residents.findByHouseId(house.id).isPresent()) {
+        if (residents.findFirstByHouseIdAndStatusOrderByCreatedAtDesc(house.id, "ACTIVE").isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Casa ja possui morador cadastrado.");
         }
         String normalizedEmail = email == null ? "" : email.trim().toLowerCase();
@@ -754,6 +754,41 @@ class ResidentController {
         }
         String suffix = document.substring(Math.max(0, document.length() - 2));
         return "**.***.***/****-" + suffix;
+    }
+}
+
+@RestController
+@CrossOrigin
+@RequestMapping("/api/admin/houses")
+@PreAuthorize("hasRole('ADMIN')")
+class AdminHouseController {
+    private final HouseRepository houses;
+    private final ResidentRepository residents;
+    private final AppUserRepository users;
+
+    AdminHouseController(HouseRepository houses, ResidentRepository residents, AppUserRepository users) {
+        this.houses = houses;
+        this.residents = residents;
+        this.users = users;
+    }
+
+    @PostMapping("/{houseId}/release")
+    Resident release(@PathVariable Long houseId) {
+        House house = houses.findById(houseId)
+            .filter(candidate -> candidate.active)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Casa nao encontrada ou inativa."));
+        Resident resident = residents.findFirstByHouseIdAndStatusOrderByCreatedAtDesc(house.id, "ACTIVE")
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, house.label + " nao possui morador ativo para liberar."));
+
+        resident.status = "INACTIVE";
+        resident = residents.save(resident);
+
+        users.findByResidentId(resident.id).ifPresent(user -> {
+            user.active = false;
+            users.save(user);
+        });
+
+        return resident;
     }
 }
 

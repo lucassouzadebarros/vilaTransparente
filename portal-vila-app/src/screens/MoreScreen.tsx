@@ -1,5 +1,5 @@
 import { useNavigation } from '@react-navigation/native';
-import { BarChart3, ClipboardList, FileClock, ListChecks, LogOut, ReceiptText, Settings, Users, WalletCards } from 'lucide-react-native';
+import { BarChart3, ClipboardList, FileClock, ListChecks, LockOpen, LogOut, ReceiptText, Settings, Users, WalletCards } from 'lucide-react-native';
 import { Button, Card, Row, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 
@@ -16,6 +16,7 @@ export function MoreScreen() {
         <Button title="Orcamentos" icon={ClipboardList} variant="ghost" onPress={() => navigation.navigate('Budgets')} />
         <Button title="Relatorios" icon={BarChart3} variant="ghost" onPress={() => navigation.navigate('Reports')} />
         {isAdmin ? <Button title="Moradores" icon={Users} variant="ghost" onPress={() => navigation.navigate('Residents')} /> : null}
+        {isAdmin ? <Button title="Liberar casa" icon={LockOpen} variant="ghost" onPress={() => navigation.navigate('ReleaseHouse')} /> : null}
         {isAdmin ? <Button title="Cobrancas Pix" icon={WalletCards} variant="ghost" onPress={() => navigation.navigate('AdminPixCharges')} /> : null}
         {isAdmin ? <Button title="Logs Webhook" icon={FileClock} variant="ghost" onPress={() => navigation.navigate('WebhookEvents')} /> : null}
         {isAdmin ? <Button title="Configuracoes" icon={Settings} variant="ghost" onPress={() => navigation.navigate('Settings')} /> : null}

@@ -1,0 +1,197 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, StyleSheet, Text, View } from 'react-native';
+import { CheckCircle2, LockOpen, RefreshCw, UserMinus } from 'lucide-react-native';
+import { Badge, Button, Card, Label, Row, Screen, Stack, Value } from '../components/ui';
+import { api, apiErrorMessage } from '../services/api';
+import { Resident } from '../types';
+import { colors, spacing } from '../theme';
+
+type HouseState = {
+  houseId: number;
+  active?: Resident;
+  inactiveCount: number;
+};
+
+export function ReleaseHouseScreen() {
+  const [residents, setResidents] = useState<Resident[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [releasingHouseId, setReleasingHouseId] = useState<number | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const houses = useMemo<HouseState[]>(() => {
+    return Array.from({ length: 9 }, (_, index) => index + 2).map((houseId) => {
+      const houseResidents = residents.filter((resident) => resident.houseId === houseId);
+      return {
+        houseId,
+        active: houseResidents.find((resident) => resident.status === 'ACTIVE'),
+        inactiveCount: houseResidents.filter((resident) => resident.status !== 'ACTIVE').length
+      };
+    });
+  }, [residents]);
+
+  async function load() {
+    setLoading(true);
+    setMessage(null);
+    try {
+      setResidents(await api.residents());
+    } catch (error) {
+      setMessage(apiErrorMessage(error, 'Nao consegui carregar as casas.'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function confirmRelease(house: HouseState) {
+    if (!house.active) {
+      return;
+    }
+    Alert.alert(
+      `Liberar Casa ${String(house.houseId).padStart(2, '0')}`,
+      `${house.active.name} ficara inativo, nao conseguira mais entrar no portal e a casa ficara disponivel para novo cadastro. O historico financeiro sera mantido.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Liberar casa',
+          style: 'destructive',
+          onPress: () => releaseHouse(house.houseId)
+        }
+      ]
+    );
+  }
+
+  async function releaseHouse(houseId: number) {
+    setReleasingHouseId(houseId);
+    setMessage(null);
+    try {
+      await api.releaseHouse(houseId);
+      await load();
+      setMessage(`Casa ${String(houseId).padStart(2, '0')} liberada para novo cadastro.`);
+    } catch (error) {
+      setMessage(apiErrorMessage(error, 'Nao consegui liberar a casa.'));
+    } finally {
+      setReleasingHouseId(null);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  return (
+    <Screen title="Liberar casa" subtitle="Disponibilidade para cadastro" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
+      <Card>
+        <Row>
+          <Value>Regra da liberacao</Value>
+          <LockOpen color={colors.blue} size={22} />
+        </Row>
+        <Label>Use quando uma casa mudou de responsavel. O morador atual fica inativo, o login dele e bloqueado e a casa volta para a tela de cadastro.</Label>
+      </Card>
+
+      {message ? (
+        <Card style={message.includes('Nao consegui') ? styles.errorCard : styles.successCard}>
+          <Text style={message.includes('Nao consegui') ? styles.errorText : styles.successText}>{message}</Text>
+        </Card>
+      ) : null}
+
+      {loading ? (
+        <Card>
+          <Value>Carregando casas...</Value>
+          <Label>Buscando moradores ativos e historico salvo.</Label>
+        </Card>
+      ) : null}
+
+      {!loading ? (
+        <Stack>
+          {houses.map((house) => {
+            const released = !house.active;
+            return (
+              <Card key={house.houseId}>
+                <Row>
+                  <View style={styles.houseTitle}>
+                    <Value>Casa {String(house.houseId).padStart(2, '0')}</Value>
+                    {house.inactiveCount > 0 ? <Label>{house.inactiveCount} morador(es) antigo(s) no historico</Label> : null}
+                  </View>
+                  <Badge status={released ? 'LIBERADA' : 'ACTIVE'} />
+                </Row>
+
+                {house.active ? (
+                  <Stack gap={spacing.sm}>
+                    <Label>Morador ativo</Label>
+                    <Value>{house.active.name}</Value>
+                    <Label>{house.active.email}</Label>
+                    <Button
+                      title={releasingHouseId === house.houseId ? 'Liberando...' : 'Liberar casa'}
+                      icon={UserMinus}
+                      variant="danger"
+                      disabled={releasingHouseId === house.houseId}
+                      onPress={() => confirmRelease(house)}
+                    />
+                  </Stack>
+                ) : (
+                  <View style={styles.releasedBox}>
+                    <CheckCircle2 color={colors.green} size={22} />
+                    <View style={styles.releasedCopy}>
+                      <Text style={styles.releasedTitle}>Disponivel para cadastro</Text>
+                      <Text style={styles.releasedText}>A proxima pessoa pode se cadastrar escolhendo esta casa.</Text>
+                    </View>
+                  </View>
+                )}
+              </Card>
+            );
+          })}
+        </Stack>
+      ) : null}
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  houseTitle: {
+    flex: 1,
+    gap: spacing.xs
+  },
+  releasedBox: {
+    minHeight: 68,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md
+  },
+  releasedCopy: {
+    flex: 1,
+    gap: spacing.xs
+  },
+  releasedTitle: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: '900'
+  },
+  releasedText: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '700'
+  },
+  successCard: {
+    borderColor: colors.green,
+    backgroundColor: colors.greenSoft
+  },
+  successText: {
+    color: colors.green,
+    fontSize: 13,
+    fontWeight: '900'
+  },
+  errorCard: {
+    borderColor: colors.red,
+    backgroundColor: colors.redSoft
+  },
+  errorText: {
+    color: colors.red,
+    fontSize: 13,
+    fontWeight: '900'
+  }
+});

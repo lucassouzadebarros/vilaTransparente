@@ -14,6 +14,7 @@ import { FinishServiceScreen } from '../screens/FinishServiceScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { MoreScreen } from '../screens/MoreScreen';
 import { PixPaymentScreen } from '../screens/PixPaymentScreen';
+import { ReleaseHouseScreen } from '../screens/ReleaseHouseScreen';
 import { ReportsScreen } from '../screens/ReportsScreen';
 import { ResidentsScreen } from '../screens/ResidentsScreen';
 import { ServiceDetailsScreen } from '../screens/ServiceDetailsScreen';
@@ -53,6 +54,7 @@ function PortalTabs() {
       <Tabs.Screen name="ServiceDetails" component={ServiceDetailsScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="FinishService" component={FinishServiceScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="Residents" component={ResidentsScreen} options={hiddenTabOptions} />
+      <Tabs.Screen name="ReleaseHouse" component={ReleaseHouseScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="Reports" component={ReportsScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="AdminPixCharges" component={AdminPixChargesScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="WebhookEvents" component={WebhookEventsScreen} options={hiddenTabOptions} />

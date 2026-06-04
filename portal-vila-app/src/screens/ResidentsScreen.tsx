@@ -37,7 +37,7 @@ export function ResidentsScreen() {
   }
 
   function startCreate() {
-    const usedHouses = new Set(items.map((item) => item.houseId));
+    const usedHouses = new Set(items.filter((item) => item.status === 'ACTIVE').map((item) => item.houseId));
     const nextHouse = Array.from({ length: 10 }, (_, index) => index + 1).find((house) => !usedHouses.has(house)) ?? 0;
     setCreating(true);
     setEditingId(null);
@@ -55,7 +55,7 @@ export function ResidentsScreen() {
         setMessage({ residentId: 0, type: 'error', text: 'Informe casa, nome e email para cadastrar o morador.' });
         return;
       }
-      if (items.some((item) => item.houseId === draft.houseId)) {
+      if (items.some((item) => item.houseId === draft.houseId && item.status === 'ACTIVE')) {
         setMessage({ residentId: 0, type: 'error', text: `Casa ${String(draft.houseId).padStart(2, '0')} ja possui morador cadastrado.` });
         return;
       }

@@ -65,8 +65,7 @@ class PixService {
                 org.springframework.http.HttpStatus.BAD_REQUEST,
                 "Casa nao encontrada ou inativa."
             ));
-        Resident resident = residents.findByHouseId(house.id)
-            .filter(candidate -> "ACTIVE".equals(candidate.status))
+        Resident resident = residents.findFirstByHouseIdAndStatusOrderByCreatedAtDesc(house.id, "ACTIVE")
             .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
                 org.springframework.http.HttpStatus.BAD_REQUEST,
                 house.label + " nao possui morador ativo cadastrado."
