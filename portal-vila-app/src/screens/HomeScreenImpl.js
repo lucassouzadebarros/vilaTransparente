@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useEffect, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
-import { Bell, ChevronDown, QrCode, ShieldCheck, Wrench } from 'lucide-react-native';
+import { Bell, ChevronDown, LogOut, QrCode, ShieldCheck, Wrench } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -17,12 +17,13 @@ const maintenanceOrder = [
 
 export function HomeScreen() {
   const navigation = useNavigation();
-  const { session, isAdmin } = useAuth();
+  const { session, isAdmin, logout } = useAuth();
   const [dashboard, setDashboard] = useState(null);
   const [contributions, setContributions] = useState([]);
   const [charges, setCharges] = useState([]);
   const [services, setServices] = useState([]);
   const [month] = useState(currentMonth());
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   async function load() {
     const [nextDashboard, nextContributions, nextCharges, nextServices] = await Promise.all([
@@ -62,10 +63,20 @@ export function HomeScreen() {
         </Pressable>
       </View>
 
-      <Pressable style={styles.greeting}>
+      <View style={styles.userArea}>
+        <Pressable style={styles.greeting} onPress={() => setUserMenuOpen((current) => !current)}>
         <Text style={styles.greetingText}>Ola, {firstName}</Text>
-        <ChevronDown color={colors.muted} size={16} />
-      </Pressable>
+          <ChevronDown color={colors.muted} size={16} />
+        </Pressable>
+        {userMenuOpen ? (
+          <View style={styles.userMenu}>
+            <Pressable style={styles.logoutMenuItem} onPress={logout}>
+              <LogOut color={colors.red} size={18} />
+              <Text style={styles.logoutMenuText}>Sair</Text>
+            </Pressable>
+          </View>
+        ) : null}
+      </View>
 
       <LocalCard style={styles.balanceCard}>
         <Text style={styles.kicker}>SALDO ATUAL</Text>
@@ -294,6 +305,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm
+  },
+  userArea: {
+    alignSelf: 'flex-start',
+    position: 'relative',
+    zIndex: 5
+  },
+  userMenu: {
+    position: 'absolute',
+    top: 44,
+    left: 0,
+    minWidth: 130,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: spacing.xs,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4
+  },
+  logoutMenuItem: {
+    minHeight: 38,
+    borderRadius: 8,
+    paddingHorizontal: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  logoutMenuText: {
+    color: colors.red,
+    fontSize: 13,
+    fontWeight: '900'
   },
   greetingText: {
     color: colors.ink,

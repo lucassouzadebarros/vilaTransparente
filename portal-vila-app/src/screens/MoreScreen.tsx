@@ -9,6 +9,9 @@ export function MoreScreen() {
 
   return (
     <Screen title="Mais" subtitle={session?.name}>
+      <Row>
+        <Button title="Sair" icon={LogOut} variant="danger" onPress={logout} />
+      </Row>
       <Card>
         <Value>Menu</Value>
         <Button title="Contribuicoes" icon={ListChecks} variant="ghost" onPress={() => navigation.navigate('Contributions')} />
@@ -21,9 +24,6 @@ export function MoreScreen() {
         {isAdmin ? <Button title="Logs Webhook" icon={FileClock} variant="ghost" onPress={() => navigation.navigate('WebhookEvents')} /> : null}
         {isAdmin ? <Button title="Configuracoes" icon={Settings} variant="ghost" onPress={() => navigation.navigate('Settings')} /> : null}
       </Card>
-      <Row>
-        <Button title="Sair" icon={LogOut} variant="danger" onPress={logout} />
-      </Row>
     </Screen>
   );
 }
