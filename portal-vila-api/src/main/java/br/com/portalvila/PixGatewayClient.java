@@ -17,12 +17,14 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 interface PixGatewayClient {
     String ONE_PIXEL_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
 
     GatewayCustomer createOrUpdateCustomer(Resident resident);
     GatewayCharge createPixCharge(CreatePixChargeRequest request);
+    Optional<GatewayCharge> findPaymentByExternalReference(String externalReference);
     PixQrCode getPixQrCode(String gatewayPaymentId);
     GatewayPayment getPayment(String gatewayPaymentId);
     void cancelPayment(String gatewayPaymentId);
@@ -222,6 +224,44 @@ class AsaasPixGatewayClient implements PixGatewayClient {
         } catch (RuntimeException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway nao respondeu dentro do tempo esperado.", ex);
         }
+    }
+
+    @Override
+    public Optional<GatewayCharge> findPaymentByExternalReference(String externalReference) {
+        requireApiKey();
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = webClient.get()
+                .uri(builder -> builder.path("/payments")
+                    .queryParam("externalReference", externalReference)
+                    .queryParam("limit", 10)
+                    .build())
+                .retrieve()
+                .bodyToMono(Map.class)
+                .block(Duration.ofSeconds(15));
+            Object data = response == null ? null : response.get("data");
+            if (data instanceof List<?> list) {
+                return list.stream()
+                    .filter(Map.class::isInstance)
+                    .map(item -> toGatewayCharge((Map<?, ?>) item))
+                    .filter(charge -> !"CANCELLED".equals(charge.status()) && !"DELETED".equals(charge.status()))
+                    .findFirst();
+            }
+            return Optional.empty();
+        } catch (WebClientResponseException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway nao respondeu dentro do tempo esperado.", ex);
+        }
+    }
+
+    private GatewayCharge toGatewayCharge(Map<?, ?> response) {
+        Object status = response.get("status");
+        return new GatewayCharge(
+            String.valueOf(response.get("id")),
+            status == null ? "PENDING" : String.valueOf(status),
+            response.get("invoiceUrl") == null ? null : String.valueOf(response.get("invoiceUrl"))
+        );
     }
 
     @Override

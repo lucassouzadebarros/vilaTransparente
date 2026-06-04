@@ -140,6 +140,8 @@ class PixService {
 
     @Transactional
     public List<PixChargeResponse> reconcile(String month) {
+        Settings settings = settingsRepository.findAll().stream().findFirst().orElseGet(Settings::new);
+        recoverMissingGatewayCharges(month, settings);
         List<PixChargeResponse> current = listCharges(month);
         for (PixChargeResponse response : current) {
             PixCharge charge = pixCharges.findById(response.id()).orElseThrow();
@@ -202,18 +204,28 @@ class PixService {
         resident.gatewayCustomerId = customer.id();
         residents.save(resident);
 
-        String houseNumber = String.format("%02d", house.number);
-        String externalReference = "VILA-" + month + "-HOUSE-" + houseNumber;
+        String externalReference = externalReference(month, house);
         LocalDate dueDate = reference.atDay(Math.min(settings.paymentDueDay, reference.lengthOfMonth()));
-        GatewayCharge gatewayCharge = gatewayClient.createPixCharge(new CreatePixChargeRequest(
-            customer.id(),
-            externalReference,
-            "Caixinha da Vila - " + house.label + " - " + month,
-            amount,
-            dueDate
-        ));
-        PixQrCode qrCode = gatewayClient.getPixQrCode(gatewayCharge.id());
+        GatewayCharge gatewayCharge = gatewayClient.findPaymentByExternalReference(externalReference)
+            .orElseGet(() -> gatewayClient.createPixCharge(new CreatePixChargeRequest(
+                customer.id(),
+                externalReference,
+                "Caixinha da Vila - " + house.label + " - " + month,
+                amount,
+                dueDate
+            )));
+        return persistGatewayCharge(settings, contribution, externalReference, amount, dueDate, gatewayCharge);
+    }
 
+    private PixChargeResponse persistGatewayCharge(
+        Settings settings,
+        Contribution contribution,
+        String externalReference,
+        BigDecimal amount,
+        LocalDate dueDate,
+        GatewayCharge gatewayCharge
+    ) {
+        PixQrCode qrCode = gatewayClient.getPixQrCode(gatewayCharge.id());
         PixCharge charge = new PixCharge();
         charge.contributionId = contribution.id;
         charge.gateway = settings.gatewayProvider;
@@ -225,14 +237,51 @@ class PixService {
         charge.qrCodeBase64 = qrCode.encodedImage();
         charge.pixCopyPaste = qrCode.payload();
         charge.invoiceUrl = gatewayCharge.invoiceUrl();
+        if ("PAID".equals(charge.status)) {
+            charge.paidAt = LocalDateTime.now();
+        }
         charge.updatedAt = LocalDateTime.now();
         charge = pixCharges.save(charge);
 
         contribution.pixChargeId = charge.id;
-        contribution.status = "PAID".equals(charge.status) ? "PAID" : "PENDING";
+        if ("PAID".equals(charge.status)) {
+            contribution.status = "PAID";
+            contribution.paidAmount = amount;
+            contribution.paymentDate = LocalDateTime.now();
+            contribution.paymentMethod = "PIX_ASAAS";
+        } else {
+            contribution.status = "PENDING";
+        }
         contribution.updatedAt = LocalDateTime.now();
         contributions.save(contribution);
         return toResponse(charge, contribution);
+    }
+
+    private void recoverMissingGatewayCharges(String month, Settings settings) {
+        for (Contribution contribution : contributions.findByReferenceMonthOrderByHouseIdAsc(month)) {
+            if (pixCharges.findByContributionId(contribution.id).isPresent()) {
+                continue;
+            }
+            House house = houses.findById(contribution.houseId).orElse(null);
+            if (house == null) {
+                continue;
+            }
+            String externalReference = externalReference(month, house);
+            gatewayClient.findPaymentByExternalReference(externalReference)
+                .ifPresent(gatewayCharge -> persistGatewayCharge(
+                    settings,
+                    contribution,
+                    externalReference,
+                    contribution.amount,
+                    YearMonth.parse(month).atDay(Math.min(settings.paymentDueDay, YearMonth.parse(month).lengthOfMonth())),
+                    gatewayCharge
+                ));
+        }
+    }
+
+    private String externalReference(String month, House house) {
+        String houseNumber = String.format("%02d", house.number);
+        return "VILA-" + month + "-HOUSE-" + houseNumber;
     }
 
     private String normalizeGatewayStatus(String status) {
