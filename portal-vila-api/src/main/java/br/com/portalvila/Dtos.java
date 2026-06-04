@@ -48,6 +48,7 @@ record DashboardResponse(
     BigDecimal expenses,
     long paidHouses,
     long pendingHouses,
+    boolean transparencyEnabled,
     List<MovementResponse> movements
 ) {
 }

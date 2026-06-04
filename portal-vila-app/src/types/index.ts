@@ -17,6 +17,7 @@ export type Dashboard = {
   expenses: number;
   paidHouses: number;
   pendingHouses: number;
+  transparencyEnabled: boolean;
   movements: Movement[];
 };
 

@@ -50,45 +50,47 @@ class FinancialService {
     }
 
     private DashboardResponse dashboard(String month, Long residentId, boolean includeAllContributionMovements) {
+        boolean transparencyEnabled = includeAllContributionMovements || hasPaidContribution(residentId);
         List<Contribution> monthContributions = contributions.findByReferenceMonthOrderByHouseIdAsc(month);
-        BigDecimal collected = monthContributions.stream()
+        BigDecimal collected = transparencyEnabled ? monthContributions.stream()
             .filter(c -> "PAID".equals(c.status))
             .map(this::paidValue)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal pending = monthContributions.stream()
+            .reduce(BigDecimal.ZERO, BigDecimal::add) : BigDecimal.ZERO;
+        BigDecimal pending = transparencyEnabled ? monthContributions.stream()
             .filter(c -> "PENDING".equals(c.status))
             .map(c -> c.amount)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal overdue = monthContributions.stream()
+            .reduce(BigDecimal.ZERO, BigDecimal::add) : BigDecimal.ZERO;
+        BigDecimal overdue = transparencyEnabled ? monthContributions.stream()
             .filter(c -> "OVERDUE".equals(c.status))
             .map(c -> c.amount)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal allPaid = contributions.findAll().stream()
+            .reduce(BigDecimal.ZERO, BigDecimal::add) : BigDecimal.ZERO;
+        BigDecimal allPaid = transparencyEnabled ? contributions.findAll().stream()
             .filter(c -> "PAID".equals(c.status))
             .map(this::paidValue)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal allExpenses = expenses.findAll().stream()
+            .reduce(BigDecimal.ZERO, BigDecimal::add) : BigDecimal.ZERO;
+        BigDecimal allExpenses = transparencyEnabled ? expenses.findAll().stream()
             .map(e -> e.amount)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+            .reduce(BigDecimal.ZERO, BigDecimal::add) : BigDecimal.ZERO;
 
         List<MovementResponse> movements = new ArrayList<>();
-        monthContributions.stream()
-            .filter(c -> "PAID".equals(c.status))
-            .filter(c -> includeAllContributionMovements || (residentId != null && residentId.equals(c.residentId)))
-            .forEach(c -> movements.add(new MovementResponse(
-                c.paymentDate == null ? YearMonth.parse(c.referenceMonth).atDay(1) : c.paymentDate.toLocalDate(),
-                c.manualPayment ? "PAGAMENTO_MANUAL" : "PIX_ASAAS",
-                includeAllContributionMovements ? "Contribuicao casa " + c.houseId : "Minha contribuicao",
-                paidValue(c),
-                c.status
+        if (transparencyEnabled) {
+            monthContributions.stream()
+                .filter(c -> "PAID".equals(c.status))
+                .forEach(c -> movements.add(new MovementResponse(
+                    c.paymentDate == null ? YearMonth.parse(c.referenceMonth).atDay(1) : c.paymentDate.toLocalDate(),
+                    c.manualPayment ? "PAGAMENTO_MANUAL" : "PIX_ASAAS",
+                    includeAllContributionMovements ? "Contribuicao casa " + c.houseId : "Mensalidade recebida",
+                    paidValue(c),
+                    c.status
+                )));
+            expenses.findAll().forEach(e -> movements.add(new MovementResponse(
+                e.expenseDate,
+                "DESPESA",
+                e.description,
+                e.amount.negate(),
+                "PAID"
             )));
-        expenses.findAll().forEach(e -> movements.add(new MovementResponse(
-            e.expenseDate,
-            "DESPESA",
-            e.description,
-            e.amount.negate(),
-            "PAID"
-        )));
+        }
         movements.sort(Comparator.comparing(MovementResponse::date).reversed());
 
         return new DashboardResponse(
@@ -98,10 +100,16 @@ class FinancialService {
             pending,
             overdue,
             allExpenses,
-            monthContributions.stream().filter(c -> "PAID".equals(c.status)).count(),
-            monthContributions.stream().filter(c -> !"PAID".equals(c.status)).count(),
+            transparencyEnabled ? monthContributions.stream().filter(c -> "PAID".equals(c.status)).count() : 0,
+            transparencyEnabled ? monthContributions.stream().filter(c -> !"PAID".equals(c.status)).count() : 0,
+            transparencyEnabled,
             movements
         );
+    }
+
+    private boolean hasPaidContribution(Long residentId) {
+        return residentId != null && contributions.findAll().stream()
+            .anyMatch(c -> residentId.equals(c.residentId) && "PAID".equals(c.status));
     }
 
     @Transactional(readOnly = true)

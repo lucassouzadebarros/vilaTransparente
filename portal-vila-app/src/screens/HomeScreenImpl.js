@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { ChevronDown, LogOut, QrCode, RefreshCw, ShieldCheck, Wrench } from 'lucide-react-native';
+import { ChevronDown, Lock, LogOut, QrCode, RefreshCw, ShieldCheck, WalletCards, Wrench } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -108,16 +108,20 @@ export function HomeScreen() {
         ) : null}
       </View>
 
-      <LocalCard style={styles.balanceCard}>
-        <Text style={styles.kicker}>SALDO ATUAL</Text>
-        <Text style={styles.balanceValue}>{formatCurrency(dashboard?.balance ?? 0)}</Text>
-      </LocalCard>
+      {isAdmin ? (
+        <>
+          <LocalCard style={styles.balanceCard}>
+            <Text style={styles.kicker}>SALDO ATUAL</Text>
+            <Text style={styles.balanceValue}>{formatCurrency(dashboard?.balance ?? 0)}</Text>
+          </LocalCard>
 
-      <View style={styles.summaryGrid}>
-        <SummaryCard title="ARRECADADO" value={totals.collected} />
-        <SummaryCard title="A CONFERIR" value={totals.checking} />
-        <SummaryCard title="PENDENTE" value={totals.pending} />
-      </View>
+          <View style={styles.summaryGrid}>
+            <SummaryCard title="ARRECADADO" value={totals.collected} />
+            <SummaryCard title="A CONFERIR" value={totals.checking} />
+            <SummaryCard title="PENDENTE" value={totals.pending} />
+          </View>
+        </>
+      ) : null}
 
       {isAdmin ? (
         <LocalCard style={styles.contributionCard}>
@@ -140,28 +144,42 @@ export function HomeScreen() {
           </View>
         </LocalCard>
       ) : (
-        <LocalCard style={styles.contributionCard}>
-          <View style={styles.cardHeaderRow}>
-            <View>
-              <Text style={styles.cardTitle}>Minha contribuicao</Text>
-              <Text style={styles.cardSubtitle}>{myContribution?.houseLabel ?? 'Minha casa'} - {monthLabel(month)}</Text>
+        <>
+          <LocalCard style={styles.contributionCard}>
+            <View style={styles.cardHeaderRow}>
+              <View>
+                <Text style={styles.cardTitle}>Minha mensalidade</Text>
+                <Text style={styles.cardSubtitle}>{myContribution?.houseLabel ?? 'Minha casa'} - {monthLabel(month)}</Text>
+              </View>
+              <StatusPill status={myContribution?.status} />
             </View>
-            <StatusPill status={myContribution?.status} />
-          </View>
-          <View style={styles.contributionInfo}>
-            <Text style={styles.contributionLabel}>Valor</Text>
-            <Text style={styles.contributionValue}>{formatCurrency(myContribution?.amount ?? 0)}</Text>
-          </View>
-          <Text style={styles.cardSubtitle}>{myCharge?.dueDate ? `Vence em ${formatDate(myCharge.dueDate)}` : 'Cobranca Pix ainda nao gerada'}</Text>
-          <Pressable
-            disabled={!myCharge?.id}
-            style={[styles.primaryAction, !myCharge?.id ? styles.disabledAction : null]}
-            onPress={() => navigation.navigate('PixPayment', { id: myCharge.id })}
-          >
-            <QrCode color={colors.surface} size={18} />
-            <Text style={styles.primaryActionText}>{myCharge?.id ? 'Ver Pix do mes' : 'Pix nao gerado'}</Text>
-          </Pressable>
-        </LocalCard>
+            <View style={styles.contributionInfo}>
+              <Text style={styles.contributionLabel}>Valor</Text>
+              <Text style={styles.contributionValue}>{formatCurrency(myContribution?.amount ?? 0)}</Text>
+            </View>
+            <Text style={styles.cardSubtitle}>
+              {myContribution?.paymentDate
+                ? `Confirmado em ${formatDate(myContribution.paymentDate)}`
+                : myCharge?.dueDate
+                  ? `Vence em ${formatDate(myCharge.dueDate)}`
+                  : 'Cobranca Pix ainda nao gerada'}
+            </Text>
+            <Pressable
+              disabled={!myCharge?.id}
+              style={[styles.primaryAction, !myCharge?.id ? styles.disabledAction : null]}
+              onPress={() => navigation.navigate('PixPayment', { id: myCharge.id })}
+            >
+              <QrCode color={colors.surface} size={18} />
+              <Text style={styles.primaryActionText}>{myCharge?.id ? 'Ver Pix do mes' : 'Pix nao gerado'}</Text>
+            </Pressable>
+          </LocalCard>
+
+          {dashboard?.transparencyEnabled ? (
+            <TransparencyOpenCard dashboard={dashboard} navigation={navigation} />
+          ) : (
+            <TransparencyLockedCard />
+          )}
+        </>
       )}
 
       <SectionTitle title="Manutencoes em destaque" />
@@ -203,6 +221,65 @@ function SummaryCard({ title, value }) {
     <View style={styles.summaryCard}>
       <Text style={styles.summaryTitle}>{title}</Text>
       <Text style={styles.summaryValue}>{formatCurrency(value)}</Text>
+    </View>
+  );
+}
+
+function TransparencyLockedCard() {
+  return (
+    <LocalCard style={styles.transparencyCard}>
+      <View style={styles.cardHeaderRow}>
+        <View style={styles.transparencyTitleWrap}>
+          <Text style={styles.cardTitle}>Transparencia financeira</Text>
+          <Text style={styles.cardSubtitle}>Liberada apos sua primeira contribuicao</Text>
+        </View>
+        <View style={styles.lockIcon}>
+          <Lock color={colors.muted} size={21} />
+        </View>
+      </View>
+      <Text style={styles.lockedText}>
+        Quando o pagamento for confirmado, voce acompanha saldo acumulado, arrecadacao e despesas da vila.
+      </Text>
+      <View style={styles.disabledInfo}>
+        <Text style={styles.disabledInfoText}>Aguardando pagamento confirmado</Text>
+      </View>
+    </LocalCard>
+  );
+}
+
+function TransparencyOpenCard({ dashboard, navigation }) {
+  return (
+    <LocalCard style={styles.transparencyCard}>
+      <View style={styles.cardHeaderRow}>
+        <View style={styles.transparencyTitleWrap}>
+          <Text style={styles.cardTitle}>Saldo acumulado da vila</Text>
+          <Text style={styles.cardSubtitle}>Transparencia liberada</Text>
+        </View>
+        <View style={styles.adminIcon}>
+          <WalletCards color={colors.blue} size={22} />
+        </View>
+      </View>
+      <Text style={styles.balanceInline}>{formatCurrency(dashboard?.balance ?? 0)}</Text>
+      <View style={styles.transparencyRows}>
+        <SummaryLine label="Arrecadado" value={dashboard?.collected ?? 0} />
+        <SummaryLine label="Despesas" value={dashboard?.expenses ?? 0} />
+        <View style={styles.summaryLine}>
+          <Text style={styles.summaryLineLabel}>Casas pagas</Text>
+          <Text style={styles.summaryLineValue}>{dashboard?.paidHouses ?? 0}</Text>
+        </View>
+      </View>
+      <Pressable style={styles.primaryAction} onPress={() => navigation.navigate('Caixa')}>
+        <Text style={styles.primaryActionText}>Ver transparencia</Text>
+      </Pressable>
+    </LocalCard>
+  );
+}
+
+function SummaryLine({ label, value }) {
+  return (
+    <View style={styles.summaryLine}>
+      <Text style={styles.summaryLineLabel}>{label}</Text>
+      <Text style={styles.summaryLineValue}>{formatCurrency(value)}</Text>
     </View>
   );
 }
@@ -478,6 +555,70 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  transparencyCard: {
+    gap: spacing.md
+  },
+  transparencyTitleWrap: {
+    flex: 1,
+    minWidth: 0
+  },
+  lockIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  lockedText: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700'
+  },
+  disabledInfo: {
+    minHeight: 42,
+    borderRadius: 8,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md
+  },
+  disabledInfoText: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  balanceInline: {
+    color: colors.blue,
+    fontSize: 28,
+    fontWeight: '900'
+  },
+  transparencyRows: {
+    gap: spacing.sm
+  },
+  summaryLine: {
+    minHeight: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md
+  },
+  summaryLineLabel: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  summaryLineValue: {
+    color: colors.ink,
+    fontSize: 15,
+    fontWeight: '900'
   },
   contributionInfo: {
     gap: spacing.xs

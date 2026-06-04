@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
-import { ListChecks, QrCode, ReceiptText, RefreshCw } from 'lucide-react-native';
+import { ListChecks, Lock, QrCode, ReceiptText, RefreshCw } from 'lucide-react-native';
 import { Badge, Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
 import { api } from '../services/api';
 import { Contribution, Dashboard } from '../types';
+import { useAuth } from '../context/AuthContext';
 import { currentMonth } from '../utils/month';
 
 export function CashBoxScreen() {
   const navigation = useNavigation<any>();
+  const { isAdmin } = useAuth();
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [month] = useState(currentMonth());
@@ -24,6 +26,16 @@ export function CashBoxScreen() {
 
   return (
     <Screen title="Caixa" subtitle="Resumo financeiro" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
+      {!isAdmin && dashboard?.transparencyEnabled === false ? (
+        <Card>
+          <Row>
+            <Value>Transparencia financeira</Value>
+            <Lock color="#667085" size={20} />
+          </Row>
+          <Label>O saldo acumulado sera liberado depois que sua primeira contribuicao for confirmada.</Label>
+        </Card>
+      ) : (
+        <>
       <Card>
         <Label>Saldo disponivel</Label>
         <Money value={dashboard?.balance ?? 0} strong />
@@ -40,6 +52,8 @@ export function CashBoxScreen() {
         <Button title="Contribuicoes" icon={ListChecks} onPress={() => navigation.navigate('Contributions')} />
         <Button title="Despesas" icon={ReceiptText} variant="ghost" onPress={() => navigation.navigate('Expenses')} />
       </Row>
+        </>
+      )}
       {contributions.slice(0, 5).map((item) => (
         <Card key={item.id}>
           <Row>
