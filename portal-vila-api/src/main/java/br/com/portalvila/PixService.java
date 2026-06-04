@@ -127,7 +127,12 @@ class PixService {
         LocalDate end = LocalDate.now().plusMonths(12).withDayOfMonth(1).plusMonths(1).minusDays(1);
         boolean changed = false;
         for (GatewayCharge gatewayCharge : gatewayClient.listPixPaymentsByCustomerAndDueDateRange(resident.gatewayCustomerId, start, end)) {
-            if (pixCharges.findByGatewayAndGatewayPaymentId(settings.gatewayProvider, gatewayCharge.id()).isPresent()) {
+            PixCharge existingCharge = pixCharges.findByGatewayAndGatewayPaymentId(settings.gatewayProvider, gatewayCharge.id()).orElse(null);
+            if (existingCharge != null) {
+                Contribution existingContribution = contributions.findById(existingCharge.contributionId).orElse(null);
+                if (existingContribution != null) {
+                    changed = applyGatewayPayment(existingCharge, existingContribution, gatewayClient.getPayment(existingCharge.gatewayPaymentId)) || changed;
+                }
                 continue;
             }
             LocalDate dueDate = gatewayCharge.dueDate();
@@ -394,10 +399,16 @@ class PixService {
         };
     }
 
-    private void applyGatewayPayment(PixCharge charge, Contribution contribution, GatewayPayment payment) {
+    private boolean applyGatewayPayment(PixCharge charge, Contribution contribution, GatewayPayment payment) {
+        String previousChargeStatus = charge.status;
+        String previousContributionStatus = contribution.status;
+        BigDecimal previousPaidAmount = contribution.paidAmount;
+        LocalDateTime previousPaymentDate = contribution.paymentDate;
+        String previousReceiptUrl = charge.receiptUrl;
+
         String status = normalizeGatewayStatus(payment.status());
         if ("PENDING".equals(status) && "PAID".equals(charge.status) && payment.value().signum() == 0) {
-            return;
+            return false;
         }
         charge.status = status;
         if ("PAID".equals(status)) {
@@ -420,5 +431,14 @@ class PixService {
         contribution.updatedAt = LocalDateTime.now();
         pixCharges.save(charge);
         contributions.save(contribution);
+        return !same(previousChargeStatus, charge.status)
+            || !same(previousContributionStatus, contribution.status)
+            || !same(previousPaidAmount, contribution.paidAmount)
+            || !same(previousPaymentDate, contribution.paymentDate)
+            || !same(previousReceiptUrl, charge.receiptUrl);
+    }
+
+    private boolean same(Object left, Object right) {
+        return java.util.Objects.equals(left, right);
     }
 }
