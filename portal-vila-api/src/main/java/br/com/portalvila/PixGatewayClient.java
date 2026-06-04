@@ -81,20 +81,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
             if (existingId == null || existingId.isBlank()) {
                 existingId = findCustomerIdByCpfCnpj(cpfCnpj);
             }
-            @SuppressWarnings("unchecked")
-            Map<String, Object> response = existingId == null
-                ? webClient.post()
-                    .uri("/customers")
-                    .bodyValue(payload)
-                    .retrieve()
-                    .bodyToMono(Map.class)
-                    .block(Duration.ofSeconds(15))
-                : webClient.put()
-                    .uri("/customers/{id}", existingId)
-                    .bodyValue(payload)
-                    .retrieve()
-                    .bodyToMono(Map.class)
-                    .block(Duration.ofSeconds(15));
+            Map<String, Object> response = saveCustomer(existingId, payload);
             return new GatewayCustomer(String.valueOf(response.getOrDefault("id", existingId)));
         } catch (ResponseStatusException ex) {
             throw ex;
@@ -103,6 +90,53 @@ class AsaasPixGatewayClient implements PixGatewayClient {
         } catch (RuntimeException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway nao respondeu dentro do tempo esperado.", ex);
         }
+    }
+
+    private Map<String, Object> saveCustomer(String existingId, Map<String, Object> payload) {
+        if (existingId == null || existingId.isBlank()) {
+            return createCustomer(payload);
+        }
+        try {
+            return updateCustomer(existingId, payload);
+        } catch (WebClientResponseException ex) {
+            if (!isMissingGatewayCustomer(ex)) {
+                throw ex;
+            }
+            return createCustomer(payload);
+        }
+    }
+
+    private Map<String, Object> createCustomer(Map<String, Object> payload) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> response = webClient.post()
+            .uri("/customers")
+            .bodyValue(payload)
+            .retrieve()
+            .bodyToMono(Map.class)
+            .block(Duration.ofSeconds(15));
+        return response;
+    }
+
+    private Map<String, Object> updateCustomer(String existingId, Map<String, Object> payload) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> response = webClient.put()
+            .uri("/customers/{id}", existingId)
+            .bodyValue(payload)
+            .retrieve()
+            .bodyToMono(Map.class)
+            .block(Duration.ofSeconds(15));
+        return response;
+    }
+
+    private boolean isMissingGatewayCustomer(WebClientResponseException ex) {
+        if (ex.getStatusCode().value() == 404) {
+            return true;
+        }
+        String message = asaasError(ex).toLowerCase();
+        return message.contains("nao encontrado")
+            || message.contains("não encontrado")
+            || message.contains("not found")
+            || message.contains("customer not found");
     }
 
     private String findCustomerIdByCpfCnpj(String cpfCnpj) {
