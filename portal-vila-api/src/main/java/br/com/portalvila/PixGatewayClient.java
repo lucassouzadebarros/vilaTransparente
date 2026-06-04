@@ -25,6 +25,7 @@ interface PixGatewayClient {
     GatewayCustomer createOrUpdateCustomer(Resident resident);
     GatewayCharge createPixCharge(CreatePixChargeRequest request);
     Optional<GatewayCharge> findPaymentByExternalReference(String externalReference);
+    List<GatewayCharge> listPixPaymentsByCustomerAndDueDateRange(String customerId, LocalDate start, LocalDate end);
     PixQrCode getPixQrCode(String gatewayPaymentId);
     GatewayPayment getPayment(String gatewayPaymentId);
     void cancelPayment(String gatewayPaymentId);
@@ -42,7 +43,7 @@ record CreatePixChargeRequest(
 ) {
 }
 
-record GatewayCharge(String id, String status, String invoiceUrl) {
+record GatewayCharge(String id, String status, String invoiceUrl, BigDecimal value, LocalDate dueDate, String externalReference) {
 }
 
 record PixQrCode(String encodedImage, String payload, String expirationDate) {
@@ -217,7 +218,10 @@ class AsaasPixGatewayClient implements PixGatewayClient {
             return new GatewayCharge(
                 String.valueOf(response.get("id")),
                 String.valueOf(response.getOrDefault("status", "PENDING")),
-                response.get("invoiceUrl") == null ? null : String.valueOf(response.get("invoiceUrl"))
+                response.get("invoiceUrl") == null ? null : String.valueOf(response.get("invoiceUrl")),
+                request.value(),
+                request.dueDate(),
+                request.externalReference()
             );
         } catch (WebClientResponseException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
@@ -255,12 +259,47 @@ class AsaasPixGatewayClient implements PixGatewayClient {
         }
     }
 
+    @Override
+    public List<GatewayCharge> listPixPaymentsByCustomerAndDueDateRange(String customerId, LocalDate start, LocalDate end) {
+        requireApiKey();
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = webClient.get()
+                .uri(builder -> builder.path("/payments")
+                    .queryParam("customer", customerId)
+                    .queryParam("billingType", "PIX")
+                    .queryParam("dueDate[ge]", start.format(DateTimeFormatter.ISO_DATE))
+                    .queryParam("dueDate[le]", end.format(DateTimeFormatter.ISO_DATE))
+                    .queryParam("limit", 100)
+                    .build())
+                .retrieve()
+                .bodyToMono(Map.class)
+                .block(Duration.ofSeconds(15));
+            Object data = response == null ? null : response.get("data");
+            if (data instanceof List<?> list) {
+                return list.stream()
+                    .filter(Map.class::isInstance)
+                    .map(item -> toGatewayCharge((Map<?, ?>) item))
+                    .filter(charge -> !"CANCELLED".equals(charge.status()) && !"DELETED".equals(charge.status()))
+                    .toList();
+            }
+            return List.of();
+        } catch (WebClientResponseException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway nao respondeu dentro do tempo esperado.", ex);
+        }
+    }
+
     private GatewayCharge toGatewayCharge(Map<?, ?> response) {
         Object status = response.get("status");
         return new GatewayCharge(
             String.valueOf(response.get("id")),
             status == null ? "PENDING" : String.valueOf(status),
-            response.get("invoiceUrl") == null ? null : String.valueOf(response.get("invoiceUrl"))
+            response.get("invoiceUrl") == null ? null : String.valueOf(response.get("invoiceUrl")),
+            response.get("value") == null ? null : new BigDecimal(String.valueOf(response.get("value"))),
+            response.get("dueDate") == null ? null : LocalDate.parse(String.valueOf(response.get("dueDate"))),
+            response.get("externalReference") == null ? null : String.valueOf(response.get("externalReference"))
         );
     }
 

@@ -1,6 +1,7 @@
 package br.com.portalvila;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -37,6 +38,16 @@ class WebhookServiceTest {
 
     @Autowired
     WebhookEventRepository webhookEvents;
+
+    @BeforeEach
+    void cleanDatabase() {
+        webhookEvents.deleteAll();
+        pixCharges.deleteAll();
+        contributions.deleteAll();
+        residents.deleteAll();
+        houses.deleteAll();
+        settingsRepository.deleteAll();
+    }
 
     @Test
     void paymentReceivedMarksChargeAndContributionAsPaidAndIgnoresDuplicateEvent() throws Exception {
@@ -89,5 +100,47 @@ class WebhookServiceTest {
         assertThat(pixCharges.findById(charge.id).orElseThrow().status).isEqualTo("PAID");
         assertThat(contributions.findById(contribution.id).orElseThrow().status).isEqualTo("PAID");
         assertThat(webhookEvents.findAll()).hasSize(1);
+    }
+
+    @Test
+    void paymentCreatedFromAsaasCreatesMissingLocalChargeByCustomerAndDueDate() throws Exception {
+        Settings settings = new Settings();
+        settings.webhookSecret = "test-webhook-token";
+        settingsRepository.save(settings);
+
+        House house = houses.save(new House(10, "Casa 10"));
+        Resident resident = new Resident(house.id, "Lorrane", "lorrane-webhook@test.dev", null, "***.222.***-**");
+        resident.gatewayCustomerId = "cus_123";
+        resident = residents.save(resident);
+
+        String payload = """
+            {
+              "id": "evt_created_123",
+              "event": "PAYMENT_CREATED",
+              "dateCreated": "2026-07-01 09:00:00",
+              "payment": {
+                "id": "pay_july_123",
+                "customer": "cus_123",
+                "billingType": "PIX",
+                "status": "PENDING",
+                "value": 10.00,
+                "dueDate": "2026-07-10",
+                "invoiceUrl": "https://asaas.test/invoice"
+              }
+            }
+            """;
+
+        WebhookResult result = webhookService.processAsaas("test-webhook-token", objectMapper.readTree(payload));
+
+        Contribution contribution = contributions.findByHouseIdAndReferenceMonth(house.id, "2026-07").orElseThrow();
+        PixCharge charge = pixCharges.findByGatewayAndGatewayPaymentId("ASAAS", "pay_july_123").orElseThrow();
+
+        assertThat(result.processed()).isTrue();
+        assertThat(contribution.residentId).isEqualTo(resident.id);
+        assertThat(contribution.status).isEqualTo("PENDING");
+        assertThat(charge.contributionId).isEqualTo(contribution.id);
+        assertThat(charge.value).isEqualByComparingTo("10.00");
+        assertThat(charge.dueDate).isEqualTo(LocalDate.of(2026, 7, 10));
+        assertThat(charge.invoiceUrl).isEqualTo("https://asaas.test/invoice");
     }
 }

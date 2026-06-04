@@ -12,6 +12,7 @@ interface HouseRepository extends JpaRepository<House, Long> {
 
 interface ResidentRepository extends JpaRepository<Resident, Long> {
     Optional<Resident> findFirstByHouseIdAndStatusOrderByCreatedAtDesc(Long houseId, String status);
+    Optional<Resident> findFirstByGatewayCustomerIdAndStatusOrderByCreatedAtDesc(String gatewayCustomerId, String status);
     List<Resident> findAllByOrderByHouseIdAsc();
 }
 

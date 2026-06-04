@@ -230,9 +230,11 @@ class PixService {
         charge.contributionId = contribution.id;
         charge.gateway = settings.gatewayProvider;
         charge.gatewayPaymentId = gatewayCharge.id();
-        charge.externalReference = externalReference;
-        charge.value = amount;
-        charge.dueDate = dueDate;
+        charge.externalReference = gatewayCharge.externalReference() == null || gatewayCharge.externalReference().isBlank()
+            ? externalReference
+            : gatewayCharge.externalReference();
+        charge.value = gatewayCharge.value() == null ? amount : gatewayCharge.value();
+        charge.dueDate = gatewayCharge.dueDate() == null ? dueDate : gatewayCharge.dueDate();
         charge.status = normalizeGatewayStatus(gatewayCharge.status());
         charge.qrCodeBase64 = qrCode.encodedImage();
         charge.pixCopyPaste = qrCode.payload();
@@ -246,7 +248,7 @@ class PixService {
         contribution.pixChargeId = charge.id;
         if ("PAID".equals(charge.status)) {
             contribution.status = "PAID";
-            contribution.paidAmount = amount;
+            contribution.paidAmount = charge.value;
             contribution.paymentDate = LocalDateTime.now();
             contribution.paymentMethod = "PIX_ASAAS";
         } else {
@@ -258,25 +260,54 @@ class PixService {
     }
 
     private void recoverMissingGatewayCharges(String month, Settings settings) {
-        for (Contribution contribution : contributions.findByReferenceMonthOrderByHouseIdAsc(month)) {
-            if (pixCharges.findByContributionId(contribution.id).isPresent()) {
+        YearMonth reference = YearMonth.parse(month);
+        LocalDate start = reference.atDay(1);
+        LocalDate end = reference.atEndOfMonth();
+        for (Resident resident : residents.findAllByOrderByHouseIdAsc()) {
+            if (!"ACTIVE".equals(resident.status)) {
                 continue;
             }
-            House house = houses.findById(contribution.houseId).orElse(null);
+            House house = houses.findById(resident.houseId).orElse(null);
             if (house == null) {
                 continue;
             }
             String externalReference = externalReference(month, house);
-            gatewayClient.findPaymentByExternalReference(externalReference)
-                .ifPresent(gatewayCharge -> persistGatewayCharge(
-                    settings,
-                    contribution,
-                    externalReference,
-                    contribution.amount,
-                    YearMonth.parse(month).atDay(Math.min(settings.paymentDueDay, YearMonth.parse(month).lengthOfMonth())),
-                    gatewayCharge
-                ));
+            Contribution contribution = contributions.findByHouseIdAndReferenceMonth(house.id, month).orElse(null);
+            if (contribution != null && pixCharges.findByContributionId(contribution.id).isPresent()) {
+                continue;
+            }
+            GatewayCharge gatewayCharge = gatewayClient.findPaymentByExternalReference(externalReference)
+                .orElseGet(() -> findResidentGatewayCharge(resident, start, end).orElse(null));
+            if (gatewayCharge == null || pixCharges.findByGatewayAndGatewayPaymentId(settings.gatewayProvider, gatewayCharge.id()).isPresent()) {
+                continue;
+            }
+            BigDecimal amount = gatewayCharge.value() == null
+                ? contribution == null ? settings.monthlyAmount : contribution.amount
+                : gatewayCharge.value();
+            if (contribution == null) {
+                contribution = new Contribution();
+                contribution.houseId = house.id;
+                contribution.residentId = resident.id;
+                contribution.referenceMonth = month;
+                contribution.amount = amount;
+                contribution.status = "PENDING";
+                contribution = contributions.save(contribution);
+            }
+            LocalDate dueDate = gatewayCharge.dueDate() == null
+                ? reference.atDay(Math.min(settings.paymentDueDay, reference.lengthOfMonth()))
+                : gatewayCharge.dueDate();
+            persistGatewayCharge(settings, contribution, externalReference, amount, dueDate, gatewayCharge);
         }
+    }
+
+    private java.util.Optional<GatewayCharge> findResidentGatewayCharge(Resident resident, LocalDate start, LocalDate end) {
+        if (resident.gatewayCustomerId == null || resident.gatewayCustomerId.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        return gatewayClient.listPixPaymentsByCustomerAndDueDateRange(resident.gatewayCustomerId, start, end)
+            .stream()
+            .filter(charge -> pixCharges.findByGatewayAndGatewayPaymentId("ASAAS", charge.id()).isEmpty())
+            .findFirst();
     }
 
     private String externalReference(String month, House house) {

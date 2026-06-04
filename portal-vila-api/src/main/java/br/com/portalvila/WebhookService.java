@@ -17,6 +17,9 @@ class WebhookService {
     private final WebhookEventRepository events;
     private final PixChargeRepository pixCharges;
     private final ContributionRepository contributions;
+    private final HouseRepository houses;
+    private final ResidentRepository residents;
+    private final PixGatewayClient gatewayClient;
     private final SettingsRepository settingsRepository;
     private final DashboardEventService dashboardEvents;
     private final String configuredToken;
@@ -26,6 +29,9 @@ class WebhookService {
         WebhookEventRepository events,
         PixChargeRepository pixCharges,
         ContributionRepository contributions,
+        HouseRepository houses,
+        ResidentRepository residents,
+        PixGatewayClient gatewayClient,
         SettingsRepository settingsRepository,
         DashboardEventService dashboardEvents,
         @Value("${portal.asaas.webhook-token:}") String configuredToken
@@ -34,6 +40,9 @@ class WebhookService {
         this.events = events;
         this.pixCharges = pixCharges;
         this.contributions = contributions;
+        this.houses = houses;
+        this.residents = residents;
+        this.gatewayClient = gatewayClient;
         this.settingsRepository = settingsRepository;
         this.dashboardEvents = dashboardEvents;
         this.configuredToken = configuredToken;
@@ -93,11 +102,18 @@ class WebhookService {
         }
         PixCharge charge = pixCharges.findByGatewayAndGatewayPaymentId("ASAAS", gatewayPaymentId).orElse(null);
         if (charge == null) {
-            return false;
+            charge = createLocalChargeFromPayment(gatewayPaymentId, payment);
+            if (charge == null) {
+                return false;
+            }
         }
         Contribution contribution = contributions.findById(charge.contributionId).orElseThrow();
 
         switch (eventType) {
+            case "PAYMENT_CREATED", "PAYMENT_UPDATED" -> {
+                String status = normalizeGatewayStatus(text(payment, "status"));
+                applyNormalizedStatus(charge, contribution, status, payment);
+            }
             case "PAYMENT_RECEIVED", "PAYMENT_CONFIRMED" -> {
                 charge.status = "PAID";
                 charge.paidAt = LocalDateTime.now();
@@ -132,6 +148,165 @@ class WebhookService {
         return true;
     }
 
+    private PixCharge createLocalChargeFromPayment(String gatewayPaymentId, JsonNode payment) {
+        String billingType = text(payment, "billingType");
+        if (billingType != null && !billingType.isBlank() && !"PIX".equalsIgnoreCase(billingType)) {
+            return null;
+        }
+        LocalDate dueDate = date(payment, "dueDate");
+        if (dueDate == null) {
+            return null;
+        }
+        Resident resident = residentFromPayment(payment);
+        if (resident == null) {
+            return null;
+        }
+        House house = houses.findById(resident.houseId).orElse(null);
+        if (house == null) {
+            return null;
+        }
+        String detectedMonth = monthFromExternalReference(text(payment, "externalReference"));
+        if (detectedMonth == null) {
+            detectedMonth = java.time.YearMonth.from(dueDate).toString();
+        }
+        final String month = detectedMonth;
+        if (contributions.findByHouseIdAndReferenceMonth(house.id, month)
+            .flatMap(contribution -> pixCharges.findByContributionId(contribution.id))
+            .isPresent()) {
+            return null;
+        }
+
+        BigDecimal value = decimal(payment, "value", BigDecimal.ZERO);
+        Contribution contribution = contributions.findByHouseIdAndReferenceMonth(house.id, month).orElseGet(() -> {
+            Contribution created = new Contribution();
+            created.houseId = house.id;
+            created.residentId = resident.id;
+            created.referenceMonth = month;
+            created.amount = value;
+            created.status = "PENDING";
+            return contributions.save(created);
+        });
+        contribution.residentId = resident.id;
+        contribution.amount = value;
+        contribution.updatedAt = LocalDateTime.now();
+        contribution = contributions.save(contribution);
+
+        PixQrCode qrCode = tryQrCode(gatewayPaymentId);
+        PixCharge charge = new PixCharge();
+        charge.contributionId = contribution.id;
+        charge.gateway = "ASAAS";
+        charge.gatewayPaymentId = gatewayPaymentId;
+        charge.externalReference = storedExternalReference(payment, gatewayPaymentId);
+        charge.value = value;
+        charge.dueDate = dueDate;
+        charge.status = normalizeGatewayStatus(text(payment, "status"));
+        charge.qrCodeBase64 = qrCode == null ? null : qrCode.encodedImage();
+        charge.pixCopyPaste = qrCode == null ? null : qrCode.payload();
+        charge.invoiceUrl = text(payment, "invoiceUrl");
+        charge.receiptUrl = text(payment, "transactionReceiptUrl");
+        charge.updatedAt = LocalDateTime.now();
+        charge = pixCharges.save(charge);
+
+        contribution.pixChargeId = charge.id;
+        applyNormalizedStatus(charge, contribution, charge.status, payment);
+        return pixCharges.save(charge);
+    }
+
+    private Resident residentFromPayment(JsonNode payment) {
+        House house = houseFromExternalReference(text(payment, "externalReference"));
+        if (house != null) {
+            return residents.findFirstByHouseIdAndStatusOrderByCreatedAtDesc(house.id, "ACTIVE").orElse(null);
+        }
+        String customerId = text(payment, "customer");
+        if (customerId == null || customerId.isBlank()) {
+            return null;
+        }
+        return residents.findFirstByGatewayCustomerIdAndStatusOrderByCreatedAtDesc(customerId, "ACTIVE").orElse(null);
+    }
+
+    private House houseFromExternalReference(String externalReference) {
+        if (externalReference == null || externalReference.isBlank()) {
+            return null;
+        }
+        String marker = "-HOUSE-";
+        int index = externalReference.lastIndexOf(marker);
+        if (index < 0) {
+            return null;
+        }
+        try {
+            Integer number = Integer.parseInt(externalReference.substring(index + marker.length()));
+            return houses.findByNumber(number).orElse(null);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private String monthFromExternalReference(String externalReference) {
+        if (externalReference == null || !externalReference.startsWith("VILA-") || externalReference.length() < 12) {
+            return null;
+        }
+        String month = externalReference.substring(5, 12);
+        return month.matches("\\d{4}-\\d{2}") ? month : null;
+    }
+
+    private String storedExternalReference(JsonNode payment, String gatewayPaymentId) {
+        String externalReference = text(payment, "externalReference");
+        return externalReference == null || externalReference.isBlank()
+            ? "ASAAS-" + gatewayPaymentId
+            : externalReference;
+    }
+
+    private PixQrCode tryQrCode(String gatewayPaymentId) {
+        try {
+            return gatewayClient.getPixQrCode(gatewayPaymentId);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private void applyNormalizedStatus(PixCharge charge, Contribution contribution, String status, JsonNode payment) {
+        if ("PAID".equals(status)) {
+            charge.status = "PAID";
+            charge.paidAt = charge.paidAt == null ? LocalDateTime.now() : charge.paidAt;
+            charge.receiptUrl = text(payment, "transactionReceiptUrl");
+            contribution.status = "PAID";
+            contribution.paidAmount = decimal(payment, "value", charge.value);
+            contribution.paymentDate = contribution.paymentDate == null ? LocalDateTime.now() : contribution.paymentDate;
+            contribution.paymentMethod = "PIX_ASAAS";
+        } else if ("OVERDUE".equals(status)) {
+            charge.status = "OVERDUE";
+            contribution.status = "OVERDUE";
+        } else if ("REFUNDED".equals(status)) {
+            charge.status = "REFUNDED";
+            contribution.status = "PENDING";
+            contribution.paidAmount = BigDecimal.ZERO;
+            contribution.paymentDate = null;
+        } else if ("CANCELLED".equals(status)) {
+            charge.status = "CANCELLED";
+            contribution.status = "CANCELLED";
+        } else {
+            charge.status = "PENDING";
+            contribution.status = "PENDING";
+        }
+        charge.updatedAt = LocalDateTime.now();
+        contribution.updatedAt = LocalDateTime.now();
+        pixCharges.save(charge);
+        contributions.save(contribution);
+    }
+
+    private String normalizeGatewayStatus(String status) {
+        if (status == null) {
+            return "PENDING";
+        }
+        return switch (status) {
+            case "RECEIVED", "CONFIRMED", "PAID" -> "PAID";
+            case "OVERDUE" -> "OVERDUE";
+            case "REFUNDED" -> "REFUNDED";
+            case "DELETED", "CANCELLED" -> "CANCELLED";
+            default -> "PENDING";
+        };
+    }
+
     private void validateWebhookToken(String token) {
         String secret = settingsRepository.findAll().stream()
             .findFirst()
@@ -151,6 +326,11 @@ class WebhookService {
     private BigDecimal decimal(JsonNode node, String field, BigDecimal fallback) {
         JsonNode value = node == null ? null : node.get(field);
         return value == null || value.isNull() ? fallback : value.decimalValue();
+    }
+
+    private LocalDate date(JsonNode node, String field) {
+        String value = text(node, field);
+        return value == null || value.isBlank() ? null : LocalDate.parse(value);
     }
 
     private String write(JsonNode payload) {
