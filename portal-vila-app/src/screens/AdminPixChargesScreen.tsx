@@ -72,7 +72,7 @@ export function AdminPixChargesScreen() {
       } else {
         const generated = await api.generatePixCharges(month, amountValue);
         setCharges(generated);
-        Alert.alert('Pix', 'Cobrancas do mes geradas.');
+        Alert.alert('Pix', generated.length ? 'Cobrancas do mes geradas.' : 'Nenhuma cobranca foi gerada. Cadastre pelo menos um morador ativo antes de gerar Pix.');
       }
     } catch (error) {
       Alert.alert('Pix', actionErrorMessage(error));

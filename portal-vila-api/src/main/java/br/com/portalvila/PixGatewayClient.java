@@ -163,69 +163,93 @@ class AsaasPixGatewayClient implements PixGatewayClient {
     public GatewayCharge createPixCharge(CreatePixChargeRequest request) {
         requireApiKey();
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> response = webClient.post()
-            .uri("/payments")
-            .bodyValue(Map.of(
-                "customer", request.customerId(),
-                "billingType", "PIX",
-                "value", request.value(),
-                "dueDate", request.dueDate().format(DateTimeFormatter.ISO_DATE),
-                "description", request.description(),
-                "externalReference", request.externalReference()
-            ))
-            .retrieve()
-            .bodyToMono(Map.class)
-            .block();
-        return new GatewayCharge(
-            String.valueOf(response.get("id")),
-            String.valueOf(response.getOrDefault("status", "PENDING")),
-            response.get("invoiceUrl") == null ? null : String.valueOf(response.get("invoiceUrl"))
-        );
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = webClient.post()
+                .uri("/payments")
+                .bodyValue(Map.of(
+                    "customer", request.customerId(),
+                    "billingType", "PIX",
+                    "value", request.value(),
+                    "dueDate", request.dueDate().format(DateTimeFormatter.ISO_DATE),
+                    "description", request.description(),
+                    "externalReference", request.externalReference()
+                ))
+                .retrieve()
+                .bodyToMono(Map.class)
+                .block(Duration.ofSeconds(15));
+            return new GatewayCharge(
+                String.valueOf(response.get("id")),
+                String.valueOf(response.getOrDefault("status", "PENDING")),
+                response.get("invoiceUrl") == null ? null : String.valueOf(response.get("invoiceUrl"))
+            );
+        } catch (WebClientResponseException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway nao respondeu dentro do tempo esperado.", ex);
+        }
     }
 
     @Override
     public PixQrCode getPixQrCode(String gatewayPaymentId) {
         requireApiKey();
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> response = webClient.get()
-            .uri("/payments/{id}/pixQrCode", gatewayPaymentId)
-            .retrieve()
-            .bodyToMono(Map.class)
-            .block();
-        return new PixQrCode(
-            String.valueOf(response.get("encodedImage")),
-            String.valueOf(response.get("payload")),
-            String.valueOf(response.get("expirationDate"))
-        );
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = webClient.get()
+                .uri("/payments/{id}/pixQrCode", gatewayPaymentId)
+                .retrieve()
+                .bodyToMono(Map.class)
+                .block(Duration.ofSeconds(15));
+            return new PixQrCode(
+                String.valueOf(response.get("encodedImage")),
+                String.valueOf(response.get("payload")),
+                String.valueOf(response.get("expirationDate"))
+            );
+        } catch (WebClientResponseException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway nao respondeu dentro do tempo esperado.", ex);
+        }
     }
 
     @Override
     public GatewayPayment getPayment(String gatewayPaymentId) {
         requireApiKey();
-        @SuppressWarnings("unchecked")
-        Map<String, Object> response = webClient.get()
-            .uri("/payments/{id}", gatewayPaymentId)
-            .retrieve()
-            .bodyToMono(Map.class)
-            .block();
-        return new GatewayPayment(
-            String.valueOf(response.get("id")),
-            String.valueOf(response.get("status")),
-            new BigDecimal(String.valueOf(response.getOrDefault("value", "0"))),
-            response.get("transactionReceiptUrl") == null ? null : String.valueOf(response.get("transactionReceiptUrl"))
-        );
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = webClient.get()
+                .uri("/payments/{id}", gatewayPaymentId)
+                .retrieve()
+                .bodyToMono(Map.class)
+                .block(Duration.ofSeconds(15));
+            return new GatewayPayment(
+                String.valueOf(response.get("id")),
+                String.valueOf(response.get("status")),
+                new BigDecimal(String.valueOf(response.getOrDefault("value", "0"))),
+                response.get("transactionReceiptUrl") == null ? null : String.valueOf(response.get("transactionReceiptUrl"))
+            );
+        } catch (WebClientResponseException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway nao respondeu dentro do tempo esperado.", ex);
+        }
     }
 
     @Override
     public void cancelPayment(String gatewayPaymentId) {
         requireApiKey();
-        webClient.delete()
-            .uri("/payments/{id}", gatewayPaymentId)
-            .retrieve()
-            .bodyToMono(Void.class)
-            .block();
+        try {
+            webClient.delete()
+                .uri("/payments/{id}", gatewayPaymentId)
+                .retrieve()
+                .bodyToMono(Void.class)
+                .block(Duration.ofSeconds(15));
+        } catch (WebClientResponseException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway nao respondeu dentro do tempo esperado.", ex);
+        }
     }
 
     private void requireApiKey() {
