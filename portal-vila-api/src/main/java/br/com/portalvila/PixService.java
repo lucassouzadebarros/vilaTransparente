@@ -125,6 +125,7 @@ class PixService {
         Settings settings = settingsRepository.findAll().stream().findFirst().orElseGet(Settings::new);
         LocalDate start = LocalDate.now().minusMonths(12).withDayOfMonth(1);
         LocalDate end = LocalDate.now().plusMonths(12).withDayOfMonth(1).plusMonths(1).minusDays(1);
+        boolean changed = false;
         for (GatewayCharge gatewayCharge : gatewayClient.listPixPaymentsByCustomerAndDueDateRange(resident.gatewayCustomerId, start, end)) {
             if (pixCharges.findByGatewayAndGatewayPaymentId(settings.gatewayProvider, gatewayCharge.id()).isPresent()) {
                 continue;
@@ -152,8 +153,11 @@ class PixService {
                 ? externalReference(month, house)
                 : gatewayCharge.externalReference();
             persistGatewayCharge(settings, contribution, externalReference, amount, dueDate, gatewayCharge);
+            changed = true;
         }
-        dashboardEvents.publishDashboardChanged();
+        if (changed) {
+            dashboardEvents.publishDashboardChanged();
+        }
         return listAllChargesForResident(residentId);
     }
 

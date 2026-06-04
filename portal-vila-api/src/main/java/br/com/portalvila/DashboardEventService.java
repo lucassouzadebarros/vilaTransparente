@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Service
 class DashboardEventService {
@@ -20,6 +22,15 @@ class DashboardEventService {
         thread.setDaemon(true);
         return thread;
     });
+    private final ScheduledExecutorService heartbeat = Executors.newSingleThreadScheduledExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "dashboard-events-heartbeat");
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    DashboardEventService() {
+        heartbeat.scheduleAtFixedRate(this::publishHeartbeat, 15, 15, TimeUnit.SECONDS);
+    }
 
     SseEmitter subscribe() {
         SseEmitter emitter = new SseEmitter(0L);
@@ -61,6 +72,19 @@ class DashboardEventService {
         );
         for (SseEmitter emitter : emitters) {
             send(emitter, "dashboard-changed", payload);
+        }
+    }
+
+    private void publishHeartbeat() {
+        if (emitters.isEmpty()) {
+            return;
+        }
+        Map<String, String> payload = Map.of(
+            "type", "HEARTBEAT",
+            "at", Instant.now().toString()
+        );
+        for (SseEmitter emitter : emitters) {
+            send(emitter, "heartbeat", payload);
         }
     }
 

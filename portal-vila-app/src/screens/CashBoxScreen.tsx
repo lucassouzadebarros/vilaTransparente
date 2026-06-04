@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigation } from '@react-navigation/native';
+import { useCallback, useRef, useState } from 'react';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { ListChecks, Lock, QrCode, ReceiptText, RefreshCw } from 'lucide-react-native';
 import { Badge, Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
 import { api } from '../services/api';
@@ -14,21 +14,74 @@ export function CashBoxScreen() {
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [charges, setCharges] = useState<PixCharge[]>([]);
   const [month] = useState(currentMonth());
+  const loadInFlight = useRef(false);
 
   async function load() {
-    const [dash, list, pixList] = await Promise.all([
-      api.dashboard(month),
-      api.contributions(month),
-      isAdmin ? api.pixCharges(month) : api.syncMyPixCharges()
-    ]);
-    setDashboard(dash);
-    setContributions(list);
-    setCharges(pixList);
+    if (loadInFlight.current) {
+      return;
+    }
+    loadInFlight.current = true;
+    try {
+      const [dash, list, pixList] = await Promise.all([
+        api.dashboard(month),
+        api.contributions(month),
+        isAdmin ? api.pixCharges(month) : api.syncMyPixCharges()
+      ]);
+      setDashboard(dash);
+      setContributions(list);
+      setCharges(pixList);
+    } finally {
+      loadInFlight.current = false;
+    }
   }
 
-  useEffect(() => {
-    load();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      const refresh = () => {
+        if (active) {
+          load().catch(() => undefined);
+        }
+      };
+
+      refresh();
+      const interval = setInterval(refresh, 15000);
+
+      let events: EventSource | null = null;
+      if (typeof window !== 'undefined' && typeof window.EventSource === 'function') {
+        events = new window.EventSource(api.dashboardEventsUrl());
+        events.addEventListener('dashboard-changed', refresh);
+      }
+
+      const handleVisible = () => {
+        if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+          refresh();
+        }
+      };
+
+      if (typeof window !== 'undefined') {
+        window.addEventListener('focus', refresh);
+      }
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', handleVisible);
+      }
+
+      return () => {
+        active = false;
+        clearInterval(interval);
+        if (events) {
+          events.close();
+        }
+        if (typeof window !== 'undefined') {
+          window.removeEventListener('focus', refresh);
+        }
+        if (typeof document !== 'undefined') {
+          document.removeEventListener('visibilitychange', handleVisible);
+        }
+      };
+    }, [isAdmin, month])
+  );
 
   return (
     <Screen title="Caixa" subtitle="Resumo financeiro" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
