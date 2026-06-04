@@ -9,10 +9,17 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Service
 class DashboardEventService {
     private final CopyOnWriteArrayList<SseEmitter> emitters = new CopyOnWriteArrayList<>();
+    private final ExecutorService executor = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "dashboard-events");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     SseEmitter subscribe() {
         SseEmitter emitter = new SseEmitter(0L);
@@ -29,12 +36,22 @@ class DashboardEventService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    publishNow();
+                    publishAsync();
                 }
             });
             return;
         }
-        publishNow();
+        publishAsync();
+    }
+
+    private void publishAsync() {
+        executor.execute(() -> {
+            try {
+                publishNow();
+            } catch (RuntimeException ignored) {
+                // A broken browser/event stream must never fail the request that changed data.
+            }
+        });
     }
 
     private void publishNow() {
@@ -50,8 +67,13 @@ class DashboardEventService {
     private void send(SseEmitter emitter, String name, Object payload) {
         try {
             emitter.send(SseEmitter.event().name(name).data(payload));
-        } catch (IOException | IllegalStateException ex) {
+        } catch (IOException | RuntimeException ex) {
             emitters.remove(emitter);
+            try {
+                emitter.complete();
+            } catch (RuntimeException ignored) {
+                // Connection is already gone.
+            }
         }
     }
 }
