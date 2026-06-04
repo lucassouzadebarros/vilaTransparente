@@ -36,7 +36,25 @@ function PortalTabs() {
         headerShown: false,
         tabBarActiveTintColor: colors.blue,
         tabBarInactiveTintColor: colors.muted,
-        tabBarStyle: { minHeight: 64, paddingTop: 8, paddingBottom: 10 }
+        tabBarStyle: {
+          height: 78,
+          paddingTop: 6,
+          paddingBottom: 12,
+          borderTopColor: colors.border
+        },
+        tabBarItemStyle: {
+          height: 58,
+          paddingVertical: 2
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          lineHeight: 14,
+          marginTop: 1,
+          paddingBottom: 2
+        },
+        tabBarIconStyle: {
+          marginTop: 2
+        }
       }}
     >
       <Tabs.Screen name="Inicio" component={HomeScreen} options={{ tabBarIcon: ({ color, size }) => <Home color={color} size={size} /> }} />
