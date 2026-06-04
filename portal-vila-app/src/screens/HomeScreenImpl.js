@@ -59,7 +59,7 @@ export function HomeScreen() {
         <View style={styles.topSpacer} />
         <View style={styles.brandBlock}>
           <Text style={styles.brand}>Portal da Vila</Text>
-          <Text style={styles.brandSubtitle}>Mensalidades, Pix, servicos e orcamentos</Text>
+          <Text style={styles.brandSubtitle}>Mensalidades, Pix, serviços e orçamentos</Text>
         </View>
         <Pressable accessibilityLabel="Notificacoes" style={styles.headerIcon}>
           <Bell color={colors.ink} size={20} />
