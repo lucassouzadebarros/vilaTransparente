@@ -100,6 +100,8 @@ export const api = {
   pixCharges: (month: string) => requestData<PixCharge[]>(apiClient.get('/pix/charges', { params: { month } })),
   pixCharge: (id: number) => requestData<PixCharge>(apiClient.get(`/pix/charges/${id}`)),
   generatePixCharges: (month: string, amount: number) => requestData<PixCharge[]>(apiClient.post('/admin/pix/monthly-charges', { month, amount })),
+  generatePixChargeForHouse: (month: string, amount: number, houseId: number) =>
+    requestData<PixCharge>(apiClient.post('/admin/pix/house-charge', { month, amount, houseId })),
   reconcilePixCharges: (month: string) => requestData<PixCharge[]>(apiClient.post('/admin/pix/reconcile', null, { params: { month } })),
   refreshQrCode: (id: number) => requestData<PixCharge>(apiClient.post(`/admin/pix/charges/${id}/refresh-qrcode`)),
   cancelCharge: (id: number, reason: string) => requestData<PixCharge>(apiClient.post(`/admin/pix/charges/${id}/cancel`, { reason })),

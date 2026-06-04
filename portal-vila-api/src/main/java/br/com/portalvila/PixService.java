@@ -44,57 +44,34 @@ class PixService {
     public List<PixChargeResponse> generateMonthlyCharges(String month, BigDecimal requestedAmount) {
         financialService.generateMonthlyContributions(month, requestedAmount);
         Settings settings = settingsRepository.findAll().stream().findFirst().orElseGet(Settings::new);
-        YearMonth reference = YearMonth.parse(month);
         BigDecimal amount = requestedAmount == null ? settings.monthlyAmount : requestedAmount;
 
         for (Resident resident : residents.findAllByOrderByHouseIdAsc()) {
             if (!"ACTIVE".equals(resident.status)) {
                 continue;
             }
-            House house = houses.findById(resident.houseId).orElseThrow();
-            Contribution contribution = contributions.findByHouseIdAndReferenceMonth(house.id, month).orElseThrow();
-            PixCharge existing = pixCharges.findByContributionId(contribution.id).orElse(null);
-            if (existing != null) {
-                continue;
-            }
-
-            GatewayCustomer customer = gatewayClient.createOrUpdateCustomer(resident);
-            resident.gatewayCustomerId = customer.id();
-            residents.save(resident);
-
-            String houseNumber = String.format("%02d", house.number);
-            String externalReference = "VILA-" + month + "-HOUSE-" + houseNumber;
-            LocalDate dueDate = reference.atDay(Math.min(settings.paymentDueDay, reference.lengthOfMonth()));
-            GatewayCharge gatewayCharge = gatewayClient.createPixCharge(new CreatePixChargeRequest(
-                customer.id(),
-                externalReference,
-                "Caixinha da Vila - " + house.label + " - " + month,
-                amount,
-                dueDate
-            ));
-            PixQrCode qrCode = gatewayClient.getPixQrCode(gatewayCharge.id());
-
-            PixCharge charge = new PixCharge();
-            charge.contributionId = contribution.id;
-            charge.gateway = settings.gatewayProvider;
-            charge.gatewayPaymentId = gatewayCharge.id();
-            charge.externalReference = externalReference;
-            charge.value = amount;
-            charge.dueDate = dueDate;
-            charge.status = normalizeGatewayStatus(gatewayCharge.status());
-            charge.qrCodeBase64 = qrCode.encodedImage();
-            charge.pixCopyPaste = qrCode.payload();
-            charge.invoiceUrl = gatewayCharge.invoiceUrl();
-            charge.updatedAt = LocalDateTime.now();
-            charge = pixCharges.save(charge);
-
-            contribution.pixChargeId = charge.id;
-            contribution.amount = amount;
-            contribution.status = "PAID".equals(charge.status) ? "PAID" : "PENDING";
-            contribution.updatedAt = LocalDateTime.now();
-            contributions.save(contribution);
+            createChargeForResident(month, amount, settings, resident);
         }
         return listCharges(month);
+    }
+
+    @Transactional
+    public PixChargeResponse generateHouseCharge(String month, BigDecimal requestedAmount, Long houseId) {
+        Settings settings = settingsRepository.findAll().stream().findFirst().orElseGet(Settings::new);
+        BigDecimal amount = requestedAmount == null ? settings.monthlyAmount : requestedAmount;
+        House house = houses.findById(houseId)
+            .filter(candidate -> candidate.active)
+            .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST,
+                "Casa nao encontrada ou inativa."
+            ));
+        Resident resident = residents.findByHouseId(house.id)
+            .filter(candidate -> "ACTIVE".equals(candidate.status))
+            .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST,
+                house.label + " nao possui morador ativo cadastrado."
+            ));
+        return createChargeForResident(month, amount, settings, resident);
     }
 
     @Transactional(readOnly = true)
@@ -186,6 +163,66 @@ class PixService {
             charge.receiptUrl,
             charge.paidAt
         );
+    }
+
+    private PixChargeResponse createChargeForResident(String month, BigDecimal amount, Settings settings, Resident resident) {
+        YearMonth reference = YearMonth.parse(month);
+        House house = houses.findById(resident.houseId).orElseThrow();
+        Contribution contribution = contributions.findByHouseIdAndReferenceMonth(house.id, month).orElseGet(() -> {
+            Contribution created = new Contribution();
+            created.houseId = resident.houseId;
+            created.residentId = resident.id;
+            created.referenceMonth = month;
+            created.amount = amount;
+            created.status = "PENDING";
+            return contributions.save(created);
+        });
+        PixCharge existing = pixCharges.findByContributionId(contribution.id).orElse(null);
+        if (existing != null) {
+            return toResponse(existing, contribution);
+        }
+
+        contribution.residentId = resident.id;
+        contribution.amount = amount;
+        contribution.status = "PENDING";
+        contribution.updatedAt = LocalDateTime.now();
+        contribution = contributions.save(contribution);
+
+        GatewayCustomer customer = gatewayClient.createOrUpdateCustomer(resident);
+        resident.gatewayCustomerId = customer.id();
+        residents.save(resident);
+
+        String houseNumber = String.format("%02d", house.number);
+        String externalReference = "VILA-" + month + "-HOUSE-" + houseNumber;
+        LocalDate dueDate = reference.atDay(Math.min(settings.paymentDueDay, reference.lengthOfMonth()));
+        GatewayCharge gatewayCharge = gatewayClient.createPixCharge(new CreatePixChargeRequest(
+            customer.id(),
+            externalReference,
+            "Caixinha da Vila - " + house.label + " - " + month,
+            amount,
+            dueDate
+        ));
+        PixQrCode qrCode = gatewayClient.getPixQrCode(gatewayCharge.id());
+
+        PixCharge charge = new PixCharge();
+        charge.contributionId = contribution.id;
+        charge.gateway = settings.gatewayProvider;
+        charge.gatewayPaymentId = gatewayCharge.id();
+        charge.externalReference = externalReference;
+        charge.value = amount;
+        charge.dueDate = dueDate;
+        charge.status = normalizeGatewayStatus(gatewayCharge.status());
+        charge.qrCodeBase64 = qrCode.encodedImage();
+        charge.pixCopyPaste = qrCode.payload();
+        charge.invoiceUrl = gatewayCharge.invoiceUrl();
+        charge.updatedAt = LocalDateTime.now();
+        charge = pixCharges.save(charge);
+
+        contribution.pixChargeId = charge.id;
+        contribution.status = "PAID".equals(charge.status) ? "PAID" : "PENDING";
+        contribution.updatedAt = LocalDateTime.now();
+        contributions.save(contribution);
+        return toResponse(charge, contribution);
     }
 
     private String normalizeGatewayStatus(String status) {

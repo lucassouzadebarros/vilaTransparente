@@ -77,6 +77,13 @@ record MonthlyChargeRequest(
 ) {
 }
 
+record HouseMonthlyChargeRequest(
+    @NotBlank String month,
+    @Positive BigDecimal amount,
+    @NotNull Long houseId
+) {
+}
+
 record ManualPaymentRequest(@NotBlank String reason, BigDecimal paidAmount) {
 }
 
