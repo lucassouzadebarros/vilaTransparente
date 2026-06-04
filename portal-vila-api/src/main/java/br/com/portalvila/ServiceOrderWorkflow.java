@@ -14,11 +14,18 @@ class ServiceOrderWorkflow {
     private final ServiceOrderRepository services;
     private final BudgetRepository budgets;
     private final ExpenseRepository expenses;
+    private final DashboardEventService dashboardEvents;
 
-    ServiceOrderWorkflow(ServiceOrderRepository services, BudgetRepository budgets, ExpenseRepository expenses) {
+    ServiceOrderWorkflow(
+        ServiceOrderRepository services,
+        BudgetRepository budgets,
+        ExpenseRepository expenses,
+        DashboardEventService dashboardEvents
+    ) {
         this.services = services;
         this.budgets = budgets;
         this.expenses = expenses;
+        this.dashboardEvents = dashboardEvents;
     }
 
     @Transactional(readOnly = true)
@@ -42,6 +49,7 @@ class ServiceOrderWorkflow {
         incoming.updatedAt = LocalDateTime.now();
         ServiceOrder saved = services.save(incoming);
         reconcileServiceBudget(saved, null);
+        dashboardEvents.publishDashboardChanged();
         return saved;
     }
 
@@ -65,6 +73,7 @@ class ServiceOrderWorkflow {
         service.updatedAt = LocalDateTime.now();
         ServiceOrder saved = services.save(service);
         reconcileServiceBudget(saved, previousBudgetId);
+        dashboardEvents.publishDashboardChanged();
         return saved;
     }
 
@@ -74,6 +83,7 @@ class ServiceOrderWorkflow {
         service.status = "CANCELADO";
         service.updatedAt = LocalDateTime.now();
         services.save(service);
+        dashboardEvents.publishDashboardChanged();
     }
 
     @Transactional
@@ -90,6 +100,7 @@ class ServiceOrderWorkflow {
         budget.updatedAt = LocalDateTime.now();
         Budget saved = budgets.save(budget);
         applyBudgetStatusToService(saved, null);
+        dashboardEvents.publishDashboardChanged();
         return saved;
     }
 
@@ -118,6 +129,7 @@ class ServiceOrderWorkflow {
         budget.updatedAt = LocalDateTime.now();
         Budget saved = budgets.save(budget);
         applyBudgetStatusToService(saved, previousServiceId);
+        dashboardEvents.publishDashboardChanged();
         return saved;
     }
 
@@ -145,6 +157,7 @@ class ServiceOrderWorkflow {
         service.expectedValue = approved.amount;
         service.updatedAt = LocalDateTime.now();
         services.save(service);
+        dashboardEvents.publishDashboardChanged();
         return approved;
     }
 
@@ -153,7 +166,9 @@ class ServiceOrderWorkflow {
         Budget budget = budgets.findById(id).orElseThrow();
         budget.status = "REJEITADO";
         budget.updatedAt = LocalDateTime.now();
-        return budgets.save(budget);
+        Budget saved = budgets.save(budget);
+        dashboardEvents.publishDashboardChanged();
+        return saved;
     }
 
     @Transactional
@@ -182,6 +197,7 @@ class ServiceOrderWorkflow {
             expense.budgetId = service.approvedBudgetId;
             expenses.save(expense);
         }
+        dashboardEvents.publishDashboardChanged();
         return service;
     }
 

@@ -21,6 +21,7 @@ class PixService {
     private final ContributionRepository contributions;
     private final PixChargeRepository pixCharges;
     private final SettingsRepository settingsRepository;
+    private final DashboardEventService dashboardEvents;
 
     PixService(
         PixGatewayClient gatewayClient,
@@ -29,7 +30,8 @@ class PixService {
         ResidentRepository residents,
         ContributionRepository contributions,
         PixChargeRepository pixCharges,
-        SettingsRepository settingsRepository
+        SettingsRepository settingsRepository,
+        DashboardEventService dashboardEvents
     ) {
         this.gatewayClient = gatewayClient;
         this.financialService = financialService;
@@ -38,6 +40,7 @@ class PixService {
         this.contributions = contributions;
         this.pixCharges = pixCharges;
         this.settingsRepository = settingsRepository;
+        this.dashboardEvents = dashboardEvents;
     }
 
     @Transactional
@@ -52,6 +55,7 @@ class PixService {
             }
             createChargeForResident(month, amount, settings, resident);
         }
+        dashboardEvents.publishDashboardChanged();
         return listCharges(month);
     }
 
@@ -70,7 +74,9 @@ class PixService {
                 org.springframework.http.HttpStatus.BAD_REQUEST,
                 house.label + " nao possui morador ativo cadastrado."
             ));
-        return createChargeForResident(month, amount, settings, resident);
+        PixChargeResponse response = createChargeForResident(month, amount, settings, resident);
+        dashboardEvents.publishDashboardChanged();
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -111,7 +117,9 @@ class PixService {
         charge.qrCodeBase64 = qrCode.encodedImage();
         charge.pixCopyPaste = qrCode.payload();
         charge.updatedAt = LocalDateTime.now();
-        return toResponse(pixCharges.save(charge), contributions.findById(charge.contributionId).orElseThrow());
+        PixChargeResponse response = toResponse(pixCharges.save(charge), contributions.findById(charge.contributionId).orElseThrow());
+        dashboardEvents.publishDashboardChanged();
+        return response;
     }
 
     @Transactional
@@ -125,7 +133,9 @@ class PixService {
         contribution.manualReason = request.reason();
         contribution.updatedAt = LocalDateTime.now();
         contributions.save(contribution);
-        return toResponse(pixCharges.save(charge), contribution);
+        PixChargeResponse response = toResponse(pixCharges.save(charge), contribution);
+        dashboardEvents.publishDashboardChanged();
+        return response;
     }
 
     @Transactional
@@ -137,6 +147,7 @@ class PixService {
             Contribution contribution = contributions.findById(charge.contributionId).orElseThrow();
             applyGatewayPayment(charge, contribution, payment);
         }
+        dashboardEvents.publishDashboardChanged();
         return listCharges(month);
     }
 

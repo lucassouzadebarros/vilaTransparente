@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { ChevronDown, LogOut, QrCode, RefreshCw, ShieldCheck, Wrench } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -24,8 +24,13 @@ export function HomeScreen() {
   const [services, setServices] = useState([]);
   const [month] = useState(currentMonth());
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const loadInFlight = useRef(false);
 
   async function load() {
+    if (loadInFlight.current) {
+      return;
+    }
+    loadInFlight.current = true;
     setRefreshing(true);
     try {
       const [nextDashboard, nextContributions, nextCharges, nextServices] = await Promise.all([
@@ -39,6 +44,7 @@ export function HomeScreen() {
       setCharges(nextCharges);
       setServices(sortMaintenance(nextServices));
     } finally {
+      loadInFlight.current = false;
       setRefreshing(false);
     }
   }
@@ -49,7 +55,17 @@ export function HomeScreen() {
     useCallback(() => {
       load();
       const interval = setInterval(load, 30000);
-      return () => clearInterval(interval);
+      let events = null;
+      if (typeof window !== 'undefined' && typeof window.EventSource === 'function') {
+        events = new window.EventSource(api.dashboardEventsUrl());
+        events.addEventListener('dashboard-changed', load);
+      }
+      return () => {
+        clearInterval(interval);
+        if (events) {
+          events.close();
+        }
+      };
     }, [month])
   );
 

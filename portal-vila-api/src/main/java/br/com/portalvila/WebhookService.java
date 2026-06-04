@@ -18,6 +18,7 @@ class WebhookService {
     private final PixChargeRepository pixCharges;
     private final ContributionRepository contributions;
     private final SettingsRepository settingsRepository;
+    private final DashboardEventService dashboardEvents;
     private final String configuredToken;
 
     WebhookService(
@@ -26,6 +27,7 @@ class WebhookService {
         PixChargeRepository pixCharges,
         ContributionRepository contributions,
         SettingsRepository settingsRepository,
+        DashboardEventService dashboardEvents,
         @Value("${portal.asaas.webhook-token:}") String configuredToken
     ) {
         this.objectMapper = objectMapper;
@@ -33,6 +35,7 @@ class WebhookService {
         this.pixCharges = pixCharges;
         this.contributions = contributions;
         this.settingsRepository = settingsRepository;
+        this.dashboardEvents = dashboardEvents;
         this.configuredToken = configuredToken;
     }
 
@@ -69,10 +72,13 @@ class WebhookService {
         }
 
         try {
-            applyPaymentEvent(event.eventType, gatewayPaymentId, payment);
+            boolean changed = applyPaymentEvent(event.eventType, gatewayPaymentId, payment);
             event.processed = true;
             event.processedAt = LocalDateTime.now();
             events.save(event);
+            if (changed) {
+                dashboardEvents.publishDashboardChanged();
+            }
             return new WebhookResult(true, false, "Webhook processado.");
         } catch (RuntimeException ex) {
             event.errorMessage = ex.getMessage();
@@ -81,13 +87,13 @@ class WebhookService {
         }
     }
 
-    private void applyPaymentEvent(String eventType, String gatewayPaymentId, JsonNode payment) {
+    private boolean applyPaymentEvent(String eventType, String gatewayPaymentId, JsonNode payment) {
         if (gatewayPaymentId == null || gatewayPaymentId.isBlank()) {
-            return;
+            return false;
         }
         PixCharge charge = pixCharges.findByGatewayAndGatewayPaymentId("ASAAS", gatewayPaymentId).orElse(null);
         if (charge == null) {
-            return;
+            return false;
         }
         Contribution contribution = contributions.findById(charge.contributionId).orElseThrow();
 
@@ -116,13 +122,14 @@ class WebhookService {
                 contribution.status = "CANCELLED";
             }
             default -> {
-                return;
+                return false;
             }
         }
         charge.updatedAt = LocalDateTime.now();
         contribution.updatedAt = LocalDateTime.now();
         pixCharges.save(charge);
         contributions.save(contribution);
+        return true;
     }
 
     private void validateWebhookToken(String token) {

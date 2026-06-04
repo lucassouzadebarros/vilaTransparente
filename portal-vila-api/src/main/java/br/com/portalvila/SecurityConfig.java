@@ -45,6 +45,7 @@ class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/login", "/api/auth/register-resident", "/api/webhooks/asaas", "/actuator/health").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/events/dashboard").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/residents/registration-houses").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/residents/self-registration").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/documents/*/file").permitAll()

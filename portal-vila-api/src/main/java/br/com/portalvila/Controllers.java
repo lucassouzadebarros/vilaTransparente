@@ -13,6 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
@@ -157,6 +158,22 @@ class DashboardController {
     @GetMapping("/reports")
     DashboardResponse reports(@RequestParam(required = false) String month) {
         return dashboard(month);
+    }
+}
+
+@RestController
+@CrossOrigin
+@RequestMapping("/api/events")
+class DashboardEventController {
+    private final DashboardEventService events;
+
+    DashboardEventController(DashboardEventService events) {
+        this.events = events;
+    }
+
+    @GetMapping("/dashboard")
+    SseEmitter dashboard() {
+        return events.subscribe();
     }
 }
 
@@ -311,9 +328,11 @@ class WebhookController {
 @RequestMapping("/api/expenses")
 class ExpenseController {
     private final ExpenseRepository expenses;
+    private final DashboardEventService dashboardEvents;
 
-    ExpenseController(ExpenseRepository expenses) {
+    ExpenseController(ExpenseRepository expenses, DashboardEventService dashboardEvents) {
         this.expenses = expenses;
+        this.dashboardEvents = dashboardEvents;
     }
 
     @GetMapping
@@ -327,7 +346,9 @@ class ExpenseController {
         if (expense.expenseDate == null) {
             expense.expenseDate = LocalDate.now();
         }
-        return expenses.save(expense);
+        Expense saved = expenses.save(expense);
+        dashboardEvents.publishDashboardChanged();
+        return saved;
     }
 }
 

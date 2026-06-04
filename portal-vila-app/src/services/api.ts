@@ -152,5 +152,6 @@ export const api = {
   updateResident: (id: number, resident: Resident) => requestData<Resident>(apiClient.put(`/residents/${id}`, resident)),
   syncResidentAsaas: (id: number) => requestData<Resident>(apiClient.post(`/residents/${id}/sync-asaas`)),
   releaseHouse: (houseId: number) => requestData<Resident>(apiClient.post(`/admin/houses/${houseId}/release`)),
-  settings: () => requestData(apiClient.get('/settings'))
+  settings: () => requestData(apiClient.get('/settings')),
+  dashboardEventsUrl: () => `${baseURL.replace(/\/$/, '')}/events/dashboard`
 };

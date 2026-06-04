@@ -21,19 +21,22 @@ class FinancialService {
     private final HouseRepository houses;
     private final ResidentRepository residents;
     private final SettingsRepository settingsRepository;
+    private final DashboardEventService dashboardEvents;
 
     FinancialService(
         ContributionRepository contributions,
         ExpenseRepository expenses,
         HouseRepository houses,
         ResidentRepository residents,
-        SettingsRepository settingsRepository
+        SettingsRepository settingsRepository,
+        DashboardEventService dashboardEvents
     ) {
         this.contributions = contributions;
         this.expenses = expenses;
         this.houses = houses;
         this.residents = residents;
         this.settingsRepository = settingsRepository;
+        this.dashboardEvents = dashboardEvents;
     }
 
     @Transactional(readOnly = true)
@@ -137,6 +140,7 @@ class FinancialService {
                 return contributions.save(contribution);
             });
         }
+        dashboardEvents.publishDashboardChanged();
         return listContributions(month);
     }
 
@@ -151,6 +155,7 @@ class FinancialService {
         contribution.manualReason = request.reason();
         contribution.updatedAt = LocalDateTime.now();
         contribution = contributions.save(contribution);
+        dashboardEvents.publishDashboardChanged();
         return toContributionResponse(contribution, houses.findById(contribution.houseId).orElse(null),
             contribution.residentId == null ? null : residents.findById(contribution.residentId).orElse(null));
     }
