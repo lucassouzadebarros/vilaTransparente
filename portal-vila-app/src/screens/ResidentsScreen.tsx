@@ -38,7 +38,7 @@ export function ResidentsScreen() {
 
   function startCreate() {
     const usedHouses = new Set(items.filter((item) => item.status === 'ACTIVE').map((item) => item.houseId));
-    const nextHouse = Array.from({ length: 10 }, (_, index) => index + 1).find((house) => !usedHouses.has(house)) ?? 0;
+    const nextHouse = Array.from({ length: 11 }, (_, index) => index + 1).find((house) => !usedHouses.has(house)) ?? 0;
     setCreating(true);
     setEditingId(null);
     setDraft({ houseId: nextHouse, name: '', email: '', phone: '', documentNumber: '', status: 'ACTIVE' });
@@ -118,7 +118,7 @@ export function ResidentsScreen() {
   }, []);
 
   return (
-    <Screen title="Moradores" subtitle="10 casas da vila" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
+    <Screen title="Moradores" subtitle="11 casas da vila" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       <Button title="Novo morador" icon={Plus} onPress={startCreate} />
       {creating && draft ? (
         <Card>

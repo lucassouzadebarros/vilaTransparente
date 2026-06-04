@@ -249,7 +249,7 @@ export function LoginScreen() {
                 </View>
                 <View style={styles.calloutText}>
                   <Text style={styles.cardTitle}>Cadastrar minha casa</Text>
-                  <Text style={styles.muted}>Moradores das casas 02 a 10 podem criar o acesso da propria casa.</Text>
+                  <Text style={styles.muted}>Moradores das casas 02 a 11 podem criar o acesso da propria casa.</Text>
                 </View>
               </View>
               <Button title="Comecar cadastro" icon={UserPlus} onPress={openRegister} />

@@ -20,7 +20,7 @@ export function ReleaseHouseScreen() {
   const [message, setMessage] = useState<string | null>(null);
 
   const houses = useMemo<HouseState[]>(() => {
-    return Array.from({ length: 9 }, (_, index) => index + 2).map((houseId) => {
+    return Array.from({ length: 10 }, (_, index) => index + 2).map((houseId) => {
       const houseResidents = residents.filter((resident) => resident.houseId === houseId);
       return {
         houseId,

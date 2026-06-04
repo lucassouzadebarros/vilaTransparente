@@ -68,8 +68,8 @@ class AuthController {
         House house = houses.findById(request.houseId())
             .filter(candidate -> candidate.active)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Casa nao encontrada."));
-        if (house.number == null || house.number < 2 || house.number > 10) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cadastro publico permitido apenas para as casas 02 a 10.");
+        if (house.number == null || house.number < 2 || house.number > 11) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cadastro publico permitido apenas para as casas 02 a 11.");
         }
         if (residents.findFirstByHouseIdAndStatusOrderByCreatedAtDesc(house.id, "ACTIVE").isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Casa ja possui morador cadastrado.");
@@ -572,7 +572,7 @@ class ResidentController {
     @GetMapping("/registration-houses")
     List<RegistrationHouseOption> registrationHouses() {
         return houses.findByActiveTrueOrderByNumberAsc().stream()
-            .filter(house -> house.number != null && house.number >= 2 && house.number <= 10)
+            .filter(house -> house.number != null && house.number >= 2 && house.number <= 11)
             .map(house -> new RegistrationHouseOption(
                 house.id,
                 house.number,
@@ -587,8 +587,8 @@ class ResidentController {
         House house = houses.findById(request.houseId())
             .filter(candidate -> candidate.active)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Casa nao encontrada."));
-        if (house.number == null || house.number < 2 || house.number > 10) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cadastro publico permitido apenas para as casas 02 a 10.");
+        if (house.number == null || house.number < 2 || house.number > 11) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cadastro publico permitido apenas para as casas 02 a 11.");
         }
         if (request.password().trim().length() < 6) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A senha precisa ter pelo menos 6 caracteres.");
@@ -682,8 +682,8 @@ class ResidentController {
         House house = houses.findById(houseId)
             .filter(candidate -> candidate.active)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Casa nao encontrada."));
-        if (!allowAnyHouse && (house.number == null || house.number < 2 || house.number > 10)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cadastro publico permitido apenas para as casas 02 a 10.");
+        if (!allowAnyHouse && (house.number == null || house.number < 2 || house.number > 11)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cadastro publico permitido apenas para as casas 02 a 11.");
         }
         if (residents.findFirstByHouseIdAndStatusOrderByCreatedAtDesc(house.id, "ACTIVE").isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Casa ja possui morador cadastrado.");

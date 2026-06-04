@@ -54,7 +54,7 @@ class DataSeeder implements CommandLineRunner {
         }
 
         if (houses.count() == 0) {
-            for (int i = 1; i <= 10; i++) {
+            for (int i = 1; i <= 11; i++) {
                 houses.save(new House(i, "Casa " + String.format("%02d", i)));
             }
         }
