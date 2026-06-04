@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { ChevronDown, Lock, LogOut, QrCode, RefreshCw, ShieldCheck, WalletCards, Wrench } from 'lucide-react-native';
+import { ArrowDown, ArrowUp, BarChart3, Bell, ChevronDown, ChevronRight, Lock, LogOut, QrCode, RefreshCw, ShieldCheck, TrendingUp, Users, WalletCards, Wrench } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -79,23 +79,24 @@ export function HomeScreen() {
   const myContribution = contributions[0];
   const myCharge = charges.find((charge) => charge.id === myContribution?.pixChargeId) ?? charges[0];
   const firstName = session?.name?.split(' ')[0] ?? 'Joao';
+  const greetingName = isAdmin ? firstName : myContribution?.houseLabel ?? firstName;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.topBar}>
         <View style={styles.topSpacer} />
-        <View style={styles.brandBlock}>
-          <Text style={styles.brand}>Portal da Vila</Text>
+        <View style={styles.titleBlock}>
+          <Text style={styles.screenTitle}>Inicio</Text>
           <Text style={styles.brandSubtitle}>Mensalidades, Pix, serviços e orçamentos</Text>
         </View>
         <Pressable accessibilityLabel="Atualizar inicio" style={[styles.headerIcon, refreshing ? styles.headerIconBusy : null]} onPress={load} disabled={refreshing}>
-          <RefreshCw color={refreshing ? colors.muted : colors.ink} size={20} />
+          {isAdmin ? <RefreshCw color={refreshing ? colors.muted : colors.ink} size={20} /> : <Bell color={colors.ink} size={22} />}
         </Pressable>
       </View>
 
       <View style={styles.userArea}>
-        <Pressable style={styles.greeting} onPress={() => setUserMenuOpen((current) => !current)}>
-        <Text style={styles.greetingText}>Ola, {firstName}</Text>
+        <Pressable style={styles.greetingPlain} onPress={() => setUserMenuOpen((current) => !current)}>
+          <Text style={styles.greetingText}>Ola, <Text style={styles.greetingName}>{greetingName}</Text></Text>
           <ChevronDown color={colors.muted} size={16} />
         </Pressable>
         {userMenuOpen ? (
@@ -149,14 +150,11 @@ export function HomeScreen() {
             <View style={styles.cardHeaderRow}>
               <View>
                 <Text style={styles.cardTitle}>Minha mensalidade</Text>
-                <Text style={styles.cardSubtitle}>{myContribution?.houseLabel ?? 'Minha casa'} - {monthLabel(month)}</Text>
+                <Text style={styles.cardMonth}>{monthLabel(month)}</Text>
               </View>
               <StatusPill status={myContribution?.status} />
             </View>
-            <View style={styles.contributionInfo}>
-              <Text style={styles.contributionLabel}>Valor</Text>
-              <Text style={styles.contributionValue}>{formatCurrency(myContribution?.amount ?? 0)}</Text>
-            </View>
+            <Text style={styles.contributionValue}>{formatCurrency(myContribution?.amount ?? 0)}</Text>
             <Text style={styles.cardSubtitle}>
               {myContribution?.paymentDate
                 ? `Confirmado em ${formatDate(myContribution.paymentDate)}`
@@ -164,14 +162,16 @@ export function HomeScreen() {
                   ? `Vence em ${formatDate(myCharge.dueDate)}`
                   : 'Cobranca Pix ainda nao gerada'}
             </Text>
-            <Pressable
-              disabled={!myCharge?.id}
-              style={[styles.primaryAction, !myCharge?.id ? styles.disabledAction : null]}
-              onPress={() => navigation.navigate('PixPayment', { id: myCharge.id })}
-            >
-              <QrCode color={colors.surface} size={18} />
-              <Text style={styles.primaryActionText}>{myCharge?.id ? 'Ver Pix do mes' : 'Pix nao gerado'}</Text>
-            </Pressable>
+            {myContribution?.status !== 'PAID' ? (
+              <Pressable
+                disabled={!myCharge?.id}
+                style={[styles.primaryAction, !myCharge?.id ? styles.disabledAction : null]}
+                onPress={() => navigation.navigate('PixPayment', { id: myCharge.id })}
+              >
+                <QrCode color={colors.surface} size={18} />
+                <Text style={styles.primaryActionText}>{myCharge?.id ? 'Ver Pix' : 'Pix nao gerado'}</Text>
+              </Pressable>
+            ) : null}
           </LocalCard>
 
           {dashboard?.transparencyEnabled ? (
@@ -182,32 +182,34 @@ export function HomeScreen() {
         </>
       )}
 
-      <SectionTitle title="Manutencoes em destaque" />
+      <SectionTitle title="Servicos e orcamentos" />
       <LocalCard style={styles.listCard}>
-        {maintenance.map((item, index) => (
-          <ShortcutRow
-            key={`${item.id ?? item.title}-${index}`}
-            item={item}
-            last={index === maintenance.length - 1}
-            onPress={() => navigation.navigate('ServiceDetails', { id: item.id })}
-          />
-        ))}
-      </LocalCard>
-
-      <SectionTitle title="Ultimos lancamentos" />
-      <LocalCard style={styles.launchCard}>
-        {movements.length > 0 ? (
-          movements.map((movement, index) => (
-            <View key={`${movement.date}-${index}`} style={styles.launchRow}>
-              <Text style={styles.launchDate}>{formatDate(movement.date)}</Text>
-              <Text style={styles.launchDescription}>{movement.description}</Text>
-              <Text style={styles.launchValue}>{formatCurrency(Math.abs(movement.amount))}</Text>
-            </View>
+        {maintenance.length > 0 ? (
+          maintenance.map((item, index) => (
+            <ShortcutRow
+              key={`${item.id ?? item.title}-${index}`}
+              item={item}
+              last={index === maintenance.length - 1}
+              onPress={() => navigation.navigate('ServiceDetails', { id: item.id })}
+            />
           ))
         ) : (
-          <Text style={styles.empty}>Nenhum lancamento recente.</Text>
+          <Text style={styles.emptyList}>Nenhum servico cadastrado.</Text>
         )}
       </LocalCard>
+
+      {isAdmin || dashboard?.transparencyEnabled ? (
+        <>
+          <SectionTitle title="Ultimos lancamentos" />
+          <LocalCard style={styles.launchCard}>
+            {movements.length > 0 ? (
+              movements.map((movement, index) => <MovementRow key={`${movement.date}-${index}`} movement={movement} />)
+            ) : (
+              <Text style={styles.empty}>Nenhum lancamento recente.</Text>
+            )}
+          </LocalCard>
+        </>
+      ) : null}
     </ScrollView>
   );
 }
@@ -228,20 +230,20 @@ function SummaryCard({ title, value }) {
 function TransparencyLockedCard() {
   return (
     <LocalCard style={styles.transparencyCard}>
-      <View style={styles.cardHeaderRow}>
-        <View style={styles.transparencyTitleWrap}>
-          <Text style={styles.cardTitle}>Transparencia financeira</Text>
-          <Text style={styles.cardSubtitle}>Liberada apos sua primeira contribuicao</Text>
+      <Text style={styles.cardTitle}>Transparencia financeira</Text>
+      <View style={styles.lockedBody}>
+        <View style={styles.lockCircle}>
+          <Lock color={colors.ink} size={27} />
         </View>
-        <View style={styles.lockIcon}>
-          <Lock color={colors.muted} size={21} />
+        <View style={styles.lockedCopy}>
+          <Text style={styles.lockedTitle}>Liberada apos sua primeira contribuicao</Text>
+          <Text style={styles.lockedText}>
+            Quando o pagamento for confirmado, voce acompanha saldo, arrecadacao e despesas da vila.
+          </Text>
         </View>
       </View>
-      <Text style={styles.lockedText}>
-        Quando o pagamento for confirmado, voce acompanha saldo acumulado, arrecadacao e despesas da vila.
-      </Text>
       <View style={styles.disabledInfo}>
-        <Text style={styles.disabledInfoText}>Aguardando pagamento confirmado</Text>
+        <Text style={styles.disabledInfoText}>Aguardando pagamento</Text>
       </View>
     </LocalCard>
   );
@@ -250,36 +252,31 @@ function TransparencyLockedCard() {
 function TransparencyOpenCard({ dashboard, navigation }) {
   return (
     <LocalCard style={styles.transparencyCard}>
-      <View style={styles.cardHeaderRow}>
-        <View style={styles.transparencyTitleWrap}>
-          <Text style={styles.cardTitle}>Saldo acumulado da vila</Text>
-          <Text style={styles.cardSubtitle}>Transparencia liberada</Text>
-        </View>
-        <View style={styles.adminIcon}>
-          <WalletCards color={colors.blue} size={22} />
-        </View>
-      </View>
-      <Text style={styles.balanceInline}>{formatCurrency(dashboard?.balance ?? 0)}</Text>
-      <View style={styles.transparencyRows}>
-        <SummaryLine label="Arrecadado" value={dashboard?.collected ?? 0} />
-        <SummaryLine label="Despesas" value={dashboard?.expenses ?? 0} />
-        <View style={styles.summaryLine}>
-          <Text style={styles.summaryLineLabel}>Casas pagas</Text>
-          <Text style={styles.summaryLineValue}>{dashboard?.paidHouses ?? 0}</Text>
-        </View>
+      <Text style={styles.cardTitle}>Saldo acumulado da vila</Text>
+      <Text style={styles.balanceOpenValue}>{formatCurrency(dashboard?.balance ?? 0)}</Text>
+      <View style={styles.metricGrid}>
+        <MetricCard icon={TrendingUp} tone="blue" label="Arrecadado" value={formatCurrency(dashboard?.collected ?? 0)} />
+        <MetricCard icon={ArrowDown} tone="red" label="Despesas" value={formatCurrency(dashboard?.expenses ?? 0)} />
+        <MetricCard icon={Users} tone="lilac" label="Casas pagas" value={String(dashboard?.paidHouses ?? 0)} />
       </View>
       <Pressable style={styles.primaryAction} onPress={() => navigation.navigate('Caixa')}>
+        <BarChart3 color={colors.surface} size={18} />
         <Text style={styles.primaryActionText}>Ver transparencia</Text>
       </Pressable>
     </LocalCard>
   );
 }
 
-function SummaryLine({ label, value }) {
+function MetricCard({ icon: Icon, tone, label, value }) {
+  const color = tone === 'red' ? colors.red : tone === 'lilac' ? colors.lilac : colors.blue;
+  const backgroundColor = tone === 'red' ? colors.redSoft : tone === 'lilac' ? '#EFE9FF' : colors.blueSoft;
   return (
-    <View style={styles.summaryLine}>
-      <Text style={styles.summaryLineLabel}>{label}</Text>
-      <Text style={styles.summaryLineValue}>{formatCurrency(value)}</Text>
+    <View style={styles.metricCard}>
+      <View style={[styles.metricIcon, { backgroundColor }]}>
+        <Icon color={color} size={21} />
+      </View>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={styles.metricValue}>{value}</Text>
     </View>
   );
 }
@@ -289,33 +286,44 @@ function SectionTitle({ title }) {
 }
 
 function StatusPill({ status }) {
+  const isPaid = status === 'PAID';
+  const isOverdue = status === 'OVERDUE';
   return (
-    <View style={[styles.statusPill, status === 'PAID' ? styles.statusPaid : status === 'OVERDUE' ? styles.statusOverdue : styles.statusPending]}>
-      <Text style={styles.statusText}>{status === 'PAID' ? 'PAGO' : status === 'OVERDUE' ? 'VENCIDO' : 'PENDENTE'}</Text>
+    <View style={[styles.statusPill, isPaid ? styles.statusPaid : isOverdue ? styles.statusOverdue : styles.statusPending]}>
+      <Text style={[styles.statusText, isPaid ? styles.statusTextPaid : isOverdue ? styles.statusTextOverdue : styles.statusTextPending]}>
+        {isPaid ? 'PAGO' : isOverdue ? 'VENCIDO' : 'PENDENTE'}
+      </Text>
     </View>
   );
 }
 
 function ShortcutRow({ item, last, onPress }) {
-  const isAttention = item.priority === 'URGENTE' || item.status === 'PLANEJADO';
   return (
-    <View style={[styles.shortcutRow, last ? styles.lastRow : null]}>
-      <View style={styles.shortcutIcon}>
-        <Wrench color={colors.ink} size={22} />
+    <Pressable onPress={onPress} style={[styles.shortcutRow, last ? styles.lastRow : null]}>
+      <View style={styles.serviceIconCircle}>
+        <Wrench color={colors.blue} size={21} />
       </View>
-      <View style={styles.shortcutText}>
-        <Text style={styles.shortcutTitle}>{item.title}</Text>
-        <Text style={styles.shortcutSubtitle}>{formatServiceSubtitle(item)}</Text>
+      <Text style={styles.shortcutTitle}>{item.title}</Text>
+      <Text style={styles.shortcutStatus}>{formatStatus(item.status)}</Text>
+      <ChevronRight color={colors.muted} size={20} />
+    </Pressable>
+  );
+}
+
+function MovementRow({ movement }) {
+  const isExpense = Number(movement.amount) < 0;
+  return (
+    <View style={styles.movementRow}>
+      <View style={[styles.movementIcon, isExpense ? styles.movementExpenseIcon : styles.movementIncomeIcon]}>
+        {isExpense ? <ArrowUp color={colors.red} size={20} /> : <ArrowDown color={colors.green} size={20} />}
       </View>
-      {isAttention ? (
-        <Pressable onPress={onPress} style={styles.warningBadge}>
-          <Text style={styles.warningText}>{formatStatus(item.status)}</Text>
-        </Pressable>
-      ) : (
-        <Pressable onPress={onPress} style={styles.rowAction}>
-          <Text style={styles.rowActionText}>Detalhes</Text>
-        </Pressable>
-      )}
+      <View style={styles.movementText}>
+        <Text style={styles.movementDescription}>{movement.description}</Text>
+        <Text style={styles.movementDate}>{formatDate(movement.date)}</Text>
+      </View>
+      <Text style={[styles.movementValue, isExpense ? styles.expenseValue : styles.incomeValue]}>
+        {isExpense ? '-' : ''}{formatCurrency(Math.abs(movement.amount))}
+      </Text>
     </View>
   );
 }
@@ -373,12 +381,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg
   },
   content: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
     paddingBottom: 96,
-    gap: spacing.sm
+    gap: spacing.md
   },
   topBar: {
-    minHeight: 44,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between'
@@ -390,9 +399,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     opacity: 1
@@ -400,40 +407,28 @@ const styles = StyleSheet.create({
   headerIconBusy: {
     opacity: 0.55
   },
-  brand: {
+  screenTitle: {
     color: colors.ink,
-    fontSize: 16,
+    fontSize: 23,
     fontWeight: '900',
     letterSpacing: 0,
     textAlign: 'center'
   },
-  brandBlock: {
+  titleBlock: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 0
   },
   brandSubtitle: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: '700',
-    lineHeight: 15,
-    marginTop: 1,
-    textAlign: 'center'
+    display: 'none'
   },
-  greeting: {
+  greetingPlain: {
     alignSelf: 'flex-start',
-    minHeight: 38,
-    minWidth: 130,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
+    minHeight: 36,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm
+    gap: spacing.xs
   },
   userArea: {
     alignSelf: 'flex-start',
@@ -471,15 +466,18 @@ const styles = StyleSheet.create({
   },
   greetingText: {
     color: colors.ink,
-    fontWeight: '800',
-    fontSize: 13
+    fontWeight: '900',
+    fontSize: 20
+  },
+  greetingName: {
+    color: colors.blue
   },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: spacing.md
+    padding: spacing.lg
   },
   balanceCard: {
     minHeight: 112,
@@ -539,8 +537,14 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     color: colors.ink,
-    fontSize: 16,
+    fontSize: 19,
     fontWeight: '900'
+  },
+  cardMonth: {
+    color: colors.muted,
+    fontSize: 17,
+    fontWeight: '700',
+    marginTop: spacing.xs
   },
   cardSubtitle: {
     color: colors.muted,
@@ -557,68 +561,94 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   transparencyCard: {
-    gap: spacing.md
+    gap: spacing.md,
+    padding: spacing.lg
   },
-  transparencyTitleWrap: {
-    flex: 1,
-    minWidth: 0
-  },
-  lockIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bg,
+  lockedBody: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center'
+    gap: spacing.lg,
+    marginTop: spacing.sm
+  },
+  lockCircle: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    backgroundColor: colors.blueSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
+  lockedCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: spacing.sm
+  },
+  lockedTitle: {
+    color: colors.ink,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '900'
   },
   lockedText: {
     color: colors.muted,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 15,
+    lineHeight: 22,
     fontWeight: '700'
   },
   disabledInfo: {
-    minHeight: 42,
+    minHeight: 50,
     borderRadius: 8,
-    backgroundColor: colors.bg,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: '#E8ECF2',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.md
   },
   disabledInfoText: {
     color: colors.muted,
-    fontSize: 13,
+    fontSize: 17,
     fontWeight: '900',
     textAlign: 'center'
   },
-  balanceInline: {
-    color: colors.blue,
-    fontSize: 28,
+  balanceOpenValue: {
+    color: colors.green,
+    fontSize: 30,
     fontWeight: '900'
   },
-  transparencyRows: {
+  metricGrid: {
+    flexDirection: 'row',
     gap: spacing.sm
   },
-  summaryLine: {
-    minHeight: 30,
-    flexDirection: 'row',
+  metricCard: {
+    flex: 1,
+    minHeight: 120,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+    gap: spacing.xs
   },
-  summaryLineLabel: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: '700'
+  metricIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs
   },
-  summaryLineValue: {
+  metricLabel: {
     color: colors.ink,
-    fontSize: 15,
-    fontWeight: '900'
+    fontSize: 13,
+    fontWeight: '800',
+    textAlign: 'center'
+  },
+  metricValue: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: '900',
+    textAlign: 'center'
   },
   contributionInfo: {
     gap: spacing.xs
@@ -629,7 +659,7 @@ const styles = StyleSheet.create({
   },
   contributionValue: {
     color: colors.ink,
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: '900'
   },
   inlineActions: {
@@ -670,7 +700,7 @@ const styles = StyleSheet.create({
   },
   statusPill: {
     minHeight: 28,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.md
@@ -685,13 +715,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.redSoft
   },
   statusText: {
-    color: colors.ink,
     fontSize: 12,
     fontWeight: '900'
   },
+  statusTextPaid: {
+    color: colors.green
+  },
+  statusTextPending: {
+    color: '#D85B00'
+  },
+  statusTextOverdue: {
+    color: colors.red
+  },
   sectionTitle: {
     color: colors.ink,
-    fontSize: 15,
+    fontSize: 20,
     fontWeight: '900',
     marginTop: spacing.xs
   },
@@ -700,20 +738,26 @@ const styles = StyleSheet.create({
     gap: 0
   },
   shortcutRow: {
-    minHeight: 58,
+    minHeight: 74,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.border
   },
   lastRow: {
     borderBottomWidth: 0
   },
-  shortcutIcon: {
-    width: 32,
+  serviceIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.blueSoft,
     alignItems: 'center'
+    ,
+    justifyContent: 'center',
+    flexShrink: 0
   },
   shortcutText: {
     flex: 1,
@@ -721,7 +765,14 @@ const styles = StyleSheet.create({
   },
   shortcutTitle: {
     color: colors.ink,
-    fontSize: 14,
+    fontSize: 16,
+    fontWeight: '900',
+    flex: 1,
+    minWidth: 0
+  },
+  shortcutStatus: {
+    color: colors.blue,
+    fontSize: 13,
     fontWeight: '900'
   },
   shortcutSubtitle: {
@@ -761,33 +812,65 @@ const styles = StyleSheet.create({
     fontWeight: '900'
   },
   launchCard: {
-    gap: spacing.sm
+    padding: 0,
+    gap: 0
   },
-  launchRow: {
-    minHeight: 28,
+  movementRow: {
+    minHeight: 76,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border
   },
-  launchDate: {
-    width: 78,
-    color: colors.ink,
-    fontSize: 12,
-    fontWeight: '700'
+  movementIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
   },
-  launchDescription: {
+  movementIncomeIcon: {
+    backgroundColor: colors.greenSoft
+  },
+  movementExpenseIcon: {
+    backgroundColor: colors.redSoft
+  },
+  movementText: {
     flex: 1,
+    minWidth: 0
+  },
+  movementDescription: {
     color: colors.ink,
+    fontSize: 15,
+    fontWeight: '800'
+  },
+  movementDate: {
+    color: colors.muted,
     fontSize: 13,
+    marginTop: 2,
     fontWeight: '700'
   },
-  launchValue: {
-    color: colors.ink,
-    fontSize: 12,
+  movementValue: {
+    fontSize: 15,
     fontWeight: '900'
+  },
+  incomeValue: {
+    color: colors.green
+  },
+  expenseValue: {
+    color: colors.red
+  },
+  emptyList: {
+    color: colors.muted,
+    fontWeight: '800',
+    padding: spacing.lg
   },
   empty: {
     color: colors.muted,
-    fontWeight: '700'
+    fontWeight: '700',
+    padding: spacing.lg
   }
 });
