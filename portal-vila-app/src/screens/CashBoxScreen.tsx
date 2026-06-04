@@ -35,10 +35,10 @@ export function CashBoxScreen() {
       {!isAdmin && dashboard?.transparencyEnabled === false ? (
         <Card>
           <Row>
-            <Value>Transparencia financeira</Value>
+            <Value>Desbloqueie todas as funcionalidades</Value>
             <Lock color="#667085" size={20} />
           </Row>
-          <Label>O saldo acumulado sera liberado depois que sua primeira contribuicao for confirmada.</Label>
+          <Label>Faca sua primeira pagamento para desbloquear.</Label>
         </Card>
       ) : (
         <>

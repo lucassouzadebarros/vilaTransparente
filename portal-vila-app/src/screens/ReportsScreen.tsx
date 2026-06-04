@@ -24,10 +24,10 @@ export function ReportsScreen() {
       {!isAdmin && dashboard?.transparencyEnabled === false ? (
         <Card>
           <Row>
-            <Value>Relatorios bloqueados</Value>
+            <Value>Desbloqueie todas as funcionalidades</Value>
             <Lock color="#667085" size={20} />
           </Row>
-          <Label>Os totais consolidados aparecem depois que sua primeira contribuicao for confirmada.</Label>
+          <Label>Faca sua primeira pagamento para desbloquear.</Label>
         </Card>
       ) : (
         <>

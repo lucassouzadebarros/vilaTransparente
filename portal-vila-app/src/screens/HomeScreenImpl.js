@@ -236,14 +236,14 @@ function TransparencyLockedCard() {
           <Lock color={colors.ink} size={27} />
         </View>
         <View style={styles.lockedCopy}>
-          <Text style={styles.lockedTitle}>Liberada apos sua primeira contribuicao</Text>
+          <Text style={styles.lockedTitle}>Desbloqueie todas as funcionalidades</Text>
           <Text style={styles.lockedText}>
-            Quando o pagamento for confirmado, voce acompanha saldo, arrecadacao e despesas da vila.
+            Faca sua primeira pagamento para desbloquear.
           </Text>
         </View>
       </View>
       <View style={styles.disabledInfo}>
-        <Text style={styles.disabledInfoText}>Aguardando pagamento</Text>
+        <Text style={styles.disabledInfoText}>Aguardando desbloqueio</Text>
       </View>
     </LocalCard>
   );
