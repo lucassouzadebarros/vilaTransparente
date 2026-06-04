@@ -13,7 +13,7 @@ export function MoreScreen() {
   const firstName = session?.name?.split(' ')[0] ?? 'Usuario';
 
   return (
-    <Screen title="Mais" subtitle={session?.name}>
+    <Screen>
       <View style={styles.userArea}>
         <Pressable style={styles.greeting} onPress={() => setUserMenuOpen((current) => !current)}>
           <Text style={styles.greetingText}>Ola, {firstName}</Text>
