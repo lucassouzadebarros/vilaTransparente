@@ -43,7 +43,7 @@ export function LoginScreen() {
     phone.trim() ? phoneError : 'telefone',
     documentNumber.trim() ? documentError : 'CPF/CNPJ',
     registerPassword ? passwordError : 'senha',
-    confirmPassword ? confirmPasswordError : 'confirmacao da senha'
+    confirmPassword ? confirmPasswordError : 'confirmação da senha'
   ].filter(Boolean);
   const canSubmitRegistration = registrationIssues.length === 0 && !loading && !housesLoading;
   const loginEmailError = emailFieldError(email);
@@ -74,7 +74,7 @@ export function LoginScreen() {
         setSelectedHouseId(options.find((house) => house.available)?.houseId ?? null);
       }
     } catch (error) {
-      setErrorMessage(apiErrorMessage(error, 'Nao consegui carregar as casas disponiveis.'));
+      setErrorMessage(apiErrorMessage(error, 'Não consegui carregar as casas disponíveis.'));
     } finally {
       setHousesLoading(false);
     }
@@ -99,10 +99,10 @@ export function LoginScreen() {
 
   function validateLogin() {
     if (!email.trim()) {
-      return 'Informe seu email para entrar.';
+      return 'Informe seu e-mail para entrar.';
     }
     if (!isValidEmail(normalizeEmail(email))) {
-      return 'Informe um email valido. Exemplo: nome@email.com';
+      return 'Informe um e-mail válido. Exemplo: nome@email.com';
     }
     if (!password) {
       return 'Informe sua senha para entrar.';
@@ -129,7 +129,7 @@ export function LoginScreen() {
       });
       await login(normalizeEmail(registerEmail), registerPassword);
     } catch (error) {
-      setErrorMessage(apiErrorMessage(error, 'Nao consegui concluir o cadastro. Confira os dados e tente novamente.'));
+      setErrorMessage(apiErrorMessage(error, 'Não consegui concluir o cadastro. Confira os dados e tente novamente.'));
       await refreshRegistrationHouses(false);
     } finally {
       setLoading(false);
@@ -144,10 +144,10 @@ export function LoginScreen() {
       return 'Selecione a casa referente ao cadastro.';
     }
     if (!name.trim() || !registerEmail.trim() || !phone.trim()) {
-      return 'Preencha nome, email e telefone.';
+      return 'Preencha nome, e-mail e telefone.';
     }
     if (!isValidEmail(emailToValidate)) {
-      return 'Informe um email valido. Exemplo: nome@email.com';
+      return 'Informe um e-mail válido. Exemplo: nome@email.com';
     }
     if (phoneDigits.length < 10 || phoneDigits.length > 11) {
       return 'Informe um telefone com DDD. Exemplo: (21) 99999-9999.';
@@ -159,14 +159,14 @@ export function LoginScreen() {
       return 'A senha precisa ter pelo menos 6 caracteres.';
     }
     if (registerPassword !== confirmPassword) {
-      return 'As senhas nao conferem.';
+      return 'As senhas não conferem.';
     }
     return '';
   }
 
   async function clearSession() {
     await logout();
-    setErrorMessage('Sessao local limpa. Tente entrar novamente.');
+    setErrorMessage('Sessão local limpa. Tente entrar novamente.');
   }
 
   function openRegister() {
@@ -196,16 +196,16 @@ export function LoginScreen() {
             <Card style={styles.loginCard}>
               <View style={styles.loginHeading}>
                 <Text style={styles.cardTitle}>Entrar</Text>
-                <Text style={styles.muted}>Acesse com o email e senha da sua casa ou da administracao.</Text>
+                <Text style={styles.muted}>Acesse com o e-mail e senha da sua casa ou da administração.</Text>
               </View>
               {errorMessage ? (
                 <View style={styles.errorBanner}>
-                  <Text style={styles.errorBannerTitle}>Nao consegui entrar</Text>
+                  <Text style={styles.errorBannerTitle}>Não consegui entrar</Text>
                   <Text style={styles.errorBannerText}>{errorMessage}</Text>
                 </View>
               ) : null}
               <Field
-                label="Email"
+                label="E-mail"
                 value={email}
                 onChangeText={(value) => {
                   setEmail(normalizeEmail(value));
@@ -214,7 +214,7 @@ export function LoginScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 errorText={loginEmailError}
-                helpText="Use o email cadastrado para sua casa."
+                helpText="Use o e-mail cadastrado para sua casa."
               />
               <Field
                 label="Senha"
@@ -263,7 +263,7 @@ export function LoginScreen() {
               {showSupportActions ? (
                 <View style={styles.shortcut}>
                   <Button title="Preencher admin" icon={ShieldCheck} variant="ghost" onPress={() => { setEmail('admin@vila.com'); setPassword('123456'); setErrorMessage(''); }} />
-                  <Button title="Limpar sessao" icon={Trash2} variant="ghost" onPress={clearSession} />
+          <Button title="Limpar sessão" icon={Trash2} variant="ghost" onPress={clearSession} />
                 </View>
               ) : null}
             </Card>
@@ -283,7 +283,7 @@ export function LoginScreen() {
 
               {errorMessage ? (
                 <View style={styles.errorBanner}>
-                  <Text style={styles.errorBannerTitle}>Nao consegui concluir o cadastro</Text>
+                  <Text style={styles.errorBannerTitle}>Não consegui concluir o cadastro</Text>
                   <Text style={styles.errorBannerText}>{errorMessage}</Text>
                 </View>
               ) : null}
@@ -310,7 +310,7 @@ export function LoginScreen() {
                           Casa {String(house.number).padStart(2, '0')}
                         </Text>
                         <Text style={[styles.houseStatus, selected ? styles.houseStatusSelected : null]}>
-                          {house.available ? (selected ? 'Selecionada' : 'Disponivel') : 'Ja cadastrada'}
+                    {house.available ? (selected ? 'Selecionada' : 'Disponível') : 'Já cadastrada'}
                         </Text>
                       </Pressable>
                     );
@@ -318,9 +318,9 @@ export function LoginScreen() {
                 </View>
               </View>
 
-              <Field label="Nome do responsavel" value={name} onChangeText={setName} errorText={name.trim() ? '' : undefined} />
+            <Field label="Nome do responsável" value={name} onChangeText={setName} errorText={name.trim() ? '' : undefined} />
               <Field
-                label="Email"
+                label="E-mail"
                 value={registerEmail}
                 onChangeText={(value) => setRegisterEmail(normalizeEmail(value))}
                 keyboardType="email-address"
@@ -369,7 +369,7 @@ export function LoginScreen() {
                   <PasswordToggle
                     visible={showConfirmPassword}
                     onPress={() => setShowConfirmPassword((current) => !current)}
-                    label={showConfirmPassword ? 'Ocultar confirmacao de senha' : 'Mostrar confirmacao de senha'}
+                    label={showConfirmPassword ? 'Ocultar confirmação de senha' : 'Mostrar confirmação de senha'}
                   />
                 }
               />
@@ -424,7 +424,7 @@ function emailFieldError(value: string) {
   if (!value.trim()) {
     return '';
   }
-  return isValidEmail(normalizeEmail(value)) ? '' : 'Informe um email valido. Exemplo: nome@email.com';
+  return isValidEmail(normalizeEmail(value)) ? '' : 'Informe um e-mail válido. Exemplo: nome@email.com';
 }
 
 function phoneFieldError(value: string) {
@@ -454,7 +454,7 @@ function confirmPasswordFieldError(password: string, confirmation: string) {
   if (!confirmation) {
     return '';
   }
-  return password === confirmation ? '' : 'As senhas nao conferem.';
+  return password === confirmation ? '' : 'As senhas não conferem.';
 }
 
 function formatPhone(value: string) {
@@ -494,9 +494,9 @@ function formatCpfCnpj(value: string) {
 function loginErrorMessage(error: unknown) {
   const maybe = error as { response?: { status?: number } };
   if (maybe.response?.status === 401 || maybe.response?.status === 403) {
-    return 'Email ou senha invalidos.';
+    return 'E-mail ou senha inválidos.';
   }
-  return 'A API nao respondeu. Confira se o backend esta rodando em http://localhost:8080 e tente de novo.';
+  return 'A API não respondeu. Confira se o backend está rodando em http://localhost:8080 e tente de novo.';
 }
 
 const styles = StyleSheet.create({

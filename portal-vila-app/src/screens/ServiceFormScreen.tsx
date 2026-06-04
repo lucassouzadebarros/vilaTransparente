@@ -153,7 +153,7 @@ export function ServiceFormScreen() {
         } catch (err) {
           if (active) {
             resetForm(null);
-            setError(apiErrorMessage(err, 'Nao consegui carregar o formulario de servico.'));
+            setError(apiErrorMessage(err, 'Não consegui carregar o formulário de serviço.'));
           }
         } finally {
           if (active) {
@@ -186,11 +186,11 @@ export function ServiceFormScreen() {
 
   async function save() {
     if (!title.trim()) {
-      setError('Informe o titulo do servico.');
+      setError('Informe o título do serviço.');
       return;
     }
     if (!description.trim()) {
-      setError('Informe a descricao do servico.');
+      setError('Informe a descrição do serviço.');
       return;
     }
 
@@ -225,7 +225,7 @@ export function ServiceFormScreen() {
           type: 'NOTA_FISCAL',
           relatedType: 'SERVICE',
           relatedId: savedServiceId,
-          description: 'Documento fiscal vinculado ao cadastro do servico.'
+          description: 'Documento fiscal vinculado ao cadastro do serviço.'
         });
       } else if (documentUrl.trim() && savedServiceId && existingDocument?.url !== documentUrl.trim()) {
         await api.createDocument({
@@ -234,18 +234,18 @@ export function ServiceFormScreen() {
           url: documentUrl.trim(),
           relatedType: 'SERVICE',
           relatedId: savedServiceId,
-          description: 'Documento fiscal vinculado ao cadastro do servico.'
+          description: 'Documento fiscal vinculado ao cadastro do serviço.'
         });
       }
 
-      Alert.alert('Servico', isEditing ? 'Servico atualizado.' : 'Servico salvo.');
+      Alert.alert('Serviço', isEditing ? 'Serviço atualizado.' : 'Serviço salvo.');
       if (savedServiceId) {
         navigation.navigate('ServiceDetails', { id: savedServiceId, refreshKey: Date.now() });
       } else {
         navigation.navigate('Servicos', { refreshKey: Date.now() });
       }
     } catch (err) {
-      setError(apiErrorMessage(err, 'Nao consegui salvar o servico.'));
+      setError(apiErrorMessage(err, 'Não consegui salvar o serviço.'));
     } finally {
       setSaving(false);
     }
@@ -257,12 +257,12 @@ export function ServiceFormScreen() {
       Alert.alert('Documento fiscal', 'Informe o link do PDF da nota fiscal ou recibo.');
       return;
     }
-    Linking.openURL(api.documentUrl(previewUrl)).catch(() => Alert.alert('Documento fiscal', 'Nao foi possivel abrir o link informado.'));
+    Linking.openURL(api.documentUrl(previewUrl)).catch(() => Alert.alert('Documento fiscal', 'Não foi possível abrir o link informado.'));
   }
 
   function selectPdf() {
     if (typeof document === 'undefined') {
-      Alert.alert('Documento fiscal', 'Selecao de arquivo disponivel no app web.');
+      Alert.alert('Documento fiscal', 'Seleção de arquivo disponível no app web.');
       return;
     }
     const input = document.createElement('input');
@@ -283,7 +283,7 @@ export function ServiceFormScreen() {
   }
 
   return (
-    <Screen title={isEditing ? 'Editar servico' : 'Novo servico'} subtitle={isEditing ? `#${serviceId}` : 'Cadastro operacional'}>
+    <Screen title={isEditing ? 'Editar serviço' : 'Novo serviço'} subtitle={isEditing ? `#${serviceId}` : 'Cadastro operacional'}>
       {error ? (
         <Card style={styles.errorCard}>
           <Label>{error}</Label>
@@ -291,10 +291,10 @@ export function ServiceFormScreen() {
       ) : null}
 
       <Card>
-        <Value>Identificacao</Value>
-        <Field label="Titulo" value={title} onChangeText={setTitle} />
-        <Field label="Descricao" value={description} onChangeText={setDescription} multiline />
-        <Field label="Categoria" value={category} onChangeText={setCategory} placeholder="Portaria, limpeza, iluminacao..." />
+        <Value>Identificação</Value>
+        <Field label="Título" value={title} onChangeText={setTitle} />
+        <Field label="Descrição" value={description} onChangeText={setDescription} multiline />
+        <Field label="Categoria" value={category} onChangeText={setCategory} placeholder="Portaria, limpeza, iluminação..." />
       </Card>
 
       <Card>
@@ -332,25 +332,25 @@ export function ServiceFormScreen() {
       <Card>
         <Value>Datas</Value>
         <Field label="Data planejada" value={plannedDate} onChangeText={setPlannedDate} placeholder="AAAA-MM-DD" />
-        <Field label="Data de conclusao" value={completedDate} onChangeText={setCompletedDate} placeholder="AAAA-MM-DD" />
-        <Field label="Observacoes" value={notes} onChangeText={setNotes} multiline />
+        <Field label="Data de conclusão" value={completedDate} onChangeText={setCompletedDate} placeholder="AAAA-MM-DD" />
+        <Field label="Observações" value={notes} onChangeText={setNotes} multiline />
       </Card>
 
       <Card>
-        <Value>Orcamento vinculado</Value>
-        <Label>Somente orcamentos aprovados podem ser vinculados a um servico.</Label>
+        <Value>Orçamento vinculado</Value>
+        <Label>Somente orçamentos aprovados podem ser vinculados a um serviço.</Label>
         <Pressable
           accessibilityRole="button"
           onPress={() => chooseBudget(null)}
           style={[styles.optionCard, selectedBudgetId === null ? styles.optionCardSelected : null]}
         >
           <View style={styles.optionInfo}>
-            <Value>Sem orcamento vinculado</Value>
-            <Label>Servico sem cotacao base</Label>
+            <Value>Sem orçamento vinculado</Value>
+            <Label>Serviço sem cotação base</Label>
           </View>
           {selectedBudgetId === null ? <Badge status="SELECIONADO" /> : null}
         </Pressable>
-        {budgetOptions.length === 0 ? <Label>Nenhum orcamento aprovado disponivel.</Label> : null}
+        {budgetOptions.length === 0 ? <Label>Nenhum orçamento aprovado disponível.</Label> : null}
         {budgetOptions.map((budget) => {
           const selected = budget.id === selectedBudgetId;
           return (
@@ -362,7 +362,7 @@ export function ServiceFormScreen() {
             >
               <View style={styles.optionInfo}>
                 <Value>{budget.title}</Value>
-                <Label>{budget.supplier} - {budget.serviceId ? `Servico #${budget.serviceId}` : 'sem servico'}</Label>
+                <Label>{budget.supplier} - {budget.serviceId ? `Serviço #${budget.serviceId}` : 'sem serviço'}</Label>
               </View>
               <View style={styles.optionRight}>
                 <Badge status={budget.status} />
@@ -386,7 +386,7 @@ export function ServiceFormScreen() {
 
       <Row style={{ flexWrap: 'wrap' }}>
         <Button title="Cancelar" icon={X} variant="ghost" onPress={() => navigation.navigate(isEditing && serviceId ? 'ServiceDetails' : 'Servicos', isEditing && serviceId ? { id: serviceId } : undefined)} />
-        <Button title={saving ? 'Salvando...' : isEditing ? 'Atualizar servico' : 'Salvar servico'} icon={Save} onPress={save} disabled={!canSave} />
+        <Button title={saving ? 'Salvando...' : isEditing ? 'Atualizar serviço' : 'Salvar serviço'} icon={Save} onPress={save} disabled={!canSave} />
       </Row>
     </Screen>
   );

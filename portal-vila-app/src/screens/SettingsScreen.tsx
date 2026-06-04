@@ -22,7 +22,7 @@ export function SettingsScreen() {
   }, []);
 
   return (
-    <Screen title="Configuracoes" subtitle="Parametros da vila" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
+    <Screen title="Configurações" subtitle="Parâmetros da vila" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       <Card>
         <Row><Label>Nome</Label><Value>{settings?.villageName}</Value></Row>
         <Row><Label>Mensalidade</Label><Value>{formatMoney(settings?.monthlyAmount ?? 0)}</Value></Row>

@@ -5,17 +5,17 @@ App Expo + React Native + TypeScript.
 ## Recursos implementados
 
 - Login com admin e morador.
-- Navegacao inferior: Inicio, Caixa, Servicos, Docs e Mais.
+- Navegação inferior: Início, Caixa, Serviços, Docs e Mais.
 - Inicio com saldo, transparencia e minha contribuicao.
-- Caixa com arrecadacao, pendencias, despesas e cards de contribuicao.
+- Caixa com arrecadação, pendências, despesas e cards de contribuição.
 - Tela de pagamento Pix com QR Code, copia-e-cola e timeline.
-- Contribuicoes com acao de pagamento manual para admin.
-- Admin Pix com geracao de cobrancas, totais, refresh de QR Code e cancelamento.
+- Contribuições com ação de pagamento manual para admin.
+- Admin Pix com geração de cobranças, totais, refresh de QR Code e cancelamento.
 - Logs de webhook para admin.
 - Despesas.
-- Servicos, cadastro de servico, detalhes, orcamentos, aprovacao/rejeicao e finalizacao com despesa.
+- Serviços, cadastro de serviço, detalhes, orçamentos, aprovação/rejeição e finalização com despesa.
 - Documentos, moradores, relatorios e configuracoes.
-- Fallback local quando a API nao esta rodando.
+- Fallback local quando a API não está rodando.
 
 ## Comandos
 
@@ -45,6 +45,6 @@ Para Android fisico ou outro dispositivo na rede, use o IP da maquina:
 $env:EXPO_PUBLIC_API_URL='http://192.168.0.10:8080/api'
 ```
 
-## Observacao
+## Observação
 
-O app tem fallback visual para os dados seedados do backend. Isso permite abrir e navegar mesmo quando a API local ainda nao esta iniciada.
+O app tem fallback visual para os dados seedados do backend. Isso permite abrir e navegar mesmo quando a API local ainda não está iniciada.

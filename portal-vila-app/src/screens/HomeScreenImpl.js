@@ -11,7 +11,7 @@ import { currentMonth, monthLabel } from '../utils/month';
 const maintenanceOrder = [
   'Portao automatico',
   'Limpeza da vila',
-  'Iluminacao comum',
+  'Iluminação comum',
   'Interfone'
 ];
 
@@ -140,7 +140,7 @@ export function HomeScreen() {
               <Text style={styles.primaryActionText}>Cobrancas Pix</Text>
             </Pressable>
             <Pressable style={styles.secondaryAction} onPress={() => navigation.navigate('Contributions')}>
-              <Text style={styles.secondaryActionText}>Contribuicoes</Text>
+              <Text style={styles.secondaryActionText}>Contribuições</Text>
             </Pressable>
           </View>
         </LocalCard>
@@ -160,7 +160,7 @@ export function HomeScreen() {
                 ? `Confirmado em ${formatDate(myContribution.paymentDate)}`
                 : myCharge?.dueDate
                   ? `Vence em ${formatDate(myCharge.dueDate)}`
-                  : 'Cobranca Pix ainda nao gerada'}
+        : 'Cobrança Pix ainda não gerada'}
             </Text>
             {myContribution?.status !== 'PAID' ? (
               <Pressable
@@ -169,7 +169,7 @@ export function HomeScreen() {
                 onPress={() => navigation.navigate('PixPayment', { id: myCharge.id })}
               >
                 <QrCode color={colors.surface} size={18} />
-                <Text style={styles.primaryActionText}>{myCharge?.id ? 'Ver Pix' : 'Pix nao gerado'}</Text>
+              <Text style={styles.primaryActionText}>{myCharge?.id ? 'Ver Pix' : 'Pix não gerado'}</Text>
               </Pressable>
             ) : null}
           </LocalCard>
@@ -182,7 +182,7 @@ export function HomeScreen() {
         </>
       )}
 
-      <SectionTitle title="Servicos e orcamentos" />
+      <SectionTitle title="Serviços e orçamentos" />
       <LocalCard style={styles.listCard}>
         {maintenance.length > 0 ? (
           maintenance.map((item, index) => (
@@ -230,7 +230,7 @@ function SummaryCard({ title, value }) {
 function TransparencyLockedCard() {
   return (
     <LocalCard style={styles.transparencyCard}>
-      <Text style={styles.cardTitle}>Transparencia financeira</Text>
+      <Text style={styles.cardTitle}>Transparência financeira</Text>
       <View style={styles.lockedBody}>
         <View style={styles.lockCircle}>
           <Lock color={colors.ink} size={27} />
@@ -238,7 +238,7 @@ function TransparencyLockedCard() {
         <View style={styles.lockedCopy}>
           <Text style={styles.lockedTitle}>Desbloqueie todas as funcionalidades</Text>
           <Text style={styles.lockedText}>
-            Faca seu primeiro pagamento para desbloquear.
+            Faça seu primeiro pagamento para desbloquear.
           </Text>
         </View>
       </View>

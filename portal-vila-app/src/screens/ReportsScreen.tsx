@@ -20,14 +20,14 @@ export function ReportsScreen() {
   }, []);
 
   return (
-    <Screen title="Relatorios" subtitle="Totais consolidados" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
+    <Screen title="Relatórios" subtitle="Totais consolidados" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       {!isAdmin && dashboard?.transparencyEnabled === false ? (
         <Card>
           <Row>
             <Value>Desbloqueie todas as funcionalidades</Value>
             <Lock color="#667085" size={20} />
           </Row>
-          <Label>Faca seu primeiro pagamento para desbloquear.</Label>
+          <Label>Faça seu primeiro pagamento para desbloquear.</Label>
         </Card>
       ) : (
         <>

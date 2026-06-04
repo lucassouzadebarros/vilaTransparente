@@ -30,7 +30,7 @@ function formatAmount(value?: number | null) {
 }
 
 function resetDocumentName(file?: File | null) {
-  return file?.name.replace(/\.pdf$/i, '') || 'Orcamento';
+  return file?.name.replace(/\.pdf$/i, '') || 'Orçamento';
 }
 
 export function BudgetFormScreen() {
@@ -56,7 +56,7 @@ export function BudgetFormScreen() {
   const [expectedDate, setExpectedDate] = useState('');
   const [status, setStatus] = useState<Budget['status']>('EM_ANALISE');
   const [notes, setNotes] = useState('');
-  const [documentName, setDocumentName] = useState('Orcamento');
+  const [documentName, setDocumentName] = useState('Orçamento');
   const [documentUrl, setDocumentUrl] = useState('');
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [existingDocument, setExistingDocument] = useState<PortalDocument | null>(null);
@@ -82,7 +82,7 @@ export function BudgetFormScreen() {
     setExpectedDate('');
     setStatus('EM_ANALISE');
     setNotes('');
-    setDocumentName('Orcamento');
+    setDocumentName('Orçamento');
     setDocumentUrl('');
     setDocumentFile(null);
     setExistingDocument(null);
@@ -102,7 +102,7 @@ export function BudgetFormScreen() {
     setExpectedDate(budget.expectedDate ?? '');
     setStatus(budget.status ?? 'EM_ANALISE');
     setNotes(budget.notes ?? '');
-    setDocumentName(document?.name ?? 'Orcamento');
+    setDocumentName(document?.name ?? 'Orçamento');
     setDocumentUrl(document?.url ?? '');
     setDocumentFile(null);
     setExistingDocument(document);
@@ -139,7 +139,7 @@ export function BudgetFormScreen() {
         } catch (err) {
           if (active) {
             resetForm(routeServiceId);
-            setError(apiErrorMessage(err, 'Nao consegui carregar o formulario de orcamento.'));
+            setError(apiErrorMessage(err, 'Não consegui carregar o formulário de orçamento.'));
           }
         } finally {
           if (active) {
@@ -156,25 +156,25 @@ export function BudgetFormScreen() {
 
   function showError(message: string) {
     setError(message);
-    Alert.alert('Orcamento', message);
+    Alert.alert('Orçamento', message);
   }
 
   async function save() {
     const serviceIdToSave = selectedService?.id ?? null;
     if (!title.trim()) {
-      showError('Informe o titulo do orcamento.');
+      showError('Informe o título do orçamento.');
       return;
     }
     if (!supplier.trim()) {
-      showError('Informe o fornecedor do orcamento.');
+      showError('Informe o fornecedor do orçamento.');
       return;
     }
     if (!Number.isFinite(amountValue) || amountValue <= 0) {
-      showError('Informe um valor valido para o orcamento.');
+      showError('Informe um valor válido para o orçamento.');
       return;
     }
     if (status === 'APROVADO' && !serviceIdToSave) {
-      showError('Vincule o orcamento a um servico antes de marcar como aprovado.');
+      showError('Vincule o orçamento a um serviço antes de marcar como aprovado.');
       return;
     }
 
@@ -207,22 +207,22 @@ export function BudgetFormScreen() {
           type: 'ORCAMENTO',
           relatedType: 'BUDGET',
           relatedId: saved.id,
-          description: 'PDF do orcamento enviado pelo fornecedor.'
+          description: 'PDF do orçamento enviado pelo fornecedor.'
         });
         saved = await api.updateBudget(saved.id, { ...saved, documentId: document.id });
       } else if (saved.id && documentUrl.trim() && existingDocument?.url !== documentUrl.trim()) {
         const document = await api.createDocument({
-          name: documentName.trim() || 'Orcamento',
+          name: documentName.trim() || 'Orçamento',
           type: 'ORCAMENTO',
           url: documentUrl.trim(),
           relatedType: 'BUDGET',
           relatedId: saved.id,
-          description: 'Link do orcamento enviado pelo fornecedor.'
+          description: 'Link do orçamento enviado pelo fornecedor.'
         });
         saved = await api.updateBudget(saved.id, { ...saved, documentId: document.id });
       }
 
-      Alert.alert('Orcamento', isEditing ? 'Orcamento atualizado.' : 'Orcamento salvo.');
+      Alert.alert('Orçamento', isEditing ? 'Orçamento atualizado.' : 'Orçamento salvo.');
       if (returnToServiceId) {
         navigation.navigate('ServiceDetails', { id: returnToServiceId, refreshKey: Date.now() });
       } else if (saved.id) {
@@ -231,7 +231,7 @@ export function BudgetFormScreen() {
         navigation.navigate('Budgets', { refreshKey: Date.now() });
       }
     } catch (err) {
-      setError(apiErrorMessage(err, 'Nao consegui salvar o orcamento.'));
+      setError(apiErrorMessage(err, 'Não consegui salvar o orçamento.'));
     } finally {
       setSaving(false);
     }
@@ -239,7 +239,7 @@ export function BudgetFormScreen() {
 
   function selectPdf() {
     if (typeof document === 'undefined') {
-      Alert.alert('Orcamento', 'Selecao de arquivo disponivel no app web.');
+      Alert.alert('Orçamento', 'Seleção de arquivo disponível no app web.');
       return;
     }
     const input = document.createElement('input');
@@ -252,7 +252,7 @@ export function BudgetFormScreen() {
       }
       setDocumentFile(file);
       setDocumentUrl('');
-      if (!documentName.trim() || documentName === 'Orcamento') {
+      if (!documentName.trim() || documentName === 'Orçamento') {
         setDocumentName(resetDocumentName(file));
       }
     };
@@ -262,14 +262,14 @@ export function BudgetFormScreen() {
   function previewDocument() {
     const previewUrl = documentFile ? URL.createObjectURL(documentFile) : documentUrl.trim();
     if (!previewUrl) {
-      Alert.alert('Orcamento', 'Informe o PDF ou link do orcamento.');
+      Alert.alert('Orçamento', 'Informe o PDF ou link do orçamento.');
       return;
     }
-    Linking.openURL(api.documentUrl(previewUrl)).catch(() => Alert.alert('Orcamento', 'Nao foi possivel abrir o documento.'));
+    Linking.openURL(api.documentUrl(previewUrl)).catch(() => Alert.alert('Orçamento', 'Não foi possível abrir o documento.'));
   }
 
   return (
-    <Screen title={isEditing ? 'Editar orcamento' : 'Novo orcamento'} subtitle={isEditing ? `#${budgetId}` : 'Cotacao de fornecedor'}>
+    <Screen title={isEditing ? 'Editar orçamento' : 'Novo orçamento'} subtitle={isEditing ? `#${budgetId}` : 'Cotação de fornecedor'}>
       {error ? (
         <Card style={styles.errorCard}>
           <Label>{error}</Label>
@@ -294,15 +294,15 @@ export function BudgetFormScreen() {
       </Card>
 
       <Card>
-        <Value>Servico vinculado</Value>
+        <Value>Serviço vinculado</Value>
         <Pressable
           accessibilityRole="button"
           onPress={() => setServiceId(null)}
           style={[styles.optionCard, serviceId === null ? styles.optionCardSelected : null]}
         >
           <View style={styles.optionInfo}>
-            <Value>Sem servico vinculado</Value>
-            <Label>Orcamento avulso</Label>
+            <Value>Sem serviço vinculado</Value>
+            <Label>Orçamento avulso</Label>
           </View>
           {serviceId === null ? <Badge status="SELECIONADO" /> : null}
         </Pressable>
@@ -317,7 +317,7 @@ export function BudgetFormScreen() {
             >
               <View style={styles.optionInfo}>
                 <Value>{service.title}</Value>
-                <Label>Servico #{service.id} - {service.status}</Label>
+                <Label>Serviço #{service.id} - {service.status}</Label>
               </View>
               <View style={styles.optionRight}>
                 {selected ? <Badge status="SELECIONADO" /> : null}
@@ -330,7 +330,7 @@ export function BudgetFormScreen() {
 
       <Card>
         <Value>Fornecedor</Value>
-        <Field label="Titulo" value={title} onChangeText={setTitle} />
+        <Field label="Título" value={title} onChangeText={setTitle} />
         <Field label="Fornecedor" value={supplier} onChangeText={setSupplier} />
         <Field label="CNPJ do fornecedor" value={supplierDocument} onChangeText={setSupplierDocument} placeholder="12.345.678/0001-90" />
         <Field label="Telefone" value={phone} onChangeText={setPhone} />
@@ -338,15 +338,15 @@ export function BudgetFormScreen() {
       </Card>
 
       <Card>
-        <Value>Datas e observacoes</Value>
-        <Field label="Data do orcamento" value={budgetDate} onChangeText={setBudgetDate} placeholder="AAAA-MM-DD" />
+        <Value>Datas e observações</Value>
+        <Field label="Data do orçamento" value={budgetDate} onChangeText={setBudgetDate} placeholder="AAAA-MM-DD" />
         <Field label="Validade" value={validUntil} onChangeText={setValidUntil} placeholder="AAAA-MM-DD" />
-        <Field label="Previsao de execucao" value={expectedDate} onChangeText={setExpectedDate} placeholder="AAAA-MM-DD" />
-        <Field label="Observacoes" value={notes} onChangeText={setNotes} multiline />
+        <Field label="Previsão de execução" value={expectedDate} onChangeText={setExpectedDate} placeholder="AAAA-MM-DD" />
+        <Field label="Observações" value={notes} onChangeText={setNotes} multiline />
       </Card>
 
       <Card>
-        <Value>Documento do orcamento</Value>
+        <Value>Documento do orçamento</Value>
         <Field label="Nome do documento" value={documentName} onChangeText={setDocumentName} />
         <Field label="Link do PDF" value={documentUrl} onChangeText={setDocumentUrl} placeholder="https://.../orcamento.pdf" />
         <Button title="Selecionar PDF" icon={Upload} variant="ghost" onPress={selectPdf} />
@@ -358,7 +358,7 @@ export function BudgetFormScreen() {
 
       <Row style={{ flexWrap: 'wrap' }}>
         <Button title="Cancelar" icon={X} variant="ghost" onPress={() => navigation.navigate(isEditing && budgetId ? 'BudgetDetails' : 'Budgets', isEditing && budgetId ? { id: budgetId } : undefined)} />
-        <Button title={saving ? 'Salvando...' : isEditing ? 'Atualizar orcamento' : 'Salvar orcamento'} icon={Save} onPress={save} disabled={!canSave} />
+        <Button title={saving ? 'Salvando...' : isEditing ? 'Atualizar orçamento' : 'Salvar orçamento'} icon={Save} onPress={save} disabled={!canSave} />
       </Row>
     </Screen>
   );

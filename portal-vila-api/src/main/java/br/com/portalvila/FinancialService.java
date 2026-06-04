@@ -79,7 +79,7 @@ class FinancialService {
                 .forEach(c -> movements.add(new MovementResponse(
                     c.paymentDate == null ? YearMonth.parse(c.referenceMonth).atDay(1) : c.paymentDate.toLocalDate(),
                     c.manualPayment ? "PAGAMENTO_MANUAL" : "PIX_ASAAS",
-                    includeAllContributionMovements ? "Contribuicao casa " + c.houseId : "Mensalidade recebida",
+                includeAllContributionMovements ? "Contribuição casa " + c.houseId : "Mensalidade recebida",
                     paidValue(c),
                     c.status
                 )));

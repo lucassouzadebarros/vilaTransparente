@@ -54,7 +54,7 @@ class SecurityConfig {
             )
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint((request, response, authException) ->
-                    writeError(response, HttpStatus.UNAUTHORIZED, "Sessao invalida ou expirada. Entre novamente."))
+                    writeError(response, HttpStatus.UNAUTHORIZED, "Sessão inválida ou expirada. Entre novamente."))
                 .accessDeniedHandler((request, response, accessDeniedException) ->
                     writeError(response, HttpStatus.FORBIDDEN, "Acesso negado. Entre com a conta admin."))
             )
@@ -124,11 +124,11 @@ class CurrentUserService {
     AppUser current() {
         var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getName() == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario nao autenticado.");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuário não autenticado.");
         }
         return users.findByEmailIgnoreCase(authentication.getName())
             .filter(user -> user.active)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario nao encontrado."));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuário não encontrado."));
     }
 
     boolean isAdmin() {
@@ -138,14 +138,14 @@ class CurrentUserService {
     Long requiredResidentId() {
         AppUser user = current();
         if (user.residentId == null) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuario sem casa vinculada.");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário sem casa vinculada.");
         }
         return user.residentId;
     }
 
     Resident currentResident() {
         return residents.findById(requiredResidentId())
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Morador nao encontrado."));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Morador não encontrado."));
     }
 
     void assertResidentAccess(Long residentId) {

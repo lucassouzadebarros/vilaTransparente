@@ -20,7 +20,7 @@ export function ContributionsScreen() {
 
   async function manualPayment(id: number) {
     await api.manualPayment(id, 'Excecao registrada pelo app');
-    Alert.alert('Pagamento manual', 'Contribuicao marcada como paga.');
+    Alert.alert('Pagamento manual', 'Contribuição marcada como paga.');
     load();
   }
 
@@ -29,7 +29,7 @@ export function ContributionsScreen() {
   }, []);
 
   return (
-    <Screen title="Contribuicoes" subtitle="Casas e status Pix" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
+    <Screen title="Contribuições" subtitle="Casas e status Pix" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       {items.map((item) => (
         <Card key={item.id}>
           <Row>
@@ -39,7 +39,7 @@ export function ContributionsScreen() {
           <Label>{item.residentName}</Label>
           <Money value={item.amount} />
           <Button
-            title={item.pixChargeId ? 'Ver Pix' : 'Pix nao gerado'}
+              title={item.pixChargeId ? 'Ver Pix' : 'Pix não gerado'}
             icon={QrCode}
             onPress={() => item.pixChargeId ? navigation.navigate('PixPayment', { id: item.pixChargeId }) : undefined}
             disabled={!item.pixChargeId}

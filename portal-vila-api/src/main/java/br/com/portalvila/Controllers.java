@@ -60,7 +60,7 @@ class AuthController {
         AppUser user = users.findByEmailIgnoreCase(request.email())
             .filter(u -> u.active)
             .filter(u -> passwordEncoder.matches(request.password(), u.passwordHash))
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciais invalidas."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciais inválidas."));
         return new LoginResponse(jwtService.issue(user), user.name, user.email, user.role, user.residentId);
     }
 
@@ -68,7 +68,7 @@ class AuthController {
     ResidentRegistrationResponse registerResident(@Valid @RequestBody ResidentRegistrationRequest request) {
         House house = houses.findById(request.houseId())
             .filter(candidate -> candidate.active)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Casa nao encontrada."));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Casa não encontrada."));
         if (house.number == null || house.number < 2 || house.number > 11) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cadastro publico permitido apenas para as casas 02 a 11.");
         }
@@ -77,7 +77,7 @@ class AuthController {
         }
         String normalizedEmail = request.email().trim().toLowerCase();
         users.findByEmailIgnoreCase(normalizedEmail).ifPresent(user -> {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email ja cadastrado.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "E-mail já cadastrado.");
         });
         if (request.password().trim().length() < 6) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A senha precisa ter pelo menos 6 caracteres.");
@@ -560,12 +560,12 @@ class DocumentController {
     ResponseEntity<Resource> file(@PathVariable Long id) throws MalformedURLException {
         PortalDocument document = documents.findById(id).orElseThrow();
         if (document.storagePath == null || document.storagePath.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Arquivo nao encontrado.");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Arquivo não encontrado.");
         }
         Path path = Paths.get(document.storagePath).toAbsolutePath().normalize();
         Resource resource = new UrlResource(path.toUri());
         if (!resource.exists() || !resource.isReadable()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Arquivo nao encontrado.");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Arquivo não encontrado.");
         }
         String filename = path.getFileName().toString();
         MediaType type = filename.toLowerCase().endsWith(".pdf") ? MediaType.APPLICATION_PDF : MediaType.APPLICATION_OCTET_STREAM;
@@ -617,7 +617,7 @@ class ResidentController {
     ResidentRegistrationResponse selfRegistration(@Valid @RequestBody ResidentRegistrationRequest request) {
         House house = houses.findById(request.houseId())
             .filter(candidate -> candidate.active)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Casa nao encontrada."));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Casa não encontrada."));
         if (house.number == null || house.number < 2 || house.number > 11) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cadastro publico permitido apenas para as casas 02 a 11.");
         }
@@ -671,7 +671,7 @@ class ResidentController {
         users.findByEmailIgnoreCase(incoming.email)
             .filter(user -> user.residentId == null || !user.residentId.equals(id))
             .ifPresent(user -> {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Email ja cadastrado.");
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "E-mail já cadastrado.");
             });
         resident.name = incoming.name;
         resident.email = incoming.email;
@@ -712,7 +712,7 @@ class ResidentController {
     ) {
         House house = houses.findById(houseId)
             .filter(candidate -> candidate.active)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Casa nao encontrada."));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Casa não encontrada."));
         if (!allowAnyHouse && (house.number == null || house.number < 2 || house.number > 11)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cadastro publico permitido apenas para as casas 02 a 11.");
         }
@@ -721,7 +721,7 @@ class ResidentController {
         }
         String normalizedEmail = email == null ? "" : email.trim().toLowerCase();
         users.findByEmailIgnoreCase(normalizedEmail).ifPresent(user -> {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email ja cadastrado.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "E-mail já cadastrado.");
         });
         Resident resident = new Resident();
         resident.houseId = house.id;
@@ -807,9 +807,9 @@ class AdminHouseController {
     Resident release(@PathVariable Long houseId) {
         House house = houses.findById(houseId)
             .filter(candidate -> candidate.active)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Casa nao encontrada ou inativa."));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Casa não encontrada ou inativa."));
         Resident resident = residents.findFirstByHouseIdAndStatusOrderByCreatedAtDesc(house.id, "ACTIVE")
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, house.label + " nao possui morador ativo para liberar."));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, house.label + " não possui morador ativo para liberar."));
 
         resident.status = "INACTIVE";
         resident = residents.save(resident);
@@ -857,7 +857,7 @@ class ApiExceptionHandler {
     ResponseEntity<Map<String, String>> responseStatus(ResponseStatusException ex) {
         String reason = ex.getReason();
         if (reason == null || reason.isBlank()) {
-            reason = "Nao foi possivel concluir a solicitacao.";
+            reason = "Não foi possível concluir a solicitação.";
         }
         return ResponseEntity.status(ex.getStatusCode()).body(Map.of("error", reason));
     }
@@ -865,6 +865,6 @@ class ApiExceptionHandler {
     @ExceptionHandler(java.util.NoSuchElementException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     Map<String, String> notFound() {
-        return Map.of("error", "Registro nao encontrado.");
+            return Map.of("error", "Registro não encontrado.");
     }
 }

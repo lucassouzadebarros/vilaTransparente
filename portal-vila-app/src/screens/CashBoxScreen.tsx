@@ -38,7 +38,7 @@ export function CashBoxScreen() {
             <Value>Desbloqueie todas as funcionalidades</Value>
             <Lock color="#667085" size={20} />
           </Row>
-          <Label>Faca seu primeiro pagamento para desbloquear.</Label>
+          <Label>Faça seu primeiro pagamento para desbloquear.</Label>
         </Card>
       ) : (
         <>
@@ -55,7 +55,7 @@ export function CashBoxScreen() {
         </Row>
       </Card>
       <Row>
-        <Button title="Contribuicoes" icon={ListChecks} onPress={() => navigation.navigate('Contributions')} />
+        <Button title="Contribuições" icon={ListChecks} onPress={() => navigation.navigate('Contributions')} />
         <Button title="Despesas" icon={ReceiptText} variant="ghost" onPress={() => navigation.navigate('Expenses')} />
       </Row>
         </>
@@ -71,7 +71,7 @@ export function CashBoxScreen() {
             <Money value={item.amount} />
           </Row>
           <Button
-            title={item.pixChargeId ? 'Ver Pix' : 'Pix nao gerado'}
+            title={item.pixChargeId ? 'Ver Pix' : 'Pix não gerado'}
             icon={QrCode}
             variant="ghost"
             onPress={() => item.pixChargeId ? navigation.navigate('PixPayment', { id: item.pixChargeId }) : undefined}

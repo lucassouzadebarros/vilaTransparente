@@ -57,9 +57,9 @@ function PortalTabs() {
         }
       }}
     >
-      <Tabs.Screen name="Inicio" component={HomeScreen} options={{ tabBarIcon: ({ color, size }) => <Home color={color} size={size} /> }} />
+      <Tabs.Screen name="Inicio" component={HomeScreen} options={{ tabBarLabel: 'Início', tabBarIcon: ({ color, size }) => <Home color={color} size={size} /> }} />
       <Tabs.Screen name="Caixa" component={CashBoxScreen} options={{ tabBarIcon: ({ color, size }) => <WalletCards color={color} size={size} /> }} />
-      <Tabs.Screen name="Servicos" component={ServicesScreen} options={{ tabBarIcon: ({ color, size }) => <Wrench color={color} size={size} /> }} />
+      <Tabs.Screen name="Servicos" component={ServicesScreen} options={{ tabBarLabel: 'Serviços', tabBarIcon: ({ color, size }) => <Wrench color={color} size={size} /> }} />
       <Tabs.Screen name="Docs" component={DocumentsScreen} options={{ tabBarIcon: ({ color, size }) => <FileText color={color} size={size} /> }} />
       <Tabs.Screen name="Mais" component={MoreScreen} options={{ tabBarIcon: ({ color, size }) => <MoreHorizontal color={color} size={size} /> }} />
       <Tabs.Screen name="Contributions" component={ContributionsScreen} options={hiddenTabOptions} />

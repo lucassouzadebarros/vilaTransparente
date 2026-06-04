@@ -26,11 +26,11 @@ export function ServicesScreen() {
 
   return (
     <Screen
-      title="Servicos"
-      subtitle="Manutencoes e melhorias"
+      title="Serviços"
+      subtitle="Manutenções e melhorias"
       right={<Button title="" icon={RefreshCw} variant="ghost" onPress={() => load()} />}
     >
-      {isAdmin ? <Button title="Novo servico" icon={Plus} onPress={() => navigation.navigate('ServiceForm', { formMode: 'create', serviceId: null, budgetId: null, formKey: Date.now() })} /> : null}
+      {isAdmin ? <Button title="Novo serviço" icon={Plus} onPress={() => navigation.navigate('ServiceForm', { formMode: 'create', serviceId: null, budgetId: null, formKey: Date.now() })} /> : null}
       <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
         {filters.map((filter) => (
           <Button key={filter} title={filter.replace('_', ' ')} variant={filter === status ? 'primary' : 'ghost'} onPress={() => setStatus(filter)} />

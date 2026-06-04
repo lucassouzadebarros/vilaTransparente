@@ -27,7 +27,7 @@ export function FinishServiceScreen() {
         type: 'NOTA_FISCAL',
         relatedType: 'SERVICE',
         relatedId: id,
-        description: 'Documento fiscal anexado na finalizacao do servico.'
+        description: 'Documento fiscal anexado na finalização do serviço.'
       });
       documentId = document.id;
     } else if (documentUrl.trim()) {
@@ -37,7 +37,7 @@ export function FinishServiceScreen() {
         url: documentUrl.trim(),
         relatedType: 'SERVICE',
         relatedId: id,
-        description: 'Documento fiscal anexado na finalizacao do servico.'
+        description: 'Documento fiscal anexado na finalização do serviço.'
       });
       documentId = document.id;
     }
@@ -51,7 +51,7 @@ export function FinishServiceScreen() {
       generateExpense: generateExpense.toLowerCase() !== 'false',
       notes
     });
-    Alert.alert('Servico', 'Servico finalizado e prestacao de contas atualizada.');
+    Alert.alert('Serviço', 'Serviço finalizado e prestação de contas atualizada.');
     navigation.goBack();
   }
 
@@ -61,12 +61,12 @@ export function FinishServiceScreen() {
       Alert.alert('Documento', 'Informe o link do PDF da nota fiscal ou recibo.');
       return;
     }
-    Linking.openURL(api.documentUrl(previewUrl)).catch(() => Alert.alert('Documento', 'Nao foi possivel abrir o link informado.'));
+    Linking.openURL(api.documentUrl(previewUrl)).catch(() => Alert.alert('Documento', 'Não foi possível abrir o link informado.'));
   }
 
   function selectPdf() {
     if (typeof document === 'undefined') {
-      Alert.alert('Documento', 'Selecao de arquivo disponivel no app web.');
+      Alert.alert('Documento', 'Seleção de arquivo disponível no app web.');
       return;
     }
     const input = document.createElement('input');
@@ -87,11 +87,11 @@ export function FinishServiceScreen() {
   }
 
   return (
-    <Screen title="Finalizar servico" subtitle="Pagamento, nota fiscal e despesa">
+    <Screen title="Finalizar serviço" subtitle="Pagamento, nota fiscal e despesa">
       <Card>
         <Value>Dados do pagamento</Value>
         <Field label="Valor final pago" value={finalValue} onChangeText={setFinalValue} keyboardType="numeric" />
-        <Field label="Data de conclusao" value={completedDate} onChangeText={setCompletedDate} />
+        <Field label="Data de conclusão" value={completedDate} onChangeText={setCompletedDate} />
         <Field label="Fornecedor executado" value={supplier} onChangeText={setSupplier} />
         <Field label="CNPJ do fornecedor" value={supplierDocument} onChangeText={setSupplierDocument} placeholder="12.345.678/0001-90" />
         <Field label="Gerar despesa automaticamente" value={generateExpense} onChangeText={setGenerateExpense} />
@@ -99,7 +99,7 @@ export function FinishServiceScreen() {
 
       <Card>
         <Value>Documento fiscal</Value>
-        <Label>Anexe um PDF por link. Esse documento aparece no detalhe do servico para prestacao de contas.</Label>
+        <Label>Anexe um PDF por link. Esse documento aparece no detalhe do serviço para prestação de contas.</Label>
         <Field label="Nome do documento" value={documentName} onChangeText={setDocumentName} />
         <Field label="Link do PDF da nota fiscal/recibo" value={documentUrl} onChangeText={setDocumentUrl} placeholder="https://.../nota-fiscal.pdf" />
         <Button title="Selecionar PDF" icon={Upload} variant="ghost" onPress={selectPdf} />
@@ -108,9 +108,9 @@ export function FinishServiceScreen() {
       </Card>
 
       <Card>
-        <Value>Observacoes finais</Value>
-        <Field label="Observacoes" value={notes} onChangeText={setNotes} multiline />
-        <Button title="Finalizar servico" icon={CheckCircle2} onPress={finish} disabled={!finalValue || !supplier} />
+        <Value>Observações finais</Value>
+        <Field label="Observações" value={notes} onChangeText={setNotes} multiline />
+        <Button title="Finalizar serviço" icon={CheckCircle2} onPress={finish} disabled={!finalValue || !supplier} />
         <Button title="Sem nota agora" icon={FileText} variant="ghost" onPress={() => { setDocumentUrl(''); setDocumentFile(null); }} />
       </Card>
     </Screen>

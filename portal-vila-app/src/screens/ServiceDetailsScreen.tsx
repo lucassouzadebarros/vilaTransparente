@@ -48,14 +48,14 @@ export function ServiceDetailsScreen() {
 
   function openDocument(document?: PortalDocument) {
     if (!document?.url) {
-      Alert.alert('Documento', 'Nenhum documento fiscal foi vinculado a este servico.');
+      Alert.alert('Documento', 'Nenhum documento fiscal foi vinculado a este serviço.');
       return;
     }
-    Linking.openURL(api.documentUrl(document.url)).catch(() => Alert.alert('Documento', 'Nao foi possivel abrir este documento.'));
+    Linking.openURL(api.documentUrl(document.url)).catch(() => Alert.alert('Documento', 'Não foi possível abrir este documento.'));
   }
 
   return (
-    <Screen title={service?.title ?? 'Detalhes do servico'} subtitle="Prestacao de contas" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
+    <Screen title={service?.title ?? 'Detalhes do serviço'} subtitle="Prestação de contas" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       {service ? (
         <>
           <Card>
@@ -67,14 +67,14 @@ export function ServiceDetailsScreen() {
             </DetailLine>
             <DetailLine label="Fornecedor">
               <View style={styles.detailTextBlockRight}>
-                <Value>{service.supplier ?? approvedBudget?.supplier ?? 'Nao definido'}</Value>
-                <Label>{service.supplierDocument ?? approvedBudget?.supplierDocument ?? 'CNPJ nao informado'}</Label>
+                <Value>{service.supplier ?? approvedBudget?.supplier ?? 'Não definido'}</Value>
+                <Label>{service.supplierDocument ?? approvedBudget?.supplierDocument ?? 'CNPJ não informado'}</Label>
               </View>
             </DetailLine>
-            <DetailLine label="Data do servico">
+            <DetailLine label="Data do serviço">
               <Value>{service.completedDate ?? service.plannedDate ?? 'A definir'}</Value>
             </DetailLine>
-            <DetailLine label="Orcamento vinculado">
+            <DetailLine label="Orçamento vinculado">
               <View style={styles.detailTextBlockRight}>
                 <Value>{approvedBudget ? `#${approvedBudget.id} - ${approvedBudget.title}` : 'Nenhum selecionado'}</Value>
                 {approvedBudget ? <Label>{approvedBudget.supplier}</Label> : null}
@@ -82,7 +82,7 @@ export function ServiceDetailsScreen() {
             </DetailLine>
             <DetailLine label="Pagamento">
               <View style={styles.detailTextBlockRight}>
-                {service.finalValue ? <Money value={service.finalValue} /> : <Value>Aguardando finalizacao</Value>}
+                {service.finalValue ? <Money value={service.finalValue} /> : <Value>Aguardando finalização</Value>}
                 {service.completedDate ? <Label>Pago em {service.completedDate}</Label> : null}
               </View>
             </DetailLine>
@@ -92,17 +92,17 @@ export function ServiceDetailsScreen() {
           <DocumentCard document={fiscalDocument} onPress={() => openDocument(fiscalDocument)} />
 
           <Card>
-            <Value>Orcamentos</Value>
-            <Label>{budgets.length} orcamento(s) vinculado(s). O detalhe financeiro principal usa somente o aprovado.</Label>
+            <Value>Orçamentos</Value>
+            <Label>{budgets.length} orçamento(s) vinculado(s). O detalhe financeiro principal usa somente o aprovado.</Label>
             <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
-              {isAdmin ? <Button title="Novo orcamento" icon={Plus} onPress={() => navigation.navigate('BudgetForm', { formMode: 'create', budgetId: null, serviceId: service.id, returnToServiceId: service.id, formKey: Date.now() })} /> : null}
-              <Button title="Ver orcamentos" icon={ClipboardList} variant="ghost" onPress={() => navigation.navigate('Budgets')} />
+              {isAdmin ? <Button title="Novo orçamento" icon={Plus} onPress={() => navigation.navigate('BudgetForm', { formMode: 'create', budgetId: null, serviceId: service.id, returnToServiceId: service.id, formKey: Date.now() })} /> : null}
+              <Button title="Ver orçamentos" icon={ClipboardList} variant="ghost" onPress={() => navigation.navigate('Budgets')} />
             </Row>
           </Card>
 
           {isAdmin ? (
             <Card>
-              <Value>Acoes administrativas</Value>
+              <Value>Ações administrativas</Value>
               <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
                 <Button title="Editar" icon={Pencil} variant="ghost" onPress={() => navigation.navigate('ServiceForm', { formMode: 'edit', serviceId: service.id, formKey: Date.now() })} />
                 <Button title="Finalizar / anexar nota" icon={CheckCircle2} onPress={() => navigation.navigate('FinishService', { id: service.id })} />
@@ -133,8 +133,8 @@ function DocumentCard({ document, onPress }: { document?: PortalDocument; onPres
             <FileText color={colors.red} size={22} />
           </View>
           <View style={styles.detailTextBlock}>
-            <Value>{document?.name ?? 'Nota fiscal nao anexada'}</Value>
-            <Label>{document?.url ? document.url.split('/').pop() : 'Finalize o servico para anexar PDF ou link.'}</Label>
+            <Value>{document?.name ?? 'Nota fiscal não anexada'}</Value>
+            <Label>{document?.url ? document.url.split('/').pop() : 'Finalize o serviço para anexar PDF ou link.'}</Label>
           </View>
         </View>
         <Button title="" icon={ExternalLink} variant="ghost" onPress={onPress} disabled={!document?.url} />

@@ -15,7 +15,7 @@
     <artifactId>portal-vila-api</artifactId>
     <version>0.1.0</version>
     <name>Portal da Vila API</name>
-    <description>API do Portal de Transparencia da Vila com cobrancas Pix via Asaas.</description>
+    <description>API do Portal de Transparência da Vila com cobranças Pix via Asaas.</description>
 
     <properties>
         <java.version>17</java.version>

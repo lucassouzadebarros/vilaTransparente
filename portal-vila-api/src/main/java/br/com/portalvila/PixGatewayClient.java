@@ -91,7 +91,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
         } catch (WebClientResponseException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
         } catch (RuntimeException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway nao respondeu dentro do tempo esperado.", ex);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
         }
     }
 
@@ -179,7 +179,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
     private String asaasError(WebClientResponseException ex) {
         String body = ex.getResponseBodyAsString();
         if (body == null || body.isBlank()) {
-            return "falha na comunicacao com o gateway.";
+            return "falha na comunicação com o gateway.";
         }
         try {
             JsonNode root = objectMapper.readTree(body);
@@ -226,7 +226,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
         } catch (WebClientResponseException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
         } catch (RuntimeException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway nao respondeu dentro do tempo esperado.", ex);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
         }
     }
 
@@ -255,7 +255,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
         } catch (WebClientResponseException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
         } catch (RuntimeException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway nao respondeu dentro do tempo esperado.", ex);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
         }
     }
 
@@ -287,7 +287,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
         } catch (WebClientResponseException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
         } catch (RuntimeException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway nao respondeu dentro do tempo esperado.", ex);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
         }
     }
 
@@ -322,7 +322,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
         } catch (WebClientResponseException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
         } catch (RuntimeException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway nao respondeu dentro do tempo esperado.", ex);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
         }
     }
 
@@ -345,7 +345,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
         } catch (WebClientResponseException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
         } catch (RuntimeException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway nao respondeu dentro do tempo esperado.", ex);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
         }
     }
 
@@ -361,7 +361,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
         } catch (WebClientResponseException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
         } catch (RuntimeException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway nao respondeu dentro do tempo esperado.", ex);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
         }
     }
 

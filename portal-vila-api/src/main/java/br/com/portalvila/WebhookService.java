@@ -344,6 +344,6 @@ class WebhookService {
 
 class InvalidWebhookTokenException extends RuntimeException {
     InvalidWebhookTokenException() {
-        super("Token de webhook invalido.");
+        super("Token de webhook inválido.");
     }
 }

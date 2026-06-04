@@ -7,11 +7,11 @@ Backend Spring Boot do Portal da Vila.
 - Login JWT com roles `ADMIN` e `RESIDENT`.
 - Seed com 10 casas, 10 moradores, usuario admin, usuario morador, contribuicoes, despesas, servico, orcamento e documento.
 - Dashboard com saldo: contribuicoes pagas menos despesas.
-- Contribuicoes por casa/mes com indice unico.
-- Pix por gateway via `PixGatewayClient`, com `AsaasPixGatewayClient` como implementacao inicial.
-- Geracao de cobrancas mensais Pix.
+- Contribuições por casa/mês com índice único.
+- Pix por gateway via `PixGatewayClient`, com `AsaasPixGatewayClient` como implementação inicial.
+- Geração de cobranças mensais Pix.
 - QR Code Pix e copia-e-cola salvos no backend.
-- Webhook Asaas com validacao de token, registro em `webhook_events` e idempotencia.
+- Webhook Asaas com validação de token, registro em `webhook_events` e idempotência.
 - Despesas, servicos, orcamentos, documentos, moradores, relatorios e configuracoes.
 - Testes para calculo de saldo e webhook `PAYMENT_RECEIVED`.
 

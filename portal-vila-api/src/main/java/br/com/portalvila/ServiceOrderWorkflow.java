@@ -90,7 +90,7 @@ class ServiceOrderWorkflow {
     public Budget saveBudget(Long serviceId, Budget budget) {
         if (serviceId != null) {
             services.findById(serviceId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Servico nao encontrado."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Serviço não encontrado."));
         }
         budget.serviceId = serviceId;
         if (budget.status == null || budget.status.isBlank()) {
@@ -107,12 +107,12 @@ class ServiceOrderWorkflow {
     @Transactional
     public Budget updateBudget(Long id, Budget incoming) {
         Budget budget = budgets.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Orcamento nao encontrado."));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Orçamento não encontrado."));
         Long previousServiceId = budget.serviceId;
         validateBudget(incoming);
         if (incoming.serviceId != null) {
             services.findById(incoming.serviceId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Servico nao encontrado."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Serviço não encontrado."));
         }
         budget.serviceId = incoming.serviceId;
         budget.title = incoming.title;
@@ -137,7 +137,7 @@ class ServiceOrderWorkflow {
     public Budget approveBudget(Long id) {
         Budget approved = budgets.findById(id).orElseThrow();
         if (approved.serviceId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vincule o orcamento a um servico antes de aprovar.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vincule o orçamento a um serviço antes de aprovar.");
         }
         Long approvedId = approved.id;
         budgets.findByServiceIdOrderByAmountAsc(approved.serviceId).forEach(budget -> {
@@ -185,7 +185,7 @@ class ServiceOrderWorkflow {
 
         if (request.generateExpense()) {
             Expense expense = new Expense();
-            expense.description = "Servico finalizado: " + service.title;
+            expense.description = "Serviço finalizado: " + service.title;
             expense.category = service.category;
             expense.amount = request.finalValue();
             expense.expenseDate = request.completedDate();
@@ -203,19 +203,19 @@ class ServiceOrderWorkflow {
 
     private void validateBudget(Budget budget) {
         if (budget == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dados do orcamento obrigatorios.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dados do orçamento obrigatórios.");
         }
         if (budget.title == null || budget.title.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Titulo do orcamento obrigatorio.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Título do orçamento obrigatório.");
         }
         if (budget.supplier == null || budget.supplier.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Fornecedor do orcamento obrigatorio.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Fornecedor do orçamento obrigatório.");
         }
         if (budget.amount == null || budget.amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor do orcamento deve ser maior que zero.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor do orçamento deve ser maior que zero.");
         }
         if ("APROVADO".equals(budget.status) && budget.serviceId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vincule o orcamento a um servico antes de aprovar.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vincule o orçamento a um serviço antes de aprovar.");
         }
     }
 
@@ -233,9 +233,9 @@ class ServiceOrderWorkflow {
             return;
         }
         Budget budget = budgets.findById(service.approvedBudgetId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Orcamento vinculado nao encontrado."));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Orçamento vinculado não encontrado."));
         if (!"APROVADO".equals(budget.status)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Somente orcamentos aprovados podem ser vinculados a um servico.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Somente orçamentos aprovados podem ser vinculados a um serviço.");
         }
         if (budget.serviceId != null && !budget.serviceId.equals(service.id)) {
             services.findById(budget.serviceId).ifPresent(previousService -> {

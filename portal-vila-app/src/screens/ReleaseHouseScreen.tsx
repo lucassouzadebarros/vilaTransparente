@@ -36,7 +36,7 @@ export function ReleaseHouseScreen() {
     try {
       setResidents(await api.residents());
     } catch (error) {
-      setMessage(apiErrorMessage(error, 'Nao consegui carregar as casas.'));
+      setMessage(apiErrorMessage(error, 'Não consegui carregar as casas.'));
     } finally {
       setLoading(false);
     }
@@ -59,7 +59,7 @@ export function ReleaseHouseScreen() {
       await load();
       setMessage(`Casa ${String(houseId).padStart(2, '0')} liberada para novo cadastro.`);
     } catch (error) {
-      setMessage(apiErrorMessage(error, 'Nao consegui liberar a casa.'));
+      setMessage(apiErrorMessage(error, 'Não consegui liberar a casa.'));
     } finally {
       setReleasingHouseId(null);
     }
@@ -73,15 +73,15 @@ export function ReleaseHouseScreen() {
     <Screen title="Liberar casa" subtitle="Disponibilidade para cadastro" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       <Card>
         <Row>
-          <Value>Regra da liberacao</Value>
+          <Value>Regra da liberação</Value>
           <LockOpen color={colors.blue} size={22} />
         </Row>
         <Label>Use quando uma casa mudou de responsavel. O morador atual fica inativo, o login dele e bloqueado e a casa volta para a tela de cadastro.</Label>
       </Card>
 
       {message ? (
-        <Card style={message.includes('Nao consegui') ? styles.errorCard : styles.successCard}>
-          <Text style={message.includes('Nao consegui') ? styles.errorText : styles.successText}>{message}</Text>
+        <Card style={message.includes('Não consegui') ? styles.errorCard : styles.successCard}>
+          <Text style={message.includes('Não consegui') ? styles.errorText : styles.successText}>{message}</Text>
         </Card>
       ) : null}
 
@@ -120,9 +120,9 @@ export function ReleaseHouseScreen() {
                     />
                     {pendingRelease?.houseId === house.houseId ? (
                       <View style={styles.confirmBox}>
-                        <Text style={styles.confirmTitle}>Confirmar liberacao da Casa {String(house.houseId).padStart(2, '0')}</Text>
+                        <Text style={styles.confirmTitle}>Confirmar liberação da Casa {String(house.houseId).padStart(2, '0')}</Text>
                         <Text style={styles.confirmText}>
-                          {house.active.name} ficara inativo, nao conseguira mais entrar no portal e a casa ficara disponivel para novo cadastro. O historico financeiro sera mantido.
+                          {house.active.name} ficará inativo, não conseguirá mais entrar no portal e a casa ficará disponível para novo cadastro. O histórico financeiro será mantido.
                         </Text>
                         <Row>
                           <Button
@@ -147,7 +147,7 @@ export function ReleaseHouseScreen() {
                     <CheckCircle2 color={colors.green} size={22} />
                     <View style={styles.releasedCopy}>
                       <Text style={styles.releasedTitle}>Disponivel para cadastro</Text>
-                      <Text style={styles.releasedText}>A proxima pessoa pode se cadastrar escolhendo esta casa.</Text>
+                      <Text style={styles.releasedText}>A próxima pessoa pode se cadastrar escolhendo esta casa.</Text>
                     </View>
                   </View>
                 )}

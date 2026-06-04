@@ -73,7 +73,7 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
       }
     }
     if (error.response?.status === 401) {
-      return 'Sessao invalida ou expirada. Entre novamente.';
+      return 'Sessão inválida ou expirada. Entre novamente.';
     }
     if (error.response?.status === 403) {
       return 'Acesso negado. Entre com a conta admin.';
@@ -82,7 +82,7 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
       return 'A API demorou para responder. Tente novamente.';
     }
     if (error.message) {
-      return `A API nao respondeu: ${error.message}`;
+      return `A API não respondeu: ${error.message}`;
     }
   }
   return fallback;

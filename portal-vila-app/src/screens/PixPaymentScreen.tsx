@@ -31,7 +31,7 @@ export function PixPaymentScreen() {
   }, [id]);
 
   return (
-    <Screen title="Pagar contribuicao" subtitle={charge ? `${charge.houseLabel} - ${charge.month}` : ''} right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
+    <Screen title="Pagar contribuição" subtitle={charge ? `${charge.houseLabel} - ${charge.month}` : ''} right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       {charge ? (
         <>
           <Card>

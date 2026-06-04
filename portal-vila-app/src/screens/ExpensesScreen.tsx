@@ -38,7 +38,7 @@ export function ExpensesScreen() {
     <Screen title="Despesas" subtitle="Saidas da caixinha" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       {isAdmin ? (
         <Card>
-          <Field label="Descricao" value={description} onChangeText={setDescription} />
+        <Field label="Descrição" value={description} onChangeText={setDescription} />
           <Field label="Valor" value={amount} onChangeText={setAmount} keyboardType="numeric" />
           <Button title="Cadastrar despesa" icon={Plus} onPress={create} disabled={!description || !amount} />
         </Card>

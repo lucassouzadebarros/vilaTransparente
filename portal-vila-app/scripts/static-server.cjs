@@ -31,7 +31,7 @@ function proxyApi(req, res) {
 
   proxyReq.on('error', () => {
     res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ error: 'API local nao respondeu. Confira se o backend esta rodando na porta 8080.' }));
+    res.end(JSON.stringify({ error: 'API local não respondeu. Confira se o backend está rodando na porta 8080.' }));
   });
 
   req.pipe(proxyReq);

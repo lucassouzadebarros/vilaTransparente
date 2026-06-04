@@ -19,7 +19,7 @@ export function BudgetsScreen() {
     try {
       setItems(await api.budgets());
     } catch (err) {
-      setError(apiErrorMessage(err, 'Nao consegui carregar os orcamentos.'));
+      setError(apiErrorMessage(err, 'Não consegui carregar os orçamentos.'));
     } finally {
       setLoading(false);
     }
@@ -32,17 +32,17 @@ export function BudgetsScreen() {
   );
 
   return (
-    <Screen title="Orcamentos" subtitle="Cotacoes vinculadas a servicos" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
-      {isAdmin ? <Button title="Novo orcamento" icon={Plus} onPress={() => navigation.navigate('BudgetForm', { formMode: 'create', budgetId: null, serviceId: null, formKey: Date.now() })} /> : null}
+    <Screen title="Orçamentos" subtitle="Cotações vinculadas a serviços" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
+      {isAdmin ? <Button title="Novo orçamento" icon={Plus} onPress={() => navigation.navigate('BudgetForm', { formMode: 'create', budgetId: null, serviceId: null, formKey: Date.now() })} /> : null}
       {error ? (
         <Card>
-          <Value>Nao consegui carregar orcamentos</Value>
+          <Value>Não consegui carregar orçamentos</Value>
           <Label>{error}</Label>
           <Button title="Tentar novamente" icon={RefreshCw} variant="ghost" onPress={load} />
         </Card>
       ) : null}
-      {loading ? <Label>Carregando orcamentos...</Label> : null}
-      {!loading && !error && items.length === 0 ? <EmptyState title="Nenhum orcamento cadastrado." /> : null}
+      {loading ? <Label>Carregando orçamentos...</Label> : null}
+      {!loading && !error && items.length === 0 ? <EmptyState title="Nenhum orçamento cadastrado." /> : null}
       {items.map((item) => (
         <Card key={item.id}>
           <Row>
@@ -52,7 +52,7 @@ export function BudgetsScreen() {
           {item.supplierDocument ? <Label>CNPJ {item.supplierDocument}</Label> : null}
           <Label>{item.title}</Label>
           <Row>
-            <Label>{item.serviceId ? `Servico #${item.serviceId}` : 'Sem servico vinculado'}</Label>
+            <Label>{item.serviceId ? `Serviço #${item.serviceId}` : 'Sem serviço vinculado'}</Label>
             <Money value={item.amount} />
           </Row>
           <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>

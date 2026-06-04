@@ -67,12 +67,12 @@ class PixService {
             .filter(candidate -> candidate.active)
             .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
                 org.springframework.http.HttpStatus.BAD_REQUEST,
-                "Casa nao encontrada ou inativa."
+                "Casa não encontrada ou inativa."
             ));
         Resident resident = residents.findFirstByHouseIdAndStatusOrderByCreatedAtDesc(house.id, "ACTIVE")
             .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
                 org.springframework.http.HttpStatus.BAD_REQUEST,
-                house.label + " nao possui morador ativo cadastrado."
+                house.label + " não possui morador ativo cadastrado."
             ));
         PixChargeResponse response = createChargeForResident(month, amount, settings, resident);
         dashboardEvents.publishDashboardChanged();

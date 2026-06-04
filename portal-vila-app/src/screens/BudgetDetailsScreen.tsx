@@ -26,25 +26,25 @@ export function BudgetDetailsScreen() {
       setBudget(nextBudget);
       setDocuments(nextDocuments);
     } catch {
-      setError('Nao consegui carregar este orcamento.');
+      setError('Não consegui carregar este orçamento.');
     }
   }
 
   async function approve() {
     try {
       setBudget(await api.approveBudget(id));
-      Alert.alert('Orcamento', 'Orcamento aprovado.');
+      Alert.alert('Orçamento', 'Orçamento aprovado.');
     } catch {
-      Alert.alert('Orcamento', 'Vincule o orcamento a um servico antes de aprovar.');
+      Alert.alert('Orçamento', 'Vincule o orçamento a um serviço antes de aprovar.');
     }
   }
 
   async function reject() {
     try {
       setBudget(await api.rejectBudget(id));
-      Alert.alert('Orcamento', 'Orcamento rejeitado.');
+      Alert.alert('Orçamento', 'Orçamento rejeitado.');
     } catch {
-      Alert.alert('Orcamento', 'Nao foi possivel rejeitar este orcamento.');
+      Alert.alert('Orçamento', 'Não foi possível rejeitar este orçamento.');
     }
   }
 
@@ -55,7 +55,7 @@ export function BudgetDetailsScreen() {
   );
 
   return (
-    <Screen title="Orcamento" subtitle="Detalhe da proposta" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
+    <Screen title="Orçamento" subtitle="Detalhe da proposta" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       {error ? (
         <Card>
           <Value>Erro</Value>
@@ -71,13 +71,13 @@ export function BudgetDetailsScreen() {
           {budget.supplierDocument ? <Label>CNPJ {budget.supplierDocument}</Label> : null}
           <Label>{budget.title}</Label>
           <Money value={budget.amount} strong />
-          <Row><Label>Servico</Label><Value>{budget.serviceId ? `#${budget.serviceId}` : 'Sem vinculo'}</Value></Row>
+          <Row><Label>Serviço</Label><Value>{budget.serviceId ? `#${budget.serviceId}` : 'Sem vínculo'}</Value></Row>
           {budget.validUntil ? <Row><Label>Validade</Label><Value>{budget.validUntil}</Value></Row> : null}
           {budget.notes ? <Label>{budget.notes}</Label> : null}
-          {!budget.serviceId ? <Label>Vincule este orcamento a um servico antes de aprovar.</Label> : null}
+          {!budget.serviceId ? <Label>Vincule este orçamento a um serviço antes de aprovar.</Label> : null}
           {documents[0] ? (
             <Button
-              title="Abrir PDF do orcamento"
+              title="Abrir PDF do orçamento"
               icon={ExternalLink}
               variant="ghost"
               onPress={() => Linking.openURL(api.documentUrl(documents[0].url))}

@@ -12,7 +12,7 @@ import { currentMonth } from '../utils/month';
 type GenerationMode = 'all' | 'house';
 
 function actionErrorMessage(error: unknown) {
-  return apiErrorMessage(error, 'Nao consegui falar com a API agora. Confira se o backend esta rodando e se o app esta apontando para a URL correta.');
+  return apiErrorMessage(error, 'Não consegui falar com a API agora. Confira se o backend está rodando e se o app está apontando para a URL correta.');
 }
 
 function parseAmount(value: string) {
@@ -60,7 +60,7 @@ export function AdminPixChargesScreen() {
 
   async function generate() {
     if (!canGenerate) {
-      Alert.alert('Pix', mode === 'house' ? 'Selecione uma casa e informe um valor valido.' : 'Informe um valor valido.');
+      Alert.alert('Pix', mode === 'house' ? 'Selecione uma casa e informe um valor válido.' : 'Informe um valor válido.');
       return;
     }
     setBusy(true);
@@ -68,11 +68,11 @@ export function AdminPixChargesScreen() {
       if (mode === 'house') {
         const generated = await api.generatePixChargeForHouse(month, amountValue, selectedHouseId as number);
         await load();
-        Alert.alert('Pix', `Cobranca da ${generated.houseLabel} pronta.`);
+        Alert.alert('Pix', `Cobrança da ${generated.houseLabel} pronta.`);
       } else {
         const generated = await api.generatePixCharges(month, amountValue);
         setCharges(generated);
-        Alert.alert('Pix', generated.length ? 'Cobrancas do mes geradas.' : 'Nenhuma cobranca foi gerada. Cadastre pelo menos um morador ativo antes de gerar Pix.');
+        Alert.alert('Pix', generated.length ? 'Cobranças do mês geradas.' : 'Nenhuma cobrança foi gerada. Cadastre pelo menos um morador ativo antes de gerar Pix.');
       }
     } catch (error) {
       Alert.alert('Pix', actionErrorMessage(error));
@@ -85,7 +85,7 @@ export function AdminPixChargesScreen() {
     setBusy(true);
     try {
       setCharges(await api.reconcilePixCharges(month));
-      Alert.alert('Pix', 'Cobrancas reconciliadas com o gateway.');
+      Alert.alert('Pix', 'Cobranças reconciliadas com o gateway.');
     } catch (error) {
       Alert.alert('Pix', actionErrorMessage(error));
     } finally {
@@ -116,7 +116,7 @@ export function AdminPixChargesScreen() {
   }, [month]);
 
   return (
-    <Screen title="Admin Pix" subtitle="Cobrancas do mes" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
+    <Screen title="Admin Pix" subtitle="Cobranças do mês" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       <Card>
         <Field
           label="Vencimento"
@@ -125,7 +125,7 @@ export function AdminPixChargesScreen() {
           keyboardType="numeric"
           placeholder="10/06/2026"
           errorText={billingDateError}
-          helpText="Use dia/mes/ano. O sistema gera a cobranca pelo mes informado nessa data."
+          helpText="Use dia/mês/ano. O sistema gera a cobrança pelo mês informado nessa data."
         />
         <Field
           label="Valor"
@@ -139,13 +139,13 @@ export function AdminPixChargesScreen() {
         <View style={styles.modeGroup}>
           <ModeButton
             title="Todas as casas"
-            subtitle="Gera para quem ainda nao tem Pix no mes."
+            subtitle="Gera para quem ainda não tem Pix no mês."
             icon={Users}
             selected={mode === 'all'}
             onPress={() => setMode('all')}
           />
           <ModeButton
-            title="Casa especifica"
+            title="Casa específica"
             subtitle="Use quando uma casa entrou depois."
             icon={Home}
             selected={mode === 'house'}
@@ -191,7 +191,7 @@ export function AdminPixChargesScreen() {
         ) : null}
 
         <Button
-          title={busy ? 'Processando...' : mode === 'house' ? 'Gerar cobranca da casa' : 'Gerar cobrancas do mes'}
+          title={busy ? 'Processando...' : mode === 'house' ? 'Gerar cobrança da casa' : 'Gerar cobranças do mês'}
           icon={Plus}
           onPress={generate}
           disabled={!canGenerate}
@@ -257,7 +257,7 @@ function formatCurrencyInput(value: string) {
 function amountFieldError(value: string) {
   const amount = parseAmount(value);
   if (!value.replace(/\D/g, '')) {
-    return 'Informe o valor da cobranca.';
+    return 'Informe o valor da cobrança.';
   }
   return amount > 0 ? '' : 'Informe um valor maior que zero.';
 }
@@ -287,14 +287,14 @@ function billingDateFieldError(value: string) {
     return 'Informe a data de vencimento.';
   }
   if (digits.length !== 8) {
-    return 'Informe a data completa no formato dia/mes/ano.';
+    return 'Informe a data completa no formato dia/mês/ano.';
   }
   const day = Number(digits.slice(0, 2));
   const month = Number(digits.slice(2, 4));
   const year = Number(digits.slice(4, 8));
   const date = new Date(year, month - 1, day);
   const valid = date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
-  return valid ? '' : 'Informe uma data valida.';
+  return valid ? '' : 'Informe uma data válida.';
 }
 
 const styles = StyleSheet.create({

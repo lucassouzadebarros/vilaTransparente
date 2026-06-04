@@ -23,7 +23,7 @@ export function ResidentsScreen() {
     try {
       setItems(await api.residents());
     } catch (error) {
-      setLoadError(apiErrorMessage(error, 'Nao consegui carregar os moradores.'));
+      setLoadError(apiErrorMessage(error, 'Não consegui carregar os moradores.'));
     } finally {
       setLoading(false);
     }
@@ -52,7 +52,7 @@ export function ResidentsScreen() {
   async function save() {
     if (!draft?.id) {
       if (!draft || !draft.houseId || !draft.name.trim() || !draft.email.trim()) {
-        setMessage({ residentId: 0, type: 'error', text: 'Informe casa, nome e email para cadastrar o morador.' });
+        setMessage({ residentId: 0, type: 'error', text: 'Informe casa, nome e e-mail para cadastrar o morador.' });
         return;
       }
       if (items.some((item) => item.houseId === draft.houseId && item.status === 'ACTIVE')) {
@@ -85,7 +85,7 @@ export function ResidentsScreen() {
       setMessage({ residentId: saved.id ?? draft.id ?? 0, type: 'success', text: 'Dados salvos e cliente sincronizado no Asaas Sandbox.' });
       Alert.alert('Moradores', 'Dados salvos e cliente sincronizado no Asaas Sandbox.');
     } catch (error) {
-      const text = apiErrorMessage(error, 'Nao consegui salvar o morador.');
+      const text = apiErrorMessage(error, 'Não consegui salvar o morador.');
       setMessage({ residentId: draft.id ?? 0, type: 'error', text });
       Alert.alert('Moradores', text);
     } finally {
@@ -105,7 +105,7 @@ export function ResidentsScreen() {
       setMessage({ residentId: saved.id ?? item.id, type: 'success', text: 'Cliente sincronizado no Asaas Sandbox.' });
       Alert.alert('Asaas', 'Cliente sincronizado no Asaas Sandbox.');
     } catch (error) {
-      const text = apiErrorMessage(error, 'Nao consegui sincronizar com o Asaas.');
+      const text = apiErrorMessage(error, 'Não consegui sincronizar com o Asaas.');
       setMessage({ residentId: item.id, type: 'error', text });
       Alert.alert('Asaas', text);
     } finally {
@@ -130,7 +130,7 @@ export function ResidentsScreen() {
             keyboardType="numeric"
           />
           <Field label="Nome" value={draft.name} onChangeText={(value) => changeDraft('name', value)} />
-          <Field label="Email" value={draft.email} onChangeText={(value) => changeDraft('email', value)} keyboardType="email-address" />
+          <Field label="E-mail" value={draft.email} onChangeText={(value) => changeDraft('email', value)} keyboardType="email-address" />
           <Field label="Telefone" value={draft.phone ?? ''} onChangeText={(value) => changeDraft('phone', value)} />
           <Field
             label="CPF/CNPJ completo para Asaas"
@@ -153,7 +153,7 @@ export function ResidentsScreen() {
       ) : null}
       {!loading && loadError ? (
         <Card>
-          <Value>Nao consegui carregar moradores</Value>
+          <Value>Não consegui carregar moradores</Value>
           <Label>{loadError}</Label>
           <Button title="Tentar novamente" icon={RefreshCw} variant="ghost" onPress={load} />
         </Card>
@@ -161,7 +161,7 @@ export function ResidentsScreen() {
       {!loading && !loadError && items.length === 0 ? (
         <Card>
           <Value>Nenhum morador cadastrado</Value>
-          <Label>Cadastre os moradores reais para gerar clientes e cobrancas no Asaas Sandbox.</Label>
+          <Label>Cadastre os moradores reais para gerar clientes e cobranças no Asaas.</Label>
         </Card>
       ) : null}
       {items.map((item) => (
@@ -174,7 +174,7 @@ export function ResidentsScreen() {
           {editingId === item.id && draft ? (
             <Stack>
               <Field label="Nome" value={draft.name} onChangeText={(value) => changeDraft('name', value)} />
-              <Field label="Email" value={draft.email} onChangeText={(value) => changeDraft('email', value)} keyboardType="email-address" />
+              <Field label="E-mail" value={draft.email} onChangeText={(value) => changeDraft('email', value)} keyboardType="email-address" />
               <Field label="Telefone" value={draft.phone ?? ''} onChangeText={(value) => changeDraft('phone', value)} />
               <Field
                 label="CPF/CNPJ completo para Asaas"
@@ -204,7 +204,7 @@ export function ResidentsScreen() {
               <Label>
                 {item.gatewayCustomerId
                   ? `Cliente Asaas sincronizado (${item.gatewayCustomerId})`
-                  : 'Cliente Asaas ainda nao sincronizado'}
+                  : 'Cliente Asaas ainda não sincronizado'}
               </Label>
               {message && message.residentId === item.id ? <Label>{message.text}</Label> : null}
               <Button
@@ -235,8 +235,8 @@ function StatusToggle({ active, onChange }: { active: boolean; onChange: (active
         <Text style={styles.toggleTitle}>Status do morador</Text>
         <Text style={styles.toggleDescription}>
           {active
-            ? 'Ativo: pode acessar o portal e receber novas cobrancas.'
-            : 'Inativo: nao acessa o portal e nao recebe novas cobrancas.'}
+                  ? 'Ativo: pode acessar o portal e receber novas cobranças.'
+                  : 'Inativo: não acessa o portal e não recebe novas cobranças.'}
         </Text>
       </View>
       <Pressable
