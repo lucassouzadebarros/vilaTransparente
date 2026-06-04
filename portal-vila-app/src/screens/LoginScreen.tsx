@@ -15,6 +15,7 @@ export function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showSupportActions, setShowSupportActions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -45,6 +46,9 @@ export function LoginScreen() {
     confirmPassword ? confirmPasswordError : 'confirmacao da senha'
   ].filter(Boolean);
   const canSubmitRegistration = registrationIssues.length === 0 && !loading && !housesLoading;
+  const loginEmailError = emailFieldError(email);
+  const loginPasswordError = password ? '' : '';
+  const canSubmitLogin = Boolean(email.trim() && password && !loginEmailError && !loading);
 
   useEffect(() => {
     if (mode !== 'register') {
@@ -77,6 +81,11 @@ export function LoginScreen() {
   }
 
   async function submit() {
+    const validation = validateLogin();
+    if (validation) {
+      setErrorMessage(validation);
+      return;
+    }
     setLoading(true);
     setErrorMessage('');
     try {
@@ -86,6 +95,19 @@ export function LoginScreen() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function validateLogin() {
+    if (!email.trim()) {
+      return 'Informe seu email para entrar.';
+    }
+    if (!isValidEmail(normalizeEmail(email))) {
+      return 'Informe um email valido. Exemplo: nome@email.com';
+    }
+    if (!password) {
+      return 'Informe sua senha para entrar.';
+    }
+    return '';
   }
 
   async function submitRegistration() {
@@ -150,6 +172,7 @@ export function LoginScreen() {
   function openRegister() {
     setMode('register');
     setErrorMessage('');
+    setShowSupportActions(false);
   }
 
   function openLogin() {
@@ -170,14 +193,38 @@ export function LoginScreen() {
 
         {mode === 'login' ? (
           <View style={styles.stack}>
-            <Card>
-              <Text style={styles.cardTitle}>Entrar</Text>
-              <Field label="Email" value={email} onChangeText={(value) => setEmail(normalizeEmail(value))} keyboardType="email-address" autoCapitalize="none" />
+            <Card style={styles.loginCard}>
+              <View style={styles.loginHeading}>
+                <Text style={styles.cardTitle}>Entrar</Text>
+                <Text style={styles.muted}>Acesse com o email e senha da sua casa ou da administracao.</Text>
+              </View>
+              {errorMessage ? (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorBannerTitle}>Nao consegui entrar</Text>
+                  <Text style={styles.errorBannerText}>{errorMessage}</Text>
+                </View>
+              ) : null}
+              <Field
+                label="Email"
+                value={email}
+                onChangeText={(value) => {
+                  setEmail(normalizeEmail(value));
+                  setErrorMessage('');
+                }}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                errorText={loginEmailError}
+                helpText="Use o email cadastrado para sua casa."
+              />
               <Field
                 label="Senha"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(value) => {
+                  setPassword(value);
+                  setErrorMessage('');
+                }}
                 secureTextEntry={!showLoginPassword}
+                errorText={loginPasswordError}
                 right={
                   <PasswordToggle
                     visible={showLoginPassword}
@@ -186,8 +233,13 @@ export function LoginScreen() {
                   />
                 }
               />
-              <Button title={loading ? 'Entrando...' : 'Entrar'} icon={LogIn} onPress={submit} disabled={loading} />
-              {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
+              <Button title={loading ? 'Entrando...' : 'Entrar'} icon={LogIn} onPress={submit} disabled={!canSubmitLogin} />
+              <View style={styles.loginFooter}>
+                <Text style={styles.loginHint}>Sem acesso ainda?</Text>
+                <Pressable accessibilityRole="button" onPress={openRegister}>
+                  <Text style={styles.inlineAction}>Cadastrar minha casa</Text>
+                </Pressable>
+              </View>
             </Card>
 
             <Card>
@@ -203,10 +255,18 @@ export function LoginScreen() {
               <Button title="Comecar cadastro" icon={UserPlus} onPress={openRegister} />
             </Card>
 
-            <View style={styles.shortcut}>
-              <Button title="Conta admin" icon={ShieldCheck} variant="ghost" onPress={() => { setEmail('admin@vila.com'); setPassword('123456'); }} />
-              <Button title="Limpar sessao" icon={Trash2} variant="ghost" onPress={clearSession} />
-            </View>
+            <Card style={styles.supportCard}>
+              <Pressable accessibilityRole="button" onPress={() => setShowSupportActions((current) => !current)} style={styles.supportHeader}>
+                <ShieldCheck color={colors.muted} size={18} />
+                <Text style={styles.supportTitle}>Suporte e acesso administrativo</Text>
+              </Pressable>
+              {showSupportActions ? (
+                <View style={styles.shortcut}>
+                  <Button title="Preencher admin" icon={ShieldCheck} variant="ghost" onPress={() => { setEmail('admin@vila.com'); setPassword('123456'); setErrorMessage(''); }} />
+                  <Button title="Limpar sessao" icon={Trash2} variant="ghost" onPress={clearSession} />
+                </View>
+              ) : null}
+            </Card>
           </View>
         ) : (
           <View style={styles.stack}>
@@ -489,6 +549,12 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0
   },
+  loginCard: {
+    gap: spacing.lg
+  },
+  loginHeading: {
+    gap: spacing.xs
+  },
   muted: {
     color: colors.muted,
     fontSize: 13,
@@ -556,6 +622,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md
+  },
+  loginFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs
+  },
+  loginHint: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  inlineAction: {
+    color: colors.blue,
+    fontSize: 13,
+    fontWeight: '900'
+  },
+  supportCard: {
+    padding: spacing.md,
+    gap: spacing.md
+  },
+  supportHeader: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  supportTitle: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: '800'
   },
   calloutHeader: {
     flexDirection: 'row',
