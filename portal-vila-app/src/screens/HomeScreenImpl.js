@@ -1,7 +1,7 @@
 // @ts-nocheck
-import { useEffect, useState } from 'react';
-import { useNavigation } from '@react-navigation/native';
-import { Bell, ChevronDown, LogOut, QrCode, ShieldCheck, Wrench } from 'lucide-react-native';
+import { useCallback, useState } from 'react';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { ChevronDown, LogOut, QrCode, RefreshCw, ShieldCheck, Wrench } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -26,21 +26,32 @@ export function HomeScreen() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   async function load() {
-    const [nextDashboard, nextContributions, nextCharges, nextServices] = await Promise.all([
-      api.dashboard(month),
-      api.contributions(month),
-      api.pixCharges(month),
-      api.services()
-    ]);
-    setDashboard(nextDashboard);
-    setContributions(nextContributions);
-    setCharges(nextCharges);
-    setServices(sortMaintenance(nextServices));
+    setRefreshing(true);
+    try {
+      const [nextDashboard, nextContributions, nextCharges, nextServices] = await Promise.all([
+        api.dashboard(month),
+        api.contributions(month),
+        api.pixCharges(month),
+        api.services()
+      ]);
+      setDashboard(nextDashboard);
+      setContributions(nextContributions);
+      setCharges(nextCharges);
+      setServices(sortMaintenance(nextServices));
+    } finally {
+      setRefreshing(false);
+    }
   }
 
-  useEffect(() => {
-    load();
-  }, []);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+      const interval = setInterval(load, 30000);
+      return () => clearInterval(interval);
+    }, [month])
+  );
 
   const totals = {
     collected: dashboard?.collected ?? 0,
@@ -61,8 +72,8 @@ export function HomeScreen() {
           <Text style={styles.brand}>Portal da Vila</Text>
           <Text style={styles.brandSubtitle}>Mensalidades, Pix, serviços e orçamentos</Text>
         </View>
-        <Pressable accessibilityLabel="Notificacoes" style={styles.headerIcon}>
-          <Bell color={colors.ink} size={20} />
+        <Pressable accessibilityLabel="Atualizar inicio" style={[styles.headerIcon, refreshing ? styles.headerIconBusy : null]} onPress={load} disabled={refreshing}>
+          <RefreshCw color={refreshing ? colors.muted : colors.ink} size={20} />
         </Pressable>
       </View>
 
@@ -286,8 +297,15 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    opacity: 1
+  },
+  headerIconBusy: {
+    opacity: 0.55
   },
   brand: {
     color: colors.ink,
