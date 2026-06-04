@@ -57,7 +57,10 @@ export function HomeScreen() {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.topBar}>
         <View style={styles.topSpacer} />
-        <Text style={styles.brand}>Portal da Vila</Text>
+        <View style={styles.brandBlock}>
+          <Text style={styles.brand}>Portal da Vila</Text>
+          <Text style={styles.brandSubtitle}>Mensalidades, Pix, servicos e orcamentos</Text>
+        </View>
         <Pressable accessibilityLabel="Notificacoes" style={styles.headerIcon}>
           <Bell color={colors.ink} size={20} />
         </Pressable>
@@ -290,7 +293,22 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 16,
     fontWeight: '900',
-    letterSpacing: 0
+    letterSpacing: 0,
+    textAlign: 'center'
+  },
+  brandBlock: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 0
+  },
+  brandSubtitle: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 15,
+    marginTop: 1,
+    textAlign: 'center'
   },
   greeting: {
     alignSelf: 'flex-start',
