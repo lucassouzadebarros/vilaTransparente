@@ -188,7 +188,7 @@ export function LoginScreen() {
             <ShieldCheck color={colors.surface} size={30} />
           </View>
           <Text style={styles.title}>Portal da Vila</Text>
-          <Text style={styles.subtitle}>Mensalidade, Pix, servicos e documentos por casa.</Text>
+          <Text style={styles.subtitle}>Mensalidades, Pix, serviços e orçamentos</Text>
         </View>
 
         {mode === 'login' ? (
