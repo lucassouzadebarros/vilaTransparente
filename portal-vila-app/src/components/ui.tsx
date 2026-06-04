@@ -120,7 +120,10 @@ export function Field({
   keyboardType,
   secureTextEntry,
   multiline,
-  autoCapitalize
+  autoCapitalize,
+  errorText,
+  helpText,
+  right
 }: {
   label: string;
   value: string;
@@ -130,21 +133,28 @@ export function Field({
   secureTextEntry?: boolean;
   multiline?: boolean;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  errorText?: string;
+  helpText?: string;
+  right?: ReactNode;
 }) {
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        keyboardType={keyboardType}
-        secureTextEntry={secureTextEntry}
-        autoCapitalize={autoCapitalize}
-        multiline={multiline}
-        style={[styles.input, multiline ? styles.inputMultiline : null]}
-        placeholderTextColor={colors.muted}
-      />
+      <View style={[styles.inputFrame, errorText ? styles.inputFrameError : null, multiline ? styles.inputFrameMultiline : null]}>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          keyboardType={keyboardType}
+          secureTextEntry={secureTextEntry}
+          autoCapitalize={autoCapitalize}
+          multiline={multiline}
+          style={[styles.input, multiline ? styles.inputMultiline : null]}
+          placeholderTextColor={colors.muted}
+        />
+        {right ? <View style={styles.inputAction}>{right}</View> : null}
+      </View>
+      {errorText ? <Text style={styles.fieldError}>{errorText}</Text> : helpText ? <Text style={styles.fieldHelp}>{helpText}</Text> : null}
     </View>
   );
 }
@@ -264,12 +274,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700'
   },
-  input: {
+  inputFrame: {
     minHeight: 46,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  inputFrameError: {
+    borderColor: colors.red,
+    backgroundColor: '#FFF8F8'
+  },
+  inputFrameMultiline: {
+    alignItems: 'flex-start'
+  },
+  input: {
+    flex: 1,
+    minHeight: 44,
     paddingHorizontal: spacing.md,
     color: colors.ink,
     fontSize: 16
@@ -278,6 +301,24 @@ const styles = StyleSheet.create({
     minHeight: 96,
     paddingTop: spacing.md,
     textAlignVertical: 'top'
+  },
+  inputAction: {
+    minWidth: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingRight: spacing.xs
+  },
+  fieldError: {
+    color: colors.red,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '700'
+  },
+  fieldHelp: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 17
   },
   empty: {
     color: colors.muted,
