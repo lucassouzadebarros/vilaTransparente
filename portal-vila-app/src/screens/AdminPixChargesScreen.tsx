@@ -21,7 +21,7 @@ function parseAmount(value: string) {
 
 export function AdminPixChargesScreen() {
   const navigation = useNavigation<any>();
-  const [month, setMonth] = useState(currentMonth());
+  const [billingDate, setBillingDate] = useState(formatBillingDate(currentMonth()));
   const [amount, setAmount] = useState('100');
   const [mode, setMode] = useState<GenerationMode>('all');
   const [selectedHouseId, setSelectedHouseId] = useState<number | null>(null);
@@ -32,7 +32,9 @@ export function AdminPixChargesScreen() {
   const activeResidents = useMemo(() => residents.filter((resident) => resident.status === 'ACTIVE'), [residents]);
   const selectedResident = activeResidents.find((resident) => resident.houseId === selectedHouseId);
   const amountValue = parseAmount(amount);
-  const canGenerate = !busy && Number.isFinite(amountValue) && amountValue > 0 && (mode === 'all' || Boolean(selectedHouseId));
+  const month = monthFromBillingDate(billingDate);
+  const billingDateError = billingDateFieldError(billingDate);
+  const canGenerate = !busy && !billingDateError && Number.isFinite(amountValue) && amountValue > 0 && (mode === 'all' || Boolean(selectedHouseId));
 
   const totals = useMemo(() => ({
     paid: charges.filter((charge) => charge.status === 'PAID').length,
@@ -114,7 +116,15 @@ export function AdminPixChargesScreen() {
   return (
     <Screen title="Admin Pix" subtitle="Cobrancas do mes" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       <Card>
-        <Field label="Mes" value={month} onChangeText={setMonth} />
+        <Field
+          label="Vencimento"
+          value={billingDate}
+          onChangeText={(value) => setBillingDate(formatDateInput(value))}
+          keyboardType="numeric"
+          placeholder="10/06/2026"
+          errorText={billingDateError}
+          helpText="Use dia/mes/ano. O sistema gera a cobranca pelo mes informado nessa data."
+        />
         <Field label="Valor" value={amount} onChangeText={setAmount} keyboardType="numeric" />
 
         <View style={styles.modeGroup}>
@@ -222,6 +232,46 @@ function ModeButton({
       </View>
     </Pressable>
   );
+}
+
+function formatBillingDate(month: string) {
+  const [year, monthNumber] = month.split('-');
+  return `10/${monthNumber}/${year}`;
+}
+
+function formatDateInput(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 2) {
+    return digits;
+  }
+  if (digits.length <= 4) {
+    return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  }
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+function monthFromBillingDate(value: string) {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length !== 8) {
+    return currentMonth();
+  }
+  return `${digits.slice(4, 8)}-${digits.slice(2, 4)}`;
+}
+
+function billingDateFieldError(value: string) {
+  const digits = value.replace(/\D/g, '');
+  if (!digits) {
+    return 'Informe a data de vencimento.';
+  }
+  if (digits.length !== 8) {
+    return 'Informe a data completa no formato dia/mes/ano.';
+  }
+  const day = Number(digits.slice(0, 2));
+  const month = Number(digits.slice(2, 4));
+  const year = Number(digits.slice(4, 8));
+  const date = new Date(year, month - 1, day);
+  const valid = date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+  return valid ? '' : 'Informe uma data valida.';
 }
 
 const styles = StyleSheet.create({
