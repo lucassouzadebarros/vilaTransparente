@@ -119,7 +119,8 @@ export function Field({
   placeholder,
   keyboardType,
   secureTextEntry,
-  multiline
+  multiline,
+  autoCapitalize
 }: {
   label: string;
   value: string;
@@ -128,6 +129,7 @@ export function Field({
   keyboardType?: 'default' | 'numeric' | 'email-address';
   secureTextEntry?: boolean;
   multiline?: boolean;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
 }) {
   return (
     <View style={styles.field}>
@@ -138,6 +140,7 @@ export function Field({
         placeholder={placeholder}
         keyboardType={keyboardType}
         secureTextEntry={secureTextEntry}
+        autoCapitalize={autoCapitalize}
         multiline={multiline}
         style={[styles.input, multiline ? styles.inputMultiline : null]}
         placeholderTextColor={colors.muted}

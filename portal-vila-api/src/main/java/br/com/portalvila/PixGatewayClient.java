@@ -1,5 +1,7 @@
 package br.com.portalvila;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -51,14 +53,17 @@ record GatewayPayment(String id, String status, BigDecimal value, String receipt
 class AsaasPixGatewayClient implements PixGatewayClient {
     private final WebClient webClient;
     private final String apiKey;
+    private final ObjectMapper objectMapper;
 
     AsaasPixGatewayClient(
         WebClient.Builder builder,
+        ObjectMapper objectMapper,
         @Value("${portal.asaas.base-url}") String baseUrl,
         @Value("${portal.asaas.api-key:}") String apiKey,
         @Value("${portal.asaas.user-agent:Portal da Vila}") String userAgent
     ) {
         this.apiKey = apiKey;
+        this.objectMapper = objectMapper;
         this.webClient = builder.baseUrl(baseUrl)
             .defaultHeader(HttpHeaders.ACCEPT, "application/json")
             .defaultHeader(HttpHeaders.USER_AGENT, userAgent)
@@ -138,6 +143,18 @@ class AsaasPixGatewayClient implements PixGatewayClient {
         String body = ex.getResponseBodyAsString();
         if (body == null || body.isBlank()) {
             return "falha na comunicacao com o gateway.";
+        }
+        try {
+            JsonNode root = objectMapper.readTree(body);
+            JsonNode errors = root.path("errors");
+            if (errors.isArray() && errors.size() > 0) {
+                JsonNode first = errors.get(0);
+                String description = first.path("description").asText("");
+                if (!description.isBlank()) {
+                    return description;
+                }
+            }
+        } catch (Exception ignored) {
         }
         return body.length() > 300 ? body.substring(0, 300) : body;
     }
