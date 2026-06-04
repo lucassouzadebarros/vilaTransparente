@@ -43,14 +43,14 @@ export function CashBoxScreen() {
       ) : (
         <>
       <Card>
-        <Label>Saldo disponivel</Label>
+        <Label>Saldo acumulado da vila</Label>
         <Money value={dashboard?.balance ?? 0} strong />
         <Row>
-          <Label>Arrecadado confirmado</Label>
+          <Label>Arrecadado no mes ({monthLabel(month)})</Label>
           <Money value={dashboard?.collected ?? 0} />
         </Row>
         <Row>
-          <Label>Despesas</Label>
+          <Label>Despesas acumuladas</Label>
           <Money value={dashboard?.expenses ?? 0} />
         </Row>
       </Card>
