@@ -43,6 +43,7 @@ record DashboardResponse(
     String month,
     BigDecimal balance,
     BigDecimal collected,
+    BigDecimal totalCollected,
     BigDecimal pending,
     BigDecimal overdue,
     BigDecimal expenses,

@@ -255,7 +255,13 @@ function TransparencyOpenCard({ dashboard, navigation }) {
       <Text style={styles.cardTitle}>Saldo acumulado da vila</Text>
       <Text style={styles.balanceOpenValue}>{formatCurrency(dashboard?.balance ?? 0)}</Text>
       <View style={styles.metricGrid}>
-        <MetricCard icon={TrendingUp} tone="blue" label="Arrecadado" value={formatCurrency(dashboard?.collected ?? 0)} />
+        <MetricCard
+          icon={TrendingUp}
+          tone="blue"
+          label="Arrecadado total"
+          value={formatCurrency(dashboard?.totalCollected ?? dashboard?.collected ?? 0)}
+          caption={`Mês ${formatCurrency(dashboard?.collected ?? 0)}`}
+        />
         <MetricCard icon={ArrowDown} tone="red" label="Despesas" value={formatCurrency(dashboard?.expenses ?? 0)} />
         <MetricCard icon={Users} tone="lilac" label="Casas pagas" value={String(dashboard?.paidHouses ?? 0)} />
       </View>
@@ -267,7 +273,7 @@ function TransparencyOpenCard({ dashboard, navigation }) {
   );
 }
 
-function MetricCard({ icon: Icon, tone, label, value }) {
+function MetricCard({ icon: Icon, tone, label, value, caption }) {
   const color = tone === 'red' ? colors.red : tone === 'lilac' ? colors.lilac : colors.blue;
   const backgroundColor = tone === 'red' ? colors.redSoft : tone === 'lilac' ? '#EFE9FF' : colors.blueSoft;
   return (
@@ -277,6 +283,7 @@ function MetricCard({ icon: Icon, tone, label, value }) {
       </View>
       <Text style={styles.metricLabel}>{label}</Text>
       <Text style={styles.metricValue}>{value}</Text>
+      {caption ? <Text style={styles.metricCaption}>{caption}</Text> : null}
     </View>
   );
 }
@@ -648,6 +655,12 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 14,
     fontWeight: '900',
+    textAlign: 'center'
+  },
+  metricCaption: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '800',
     textAlign: 'center'
   },
   contributionInfo: {

@@ -97,6 +97,7 @@ class FinancialService {
             month,
             allPaid.subtract(allExpenses),
             collected,
+            allPaid,
             pending,
             overdue,
             allExpenses,

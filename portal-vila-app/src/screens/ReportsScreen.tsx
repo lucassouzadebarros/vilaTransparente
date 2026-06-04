@@ -32,7 +32,8 @@ export function ReportsScreen() {
       ) : (
         <>
       <Card>
-        <Row><Label>Arrecadado via gateway/manual</Label><Money value={dashboard?.collected ?? 0} /></Row>
+        <Row><Label>Arrecadado total</Label><Money value={dashboard?.totalCollected ?? dashboard?.collected ?? 0} /></Row>
+        <Row><Label>Arrecadado no mês</Label><Money value={dashboard?.collected ?? 0} /></Row>
         <Row><Label>Pendente</Label><Money value={dashboard?.pending ?? 0} /></Row>
         <Row><Label>Vencido</Label><Money value={dashboard?.overdue ?? 0} /></Row>
         <Row><Label>Despesas</Label><Money value={dashboard?.expenses ?? 0} /></Row>

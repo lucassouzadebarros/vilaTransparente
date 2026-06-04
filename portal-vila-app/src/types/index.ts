@@ -12,6 +12,7 @@ export type Dashboard = {
   month: string;
   balance: number;
   collected: number;
+  totalCollected: number;
   pending: number;
   overdue: number;
   expenses: number;
