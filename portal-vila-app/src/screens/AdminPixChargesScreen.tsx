@@ -16,13 +16,14 @@ function actionErrorMessage(error: unknown) {
 }
 
 function parseAmount(value: string) {
-  return Number(value.replace(/\./g, '').replace(',', '.'));
+  const digits = value.replace(/\D/g, '');
+  return digits ? Number(digits) / 100 : 0;
 }
 
 export function AdminPixChargesScreen() {
   const navigation = useNavigation<any>();
   const [billingDate, setBillingDate] = useState(formatBillingDate(currentMonth()));
-  const [amount, setAmount] = useState('100');
+  const [amount, setAmount] = useState('R$ 100,00');
   const [mode, setMode] = useState<GenerationMode>('all');
   const [selectedHouseId, setSelectedHouseId] = useState<number | null>(null);
   const [charges, setCharges] = useState<PixCharge[]>([]);
@@ -34,7 +35,8 @@ export function AdminPixChargesScreen() {
   const amountValue = parseAmount(amount);
   const month = monthFromBillingDate(billingDate);
   const billingDateError = billingDateFieldError(billingDate);
-  const canGenerate = !busy && !billingDateError && Number.isFinite(amountValue) && amountValue > 0 && (mode === 'all' || Boolean(selectedHouseId));
+  const amountError = amountFieldError(amount);
+  const canGenerate = !busy && !billingDateError && !amountError && Number.isFinite(amountValue) && amountValue > 0 && (mode === 'all' || Boolean(selectedHouseId));
 
   const totals = useMemo(() => ({
     paid: charges.filter((charge) => charge.status === 'PAID').length,
@@ -125,7 +127,14 @@ export function AdminPixChargesScreen() {
           errorText={billingDateError}
           helpText="Use dia/mes/ano. O sistema gera a cobranca pelo mes informado nessa data."
         />
-        <Field label="Valor" value={amount} onChangeText={setAmount} keyboardType="numeric" />
+        <Field
+          label="Valor"
+          value={amount}
+          onChangeText={(value) => setAmount(formatCurrencyInput(value))}
+          keyboardType="numeric"
+          placeholder="R$ 100,00"
+          errorText={amountError}
+        />
 
         <View style={styles.modeGroup}>
           <ModeButton
@@ -237,6 +246,20 @@ function ModeButton({
 function formatBillingDate(month: string) {
   const [year, monthNumber] = month.split('-');
   return `10/${monthNumber}/${year}`;
+}
+
+function formatCurrencyInput(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 12);
+  const cents = digits ? Number(digits) / 100 : 0;
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents);
+}
+
+function amountFieldError(value: string) {
+  const amount = parseAmount(value);
+  if (!value.replace(/\D/g, '')) {
+    return 'Informe o valor da cobranca.';
+  }
+  return amount > 0 ? '' : 'Informe um valor maior que zero.';
 }
 
 function formatDateInput(value: string) {
