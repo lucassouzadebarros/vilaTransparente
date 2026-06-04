@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Edit3, Plus, RefreshCw, Save, X } from 'lucide-react-native';
 import { Badge, Button, Card, Field, Label, Row, Screen, Stack, Value } from '../components/ui';
 import { api, apiErrorMessage } from '../services/api';
 import { Resident } from '../types';
+import { colors, spacing } from '../theme';
 
 export function ResidentsScreen() {
   const [items, setItems] = useState<Resident[]>([]);
@@ -181,6 +182,10 @@ export function ResidentsScreen() {
                 onChangeText={(value) => changeDraft('documentNumber', value)}
                 keyboardType="numeric"
               />
+              <StatusToggle
+                active={draft.status === 'ACTIVE'}
+                onChange={(active) => changeDraft('status', active ? 'ACTIVE' : 'INACTIVE')}
+              />
               <Row>
                 <Button title="Cancelar" icon={X} variant="ghost" onPress={() => { setEditingId(null); setDraft(null); }} disabled={saving} />
                 <Button title={saving ? 'Salvando...' : 'Salvar'} icon={Save} onPress={save} disabled={saving} />
@@ -222,3 +227,100 @@ export function ResidentsScreen() {
     </Screen>
   );
 }
+
+function StatusToggle({ active, onChange }: { active: boolean; onChange: (active: boolean) => void }) {
+  return (
+    <View style={styles.toggleCard}>
+      <View style={styles.toggleCopy}>
+        <Text style={styles.toggleTitle}>Status do morador</Text>
+        <Text style={styles.toggleDescription}>
+          {active
+            ? 'Ativo: pode acessar o portal e receber novas cobrancas.'
+            : 'Inativo: nao acessa o portal e nao recebe novas cobrancas.'}
+        </Text>
+      </View>
+      <Pressable
+        accessibilityRole="switch"
+        accessibilityState={{ checked: active }}
+        accessibilityLabel="Status do morador"
+        onPress={() => onChange(!active)}
+        style={[styles.switchTrack, active ? styles.switchTrackActive : styles.switchTrackInactive]}
+      >
+        <View style={[styles.switchThumb, active ? styles.switchThumbActive : styles.switchThumbInactive]} />
+        <Text style={[styles.switchText, active ? styles.switchTextActive : styles.switchTextInactive]}>
+          {active ? 'ON' : 'OFF'}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  toggleCard: {
+    minHeight: 76,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md
+  },
+  toggleCopy: {
+    flex: 1,
+    gap: spacing.xs
+  },
+  toggleTitle: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: '900'
+  },
+  toggleDescription: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700'
+  },
+  switchTrack: {
+    width: 74,
+    height: 36,
+    borderRadius: 999,
+    padding: 3,
+    justifyContent: 'center'
+  },
+  switchTrackActive: {
+    backgroundColor: colors.green
+  },
+  switchTrackInactive: {
+    backgroundColor: colors.muted
+  },
+  switchThumb: {
+    position: 'absolute',
+    top: 4,
+    width: 28,
+    height: 28,
+    borderRadius: 999,
+    backgroundColor: colors.surface
+  },
+  switchThumbActive: {
+    right: 4
+  },
+  switchThumbInactive: {
+    left: 4
+  },
+  switchText: {
+    fontSize: 11,
+    fontWeight: '900'
+  },
+  switchTextActive: {
+    color: colors.surface,
+    marginLeft: spacing.sm
+  },
+  switchTextInactive: {
+    color: colors.surface,
+    alignSelf: 'flex-end',
+    marginRight: spacing.sm
+  }
+});

@@ -58,7 +58,9 @@ export function formatMoney(value?: number) {
 export function Badge({ status }: { status: string }) {
   const normalized = status.toUpperCase();
   const palette =
-    normalized.includes('PAID') || normalized.includes('APROVADO') || normalized.includes('FINALIZADO')
+    normalized.includes('INACTIVE') || normalized.includes('INATIVO')
+      ? { bg: colors.redSoft, fg: colors.red }
+      : normalized.includes('ACTIVE') || normalized.includes('ATIVO') || normalized.includes('PAID') || normalized.includes('APROVADO') || normalized.includes('FINALIZADO')
       ? { bg: colors.greenSoft, fg: colors.green }
       : normalized.includes('PENDING') || normalized.includes('ANALISE') || normalized.includes('PLANEJADO')
         ? { bg: colors.amberSoft, fg: colors.amber }
@@ -66,6 +68,8 @@ export function Badge({ status }: { status: string }) {
           ? { bg: colors.redSoft, fg: colors.red }
           : { bg: colors.blueSoft, fg: colors.blue };
   const label = normalized
+    .replace('INACTIVE', 'INATIVO')
+    .replace('ACTIVE', 'ATIVO')
     .replace('PAID', 'PAGO')
     .replace('PENDING', 'PENDENTE')
     .replace('OVERDUE', 'VENCIDA')
