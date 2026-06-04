@@ -3,7 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import { ListChecks, Lock, QrCode, ReceiptText, RefreshCw } from 'lucide-react-native';
 import { Badge, Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
 import { api } from '../services/api';
-import { Contribution, Dashboard } from '../types';
+import { Contribution, Dashboard, PixCharge } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { currentMonth } from '../utils/month';
 
@@ -12,12 +12,18 @@ export function CashBoxScreen() {
   const { isAdmin } = useAuth();
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [contributions, setContributions] = useState<Contribution[]>([]);
+  const [charges, setCharges] = useState<PixCharge[]>([]);
   const [month] = useState(currentMonth());
 
   async function load() {
-    const [dash, list] = await Promise.all([api.dashboard(month), api.contributions(month)]);
+    const [dash, list, pixList] = await Promise.all([
+      api.dashboard(month),
+      api.contributions(month),
+      isAdmin ? api.pixCharges(month) : api.syncMyPixCharges()
+    ]);
     setDashboard(dash);
     setContributions(list);
+    setCharges(pixList);
   }
 
   useEffect(() => {
@@ -54,7 +60,7 @@ export function CashBoxScreen() {
       </Row>
         </>
       )}
-      {contributions.slice(0, 5).map((item) => (
+      {(isAdmin ? contributions.slice(0, 5) : []).map((item) => (
         <Card key={item.id}>
           <Row>
             <Value>{item.houseLabel}</Value>
@@ -73,6 +79,45 @@ export function CashBoxScreen() {
           />
         </Card>
       ))}
+      {!isAdmin ? (
+        <>
+          {charges.map((charge) => (
+            <Card key={charge.id}>
+              <Row>
+                <Value>{charge.houseLabel}</Value>
+                <Badge status={charge.status} />
+              </Row>
+              <Row>
+                <Label>{charge.month ? monthLabel(charge.month) : formatDate(charge.dueDate)}</Label>
+                <Money value={charge.value} />
+              </Row>
+              <Label>Vencimento {formatDate(charge.dueDate)}</Label>
+              <Button
+                title="Ver Pix"
+                icon={QrCode}
+                variant="ghost"
+                onPress={() => navigation.navigate('PixPayment', { id: charge.id })}
+              />
+            </Card>
+          ))}
+        </>
+      ) : null}
     </Screen>
   );
+}
+
+function monthLabel(value: string) {
+  const [year, month] = value.split('-');
+  if (!year || !month) {
+    return value;
+  }
+  return `${month}/${year}`;
+}
+
+function formatDate(value: string) {
+  const [year, month, day] = value.split('-');
+  if (!year || !month || !day) {
+    return value;
+  }
+  return `${day}/${month}/${year}`;
 }

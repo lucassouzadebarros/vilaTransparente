@@ -22,7 +22,7 @@ const webBaseURL = typeof window !== 'undefined' && window.location?.origin
 const baseURL = process.env.EXPO_PUBLIC_API_URL ?? webBaseURL;
 const publicBaseURL = baseURL.replace(/\/api\/?$/, '');
 
-export const apiClient = axios.create({ baseURL, timeout: 6000 });
+export const apiClient = axios.create({ baseURL, timeout: 20000 });
 
 apiClient.interceptors.request.use(async (config) => {
   const raw = await AsyncStorage.getItem('portal-vila-session');
@@ -98,6 +98,8 @@ export const api = {
   dashboard: (month: string) => requestData<Dashboard>(apiClient.get('/dashboard', { params: { month } })),
   contributions: (month: string) => requestData<Contribution[]>(apiClient.get('/contributions', { params: { month } })),
   pixCharges: (month: string) => requestData<PixCharge[]>(apiClient.get('/pix/charges', { params: { month } })),
+  allPixCharges: () => requestData<PixCharge[]>(apiClient.get('/pix/charges/all')),
+  syncMyPixCharges: () => requestData<PixCharge[]>(apiClient.post('/pix/charges/sync')),
   pixCharge: (id: number) => requestData<PixCharge>(apiClient.get(`/pix/charges/${id}`)),
   generatePixCharges: (month: string, amount: number) => requestData<PixCharge[]>(apiClient.post('/admin/pix/monthly-charges', { month, amount })),
   generatePixChargeForHouse: (month: string, amount: number, houseId: number) =>

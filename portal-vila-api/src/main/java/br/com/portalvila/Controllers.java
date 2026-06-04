@@ -261,6 +261,16 @@ class PixController {
             : pixService.listChargesForResident(month, currentUser.requiredResidentId());
     }
 
+    @GetMapping({"/pix/charges/all", "/pix-charges/all"})
+    List<PixChargeResponse> listAllCharges() {
+        return pixService.listAllChargesForResident(currentUser.requiredResidentId());
+    }
+
+    @PostMapping({"/pix/charges/sync", "/pix-charges/sync"})
+    List<PixChargeResponse> syncMyCharges() {
+        return pixService.syncChargesForResident(currentUser.requiredResidentId());
+    }
+
     @GetMapping({"/pix/charges/{id}", "/pix-charges/{id}"})
     PixChargeResponse getCharge(@PathVariable Long id) {
         PixChargeResponse response = pixService.getCharge(id);

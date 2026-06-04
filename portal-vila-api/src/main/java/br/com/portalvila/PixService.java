@@ -104,6 +104,60 @@ class PixService {
     }
 
     @Transactional(readOnly = true)
+    public List<PixChargeResponse> listAllChargesForResident(Long residentId) {
+        Map<Long, Contribution> contributionById = contributions.findByResidentIdOrderByReferenceMonthDesc(residentId)
+            .stream()
+            .collect(Collectors.toMap(c -> c.id, Function.identity()));
+        return pixCharges.findAll().stream()
+            .filter(charge -> contributionById.containsKey(charge.contributionId))
+            .map(charge -> toResponse(charge, contributionById.get(charge.contributionId)))
+            .sorted((a, b) -> b.dueDate().compareTo(a.dueDate()))
+            .toList();
+    }
+
+    @Transactional
+    public List<PixChargeResponse> syncChargesForResident(Long residentId) {
+        Resident resident = residents.findById(residentId).orElseThrow();
+        if (resident.gatewayCustomerId == null || resident.gatewayCustomerId.isBlank()) {
+            return listAllChargesForResident(residentId);
+        }
+        House house = houses.findById(resident.houseId).orElseThrow();
+        Settings settings = settingsRepository.findAll().stream().findFirst().orElseGet(Settings::new);
+        LocalDate start = LocalDate.now().minusMonths(12).withDayOfMonth(1);
+        LocalDate end = LocalDate.now().plusMonths(12).withDayOfMonth(1).plusMonths(1).minusDays(1);
+        for (GatewayCharge gatewayCharge : gatewayClient.listPixPaymentsByCustomerAndDueDateRange(resident.gatewayCustomerId, start, end)) {
+            if (pixCharges.findByGatewayAndGatewayPaymentId(settings.gatewayProvider, gatewayCharge.id()).isPresent()) {
+                continue;
+            }
+            LocalDate dueDate = gatewayCharge.dueDate();
+            if (dueDate == null) {
+                continue;
+            }
+            String month = YearMonth.from(dueDate).toString();
+            Contribution contribution = contributions.findByHouseIdAndReferenceMonth(house.id, month).orElse(null);
+            if (contribution != null && pixCharges.findByContributionId(contribution.id).isPresent()) {
+                continue;
+            }
+            BigDecimal amount = gatewayCharge.value() == null ? settings.monthlyAmount : gatewayCharge.value();
+            if (contribution == null) {
+                contribution = new Contribution();
+                contribution.houseId = house.id;
+                contribution.residentId = resident.id;
+                contribution.referenceMonth = month;
+                contribution.amount = amount;
+                contribution.status = "PENDING";
+                contribution = contributions.save(contribution);
+            }
+            String externalReference = gatewayCharge.externalReference() == null || gatewayCharge.externalReference().isBlank()
+                ? externalReference(month, house)
+                : gatewayCharge.externalReference();
+            persistGatewayCharge(settings, contribution, externalReference, amount, dueDate, gatewayCharge);
+        }
+        dashboardEvents.publishDashboardChanged();
+        return listAllChargesForResident(residentId);
+    }
+
+    @Transactional(readOnly = true)
     public PixChargeResponse getCharge(Long id) {
         PixCharge charge = pixCharges.findById(id).orElseThrow();
         Contribution contribution = contributions.findById(charge.contributionId).orElseThrow();
@@ -225,7 +279,7 @@ class PixService {
         LocalDate dueDate,
         GatewayCharge gatewayCharge
     ) {
-        PixQrCode qrCode = gatewayClient.getPixQrCode(gatewayCharge.id());
+        PixQrCode qrCode = safeQrCode(gatewayCharge.id());
         PixCharge charge = new PixCharge();
         charge.contributionId = contribution.id;
         charge.gateway = settings.gatewayProvider;
@@ -236,8 +290,8 @@ class PixService {
         charge.value = gatewayCharge.value() == null ? amount : gatewayCharge.value();
         charge.dueDate = gatewayCharge.dueDate() == null ? dueDate : gatewayCharge.dueDate();
         charge.status = normalizeGatewayStatus(gatewayCharge.status());
-        charge.qrCodeBase64 = qrCode.encodedImage();
-        charge.pixCopyPaste = qrCode.payload();
+        charge.qrCodeBase64 = qrCode == null ? null : qrCode.encodedImage();
+        charge.pixCopyPaste = qrCode == null ? null : qrCode.payload();
         charge.invoiceUrl = gatewayCharge.invoiceUrl();
         if ("PAID".equals(charge.status)) {
             charge.paidAt = LocalDateTime.now();
@@ -257,6 +311,14 @@ class PixService {
         contribution.updatedAt = LocalDateTime.now();
         contributions.save(contribution);
         return toResponse(charge, contribution);
+    }
+
+    private PixQrCode safeQrCode(String gatewayPaymentId) {
+        try {
+            return gatewayClient.getPixQrCode(gatewayPaymentId);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 
     private void recoverMissingGatewayCharges(String month, Settings settings) {
