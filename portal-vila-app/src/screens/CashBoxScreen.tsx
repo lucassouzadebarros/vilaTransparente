@@ -38,7 +38,7 @@ export function CashBoxScreen() {
             <Value>Desbloqueie todas as funcionalidades</Value>
             <Lock color="#667085" size={20} />
           </Row>
-          <Label>Faca sua primeira pagamento para desbloquear.</Label>
+          <Label>Faca seu primeiro pagamento para desbloquear.</Label>
         </Card>
       ) : (
         <>

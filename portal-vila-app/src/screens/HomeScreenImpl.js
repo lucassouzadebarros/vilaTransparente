@@ -238,7 +238,7 @@ function TransparencyLockedCard() {
         <View style={styles.lockedCopy}>
           <Text style={styles.lockedTitle}>Desbloqueie todas as funcionalidades</Text>
           <Text style={styles.lockedText}>
-            Faca sua primeira pagamento para desbloquear.
+            Faca seu primeiro pagamento para desbloquear.
           </Text>
         </View>
       </View>
