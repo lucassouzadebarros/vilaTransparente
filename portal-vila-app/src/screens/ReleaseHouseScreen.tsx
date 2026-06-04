@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { CheckCircle2, LockOpen, RefreshCw, UserMinus } from 'lucide-react-native';
 import { Badge, Button, Card, Label, Row, Screen, Stack, Value } from '../components/ui';
 import { api, apiErrorMessage } from '../services/api';
@@ -16,6 +16,7 @@ export function ReleaseHouseScreen() {
   const [residents, setResidents] = useState<Resident[]>([]);
   const [loading, setLoading] = useState(true);
   const [releasingHouseId, setReleasingHouseId] = useState<number | null>(null);
+  const [pendingRelease, setPendingRelease] = useState<HouseState | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const houses = useMemo<HouseState[]>(() => {
@@ -45,18 +46,8 @@ export function ReleaseHouseScreen() {
     if (!house.active) {
       return;
     }
-    Alert.alert(
-      `Liberar Casa ${String(house.houseId).padStart(2, '0')}`,
-      `${house.active.name} ficara inativo, nao conseguira mais entrar no portal e a casa ficara disponivel para novo cadastro. O historico financeiro sera mantido.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Liberar casa',
-          style: 'destructive',
-          onPress: () => releaseHouse(house.houseId)
-        }
-      ]
-    );
+    setPendingRelease(house);
+    setMessage(null);
   }
 
   async function releaseHouse(houseId: number) {
@@ -64,6 +55,7 @@ export function ReleaseHouseScreen() {
     setMessage(null);
     try {
       await api.releaseHouse(houseId);
+      setPendingRelease(null);
       await load();
       setMessage(`Casa ${String(houseId).padStart(2, '0')} liberada para novo cadastro.`);
     } catch (error) {
@@ -126,6 +118,29 @@ export function ReleaseHouseScreen() {
                       disabled={releasingHouseId === house.houseId}
                       onPress={() => confirmRelease(house)}
                     />
+                    {pendingRelease?.houseId === house.houseId ? (
+                      <View style={styles.confirmBox}>
+                        <Text style={styles.confirmTitle}>Confirmar liberacao da Casa {String(house.houseId).padStart(2, '0')}</Text>
+                        <Text style={styles.confirmText}>
+                          {house.active.name} ficara inativo, nao conseguira mais entrar no portal e a casa ficara disponivel para novo cadastro. O historico financeiro sera mantido.
+                        </Text>
+                        <Row>
+                          <Button
+                            title="Cancelar"
+                            variant="ghost"
+                            onPress={() => setPendingRelease(null)}
+                            disabled={releasingHouseId === house.houseId}
+                          />
+                          <Button
+                            title={releasingHouseId === house.houseId ? 'Liberando...' : 'Confirmar'}
+                            icon={UserMinus}
+                            variant="danger"
+                            onPress={() => releaseHouse(house.houseId)}
+                            disabled={releasingHouseId === house.houseId}
+                          />
+                        </Row>
+                      </View>
+                    ) : null}
                   </Stack>
                 ) : (
                   <View style={styles.releasedBox}>
@@ -172,6 +187,25 @@ const styles = StyleSheet.create({
   },
   releasedText: {
     color: colors.muted,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '700'
+  },
+  confirmBox: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.red,
+    backgroundColor: colors.redSoft,
+    padding: spacing.md,
+    gap: spacing.sm
+  },
+  confirmTitle: {
+    color: colors.red,
+    fontSize: 14,
+    fontWeight: '900'
+  },
+  confirmText: {
+    color: colors.ink,
     fontSize: 12,
     lineHeight: 17,
     fontWeight: '700'
