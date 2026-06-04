@@ -197,7 +197,7 @@ export function LoginScreen() {
                 </View>
                 <View style={styles.calloutText}>
                   <Text style={styles.cardTitle}>Cadastrar minha casa</Text>
-                  <Text style={styles.muted}>Moradores das casas 02 a 10 podem criar acesso e cliente Asaas.</Text>
+                  <Text style={styles.muted}>Moradores das casas 02 a 10 podem criar o acesso da propria casa.</Text>
                 </View>
               </View>
               <Button title="Comecar cadastro" icon={UserPlus} onPress={openRegister} />
@@ -277,7 +277,7 @@ export function LoginScreen() {
                 errorText={phoneError}
               />
               <Field
-                label="CPF/CNPJ para o Asaas"
+                label="CPF/CNPJ"
                 value={documentNumber}
                 onChangeText={(value) => setDocumentNumber(formatCpfCnpj(value))}
                 keyboardType="numeric"
@@ -325,9 +325,9 @@ export function LoginScreen() {
                 </View>
               )}
 
-              <View style={styles.asaasNotice}>
+              <View style={styles.signupNotice}>
                 <CheckCircle2 color={colors.green} size={18} />
-                <Text style={styles.noticeText}>Ao salvar, o cliente sera criado no Asaas Sandbox e a casa ficara bloqueada para novo cadastro.</Text>
+                <Text style={styles.noticeText}>Ao salvar, o cadastro da casa sera criado e ela ficara bloqueada para novo cadastro.</Text>
               </View>
 
               <Button title={loading ? 'Cadastrando...' : 'Cadastrar e entrar'} icon={UserPlus} onPress={submitRegistration} disabled={!canSubmitRegistration} />
@@ -641,7 +641,7 @@ const styles = StyleSheet.create({
   houseStatusSelected: {
     color: colors.blue
   },
-  asaasNotice: {
+  signupNotice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
