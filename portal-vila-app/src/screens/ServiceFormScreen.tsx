@@ -4,6 +4,7 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 import { ArrowLeft, CalendarDays, Check, ChevronDown, ClipboardList, ExternalLink, FileText, Flag, Link2, Save, Trash2, Upload, UserRound, X } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { Badge, Card, Label, Money } from '../components/ui';
+import { SoftBackdrop } from '../components/SoftBackdrop';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
 import { Budget, PortalDocument, ServiceOrder } from '../types';
@@ -311,7 +312,7 @@ export function ServiceFormScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <ServiceFormBackdrop />
+      <SoftBackdrop compact />
       <View style={styles.header}>
         <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={cancel} style={styles.backButton}>
           <ArrowLeft color={colors.ink} size={20} />
@@ -440,37 +441,6 @@ function FormSection({ icon: Icon, title, children }: { icon: LucideIcon; title:
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
       {children}
-    </View>
-  );
-}
-
-function ServiceFormBackdrop() {
-  return (
-    <View pointerEvents="none" style={styles.formBackdrop}>
-      <View style={styles.backdropGlow} />
-      <View style={[styles.backdropCloud, styles.backdropCloudLeft]} />
-      <View style={[styles.backdropCloud, styles.backdropCloudRight]} />
-
-      <View style={styles.backdropLeafGroupLeft}>
-        <View style={[styles.backdropLeaf, styles.backdropLeafOne]} />
-        <View style={[styles.backdropLeaf, styles.backdropLeafTwo]} />
-        <View style={[styles.backdropLeaf, styles.backdropLeafThree]} />
-      </View>
-      <View style={styles.backdropLeafGroupRight}>
-        <View style={[styles.backdropLeaf, styles.backdropLeafOne]} />
-        <View style={[styles.backdropLeaf, styles.backdropLeafTwo]} />
-        <View style={[styles.backdropLeaf, styles.backdropLeafThree]} />
-      </View>
-
-      <View style={styles.backdropVillage}>
-        <View style={[styles.backdropHouse, styles.backdropHouseMuted, { height: 42, width: 43 }]} />
-        <View style={[styles.backdropHouse, { height: 60, width: 54 }]} />
-        <View style={[styles.backdropHouse, styles.backdropHouseSoft, { height: 48, width: 48 }]} />
-        <View style={[styles.backdropHouse, { height: 68, width: 60 }]} />
-        <View style={[styles.backdropHouse, styles.backdropHouseSoft, { height: 52, width: 50 }]} />
-        <View style={[styles.backdropHouse, { height: 58, width: 54 }]} />
-        <View style={[styles.backdropHouse, styles.backdropHouseMuted, { height: 40, width: 44 }]} />
-      </View>
     </View>
   );
 }
@@ -611,104 +581,6 @@ const styles = StyleSheet.create({
     paddingBottom: 106,
     gap: 10,
     position: 'relative'
-  },
-  formBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: -32,
-    right: -32,
-    height: 260,
-    alignItems: 'center',
-    overflow: 'hidden'
-  },
-  backdropGlow: {
-    position: 'absolute',
-    top: 4,
-    width: 520,
-    height: 230,
-    borderRadius: 230,
-    backgroundColor: '#EDF7FC',
-    opacity: 0.74
-  },
-  backdropCloud: {
-    position: 'absolute',
-    width: 56,
-    height: 15,
-    borderRadius: 999,
-    backgroundColor: '#E3EDF7',
-    opacity: 0.38
-  },
-  backdropCloudLeft: {
-    top: 78,
-    left: 48
-  },
-  backdropCloudRight: {
-    top: 82,
-    right: 46
-  },
-  backdropLeafGroupLeft: {
-    position: 'absolute',
-    top: 86,
-    left: '50%',
-    width: 82,
-    height: 42,
-    marginLeft: -168,
-    opacity: 0.38,
-    transform: [{ rotate: '-6deg' }]
-  },
-  backdropLeafGroupRight: {
-    position: 'absolute',
-    top: 88,
-    left: '50%',
-    width: 82,
-    height: 42,
-    marginLeft: 84,
-    opacity: 0.34,
-    transform: [{ scaleX: -1 }, { rotate: '-6deg' }]
-  },
-  backdropLeaf: {
-    position: 'absolute',
-    width: 32,
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: '#C8E0E4'
-  },
-  backdropLeafOne: {
-    top: 2,
-    left: 4,
-    transform: [{ rotate: '28deg' }]
-  },
-  backdropLeafTwo: {
-    top: 17,
-    left: 26,
-    transform: [{ rotate: '-18deg' }]
-  },
-  backdropLeafThree: {
-    top: 28,
-    left: 8,
-    transform: [{ rotate: '18deg' }]
-  },
-  backdropVillage: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    bottom: 0,
-    height: 104,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    opacity: 0.14
-  },
-  backdropHouse: {
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    backgroundColor: '#DCE9F4'
-  },
-  backdropHouseSoft: {
-    backgroundColor: '#E6F0F8'
-  },
-  backdropHouseMuted: {
-    backgroundColor: '#D4E3F0'
   },
   header: {
     flexDirection: 'row',

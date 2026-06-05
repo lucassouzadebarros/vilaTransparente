@@ -1,13 +1,22 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { ReactNode, useCallback, useMemo, useState } from 'react';
+import { Alert, Linking, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { ExternalLink, FileText, Save, Upload, X } from 'lucide-react-native';
-import { Badge, Button, Card, Field, Label, Money, Row, Screen, Value } from '../components/ui';
+import { ArrowLeft, CalendarDays, CheckCircle2, ExternalLink, FileText, Flag, Link2, Save, Trash2, Upload, UserRound, X } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
+import { Badge, Card, Label, Money } from '../components/ui';
+import { SoftBackdrop } from '../components/SoftBackdrop';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
 import { Budget, PortalDocument, ServiceOrder } from '../types';
 
 const statusOptions: Array<Budget['status']> = ['EM_ANALISE', 'APROVADO', 'REJEITADO', 'CANCELADO'];
+
+const statusLabels: Record<Budget['status'], string> = {
+  EM_ANALISE: 'Em análise',
+  APROVADO: 'Aprovado',
+  REJEITADO: 'Rejeitado',
+  CANCELADO: 'Cancelado'
+};
 
 function positiveId(value: unknown) {
   const parsed = Number(value);
@@ -268,132 +277,527 @@ export function BudgetFormScreen() {
     Linking.openURL(api.documentUrl(previewUrl)).catch(() => Alert.alert('Orçamento', 'Não foi possível abrir o documento.'));
   }
 
+  function cancel() {
+    navigation.navigate(isEditing && budgetId ? 'BudgetDetails' : 'Budgets', isEditing && budgetId ? { id: budgetId } : undefined);
+  }
+
   return (
-    <Screen title={isEditing ? 'Editar orçamento' : 'Novo orçamento'} subtitle={isEditing ? `#${budgetId}` : 'Cotação de fornecedor'}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <SoftBackdrop compact />
+      <View style={styles.header}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={cancel} style={styles.backButton}>
+          <ArrowLeft color={colors.ink} size={20} />
+        </Pressable>
+        <View style={styles.headerCopy}>
+          <Text style={styles.title}>{isEditing ? 'Editar orçamento' : 'Novo orçamento'}</Text>
+          <Text style={styles.subtitle}>{isEditing ? `Orçamento #${budgetId}` : 'Cotação de fornecedor'}</Text>
+        </View>
+      </View>
+
       {error ? (
         <Card style={styles.errorCard}>
           <Label>{error}</Label>
         </Card>
       ) : null}
 
-      <Card>
-        <Row>
-          <Value>Status</Value>
-          {loading ? <Label>Carregando...</Label> : null}
-        </Row>
-        <View style={styles.optionGrid}>
+      <FormSection icon={Flag} title="Status">
+        {loading ? <Text style={styles.sectionHelp}>Carregando...</Text> : null}
+        <View style={styles.statusGrid}>
           {statusOptions.map((item) => (
-            <Button
-              key={item}
-              title={item.replace('_', ' ')}
-              variant={item === status ? 'primary' : 'ghost'}
-              onPress={() => setStatus(item)}
-            />
+            <StatusChoice key={item} label={statusLabels[item]} selected={item === status} onPress={() => setStatus(item)} />
           ))}
         </View>
-      </Card>
+      </FormSection>
 
-      <Card>
-        <Value>Serviço vinculado</Value>
-        <Pressable
-          accessibilityRole="button"
+      <FormSection icon={Link2} title="Serviço vinculado">
+        <BudgetChoice
+          selected={serviceId === null}
+          title="Sem serviço vinculado"
+          subtitle="Orçamento avulso"
           onPress={() => setServiceId(null)}
-          style={[styles.optionCard, serviceId === null ? styles.optionCardSelected : null]}
-        >
-          <View style={styles.optionInfo}>
-            <Value>Sem serviço vinculado</Value>
-            <Label>Orçamento avulso</Label>
-          </View>
-          {serviceId === null ? <Badge status="SELECIONADO" /> : null}
-        </Pressable>
+        />
         {services.map((service) => {
           const selected = service.id === serviceId;
           return (
-            <Pressable
+            <BudgetChoice
               key={service.id}
-              accessibilityRole="button"
+              selected={selected}
+              title={service.title}
+              subtitle={`Serviço #${service.id} - ${service.status.replace('_', ' ')}`}
               onPress={() => setServiceId(service.id ?? null)}
-              style={[styles.optionCard, selected ? styles.optionCardSelected : null]}
-            >
-              <View style={styles.optionInfo}>
-                <Value>{service.title}</Value>
-                <Label>Serviço #{service.id} - {service.status}</Label>
-              </View>
-              <View style={styles.optionRight}>
-                {selected ? <Badge status="SELECIONADO" /> : null}
-                <Money value={service.finalValue ?? service.expectedValue ?? 0} />
-              </View>
-            </Pressable>
+              right={
+                <View style={styles.budgetRight}>
+                  {selected ? <Badge status="SELECIONADO" /> : null}
+                  <Money value={service.finalValue ?? service.expectedValue ?? 0} />
+                </View>
+              }
+            />
           );
         })}
-      </Card>
+      </FormSection>
 
-      <Card>
-        <Value>Fornecedor</Value>
-        <Field label="Título" value={title} onChangeText={setTitle} />
-        <Field label="Fornecedor" value={supplier} onChangeText={setSupplier} />
-        <Field label="CNPJ do fornecedor" value={supplierDocument} onChangeText={setSupplierDocument} placeholder="12.345.678/0001-90" />
-        <Field label="Telefone" value={phone} onChangeText={setPhone} />
-        <Field label="Valor" value={amount} onChangeText={setAmount} keyboardType="numeric" />
-      </Card>
+      <FormSection icon={UserRound} title="Fornecedor">
+        <FormField label="Título" value={title} onChangeText={setTitle} placeholder="Digite o título do serviço" />
+        <FormField label="Fornecedor" value={supplier} onChangeText={setSupplier} placeholder="Nome do fornecedor" />
+        <View style={styles.twoColumns}>
+          <FormField label="CNPJ do fornecedor" value={supplierDocument} onChangeText={setSupplierDocument} placeholder="12.345.678/0001-90" style={styles.columnField} />
+          <FormField label="Telefone" value={phone} onChangeText={setPhone} placeholder="(00) 00000-0000" style={styles.columnField} />
+        </View>
+        <FormField label="Valor" value={amount} onChangeText={setAmount} keyboardType="numeric" placeholder="R$ 0,00" />
+      </FormSection>
 
-      <Card>
-        <Value>Datas e observações</Value>
-        <Field label="Data do orçamento" value={budgetDate} onChangeText={setBudgetDate} placeholder="AAAA-MM-DD" />
-        <Field label="Validade" value={validUntil} onChangeText={setValidUntil} placeholder="AAAA-MM-DD" />
-        <Field label="Previsão de execução" value={expectedDate} onChangeText={setExpectedDate} placeholder="AAAA-MM-DD" />
-        <Field label="Observações" value={notes} onChangeText={setNotes} multiline />
-      </Card>
+      <FormSection icon={CalendarDays} title="Datas e observações">
+        <View style={styles.threeColumns}>
+          <FormField label="Data do orçamento" value={budgetDate} onChangeText={setBudgetDate} placeholder="AAAA-MM-DD" right={<CalendarDays color={colors.muted} size={15} />} style={styles.columnField} />
+          <FormField label="Validade" value={validUntil} onChangeText={setValidUntil} placeholder="AAAA-MM-DD" right={<CalendarDays color={colors.muted} size={15} />} style={styles.columnField} />
+          <FormField label="Previsão de execução" value={expectedDate} onChangeText={setExpectedDate} placeholder="AAAA-MM-DD" right={<CalendarDays color={colors.muted} size={15} />} style={styles.columnField} />
+        </View>
+        <FormField label="Observações" value={notes} onChangeText={setNotes} placeholder="Informações adicionais, observações, instruções..." multiline />
+      </FormSection>
 
-      <Card>
-        <Value>Documento do orçamento</Value>
-        <Field label="Nome do documento" value={documentName} onChangeText={setDocumentName} />
-        <Field label="Link do PDF" value={documentUrl} onChangeText={setDocumentUrl} placeholder="https://.../orcamento.pdf" />
-        <Button title="Selecionar PDF" icon={Upload} variant="ghost" onPress={selectPdf} />
-        {documentFile ? <Label>Arquivo selecionado: {documentFile.name}</Label> : null}
-        {existingDocument && !documentFile ? <Label>Documento atual: {existingDocument.name}</Label> : null}
-        <Button title="Visualizar PDF" icon={ExternalLink} variant="ghost" onPress={previewDocument} />
-        <Button title="Limpar documento" icon={FileText} variant="ghost" onPress={() => { setDocumentUrl(''); setDocumentFile(null); setExistingDocument(null); }} />
-      </Card>
+      <FormSection icon={FileText} title="Documento do orçamento">
+        <FormField label="Nome do documento" value={documentName} onChangeText={setDocumentName} placeholder="Orçamento" />
+        <FormField label="Link do PDF" value={documentUrl} onChangeText={setDocumentUrl} placeholder="https://.../orcamento.pdf" />
+        {documentFile ? <Text style={styles.sectionHelp}>Arquivo selecionado: {documentFile.name}</Text> : null}
+        {existingDocument && !documentFile ? <Text style={styles.sectionHelp}>Documento atual: {existingDocument.name}</Text> : null}
+        <View style={styles.documentActions}>
+          <DocumentActionButton title="Selecionar PDF" icon={Upload} onPress={selectPdf} />
+          <DocumentActionButton title="Visualizar PDF" icon={ExternalLink} onPress={previewDocument} />
+          <DocumentActionButton title="Limpar documento" icon={Trash2} danger onPress={() => { setDocumentUrl(''); setDocumentFile(null); setExistingDocument(null); }} />
+        </View>
+      </FormSection>
 
-      <Row style={{ flexWrap: 'wrap' }}>
-        <Button title="Cancelar" icon={X} variant="ghost" onPress={() => navigation.navigate(isEditing && budgetId ? 'BudgetDetails' : 'Budgets', isEditing && budgetId ? { id: budgetId } : undefined)} />
-        <Button title={saving ? 'Salvando...' : isEditing ? 'Atualizar orçamento' : 'Salvar orçamento'} icon={Save} onPress={save} disabled={!canSave} />
-      </Row>
-    </Screen>
+      <View style={styles.footerActions}>
+        <FooterActionButton title="Cancelar" icon={X} onPress={cancel} />
+        <FooterActionButton title={saving ? 'Salvando...' : isEditing ? 'Atualizar orçamento' : 'Salvar orçamento'} icon={Save} onPress={save} primary disabled={!canSave} />
+      </View>
+    </ScrollView>
+  );
+}
+
+function FormSection({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: ReactNode }) {
+  return (
+    <View style={styles.sectionCard}>
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionIcon}>
+          <Icon color={colors.blue} size={18} />
+        </View>
+        <Text style={styles.sectionTitle}>{title}</Text>
+      </View>
+      {children}
+    </View>
+  );
+}
+
+function FormField({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  keyboardType,
+  multiline,
+  right,
+  style
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder?: string;
+  keyboardType?: 'default' | 'numeric' | 'email-address';
+  multiline?: boolean;
+  right?: ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <View style={[styles.field, style]}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={[styles.inputFrame, multiline ? styles.inputFrameMultiline : null]}>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          keyboardType={keyboardType}
+          multiline={multiline}
+          style={[styles.input, multiline ? styles.inputMultiline : null]}
+          placeholderTextColor={colors.muted}
+        />
+        {right ? <View style={styles.inputAction}>{right}</View> : null}
+      </View>
+    </View>
+  );
+}
+
+function StatusChoice({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.statusChoice, selected ? styles.statusChoiceSelected : null]}>
+      {selected ? <CheckCircle2 color={colors.surface} size={15} /> : null}
+      <Text style={[styles.statusChoiceText, selected ? styles.statusChoiceTextSelected : null]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function BudgetChoice({
+  title,
+  subtitle,
+  selected,
+  onPress,
+  right
+}: {
+  title: string;
+  subtitle: string;
+  selected: boolean;
+  onPress: () => void;
+  right?: ReactNode;
+}) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.budgetChoice, selected ? styles.budgetChoiceSelected : null]}>
+      <View style={styles.documentMiniIcon}>
+        <FileText color={colors.blue} size={20} />
+      </View>
+      <View style={styles.budgetCopy}>
+        <Text style={styles.budgetTitle}>{title}</Text>
+        <Text style={styles.budgetSubtitle}>{subtitle}</Text>
+      </View>
+      {right ?? (selected ? <View style={styles.selectedPill}><CheckCircle2 color={colors.blue} size={14} /><Text style={styles.selectedText}>SELECIONADO</Text></View> : null)}
+    </Pressable>
+  );
+}
+
+function DocumentActionButton({ title, icon: Icon, onPress, danger }: { title: string; icon: LucideIcon; onPress: () => void; danger?: boolean }) {
+  const color = danger ? colors.red : colors.blue;
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={styles.documentActionButton}>
+      <Icon color={color} size={15} />
+      <Text style={[styles.documentActionText, danger ? styles.documentActionTextDanger : null]}>{title}</Text>
+    </Pressable>
+  );
+}
+
+function FooterActionButton({
+  title,
+  icon: Icon,
+  onPress,
+  primary,
+  disabled
+}: {
+  title: string;
+  icon: LucideIcon;
+  onPress: () => void;
+  primary?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.footerButton,
+        primary ? styles.footerButtonPrimary : null,
+        { opacity: disabled ? 0.5 : pressed ? 0.84 : 1 }
+      ]}
+    >
+      <Icon color={primary ? colors.surface : colors.blue} size={16} />
+      <Text style={[styles.footerButtonText, primary ? styles.footerButtonTextPrimary : null]}>{title}</Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  errorCard: {
-    borderColor: colors.red
+  screen: {
+    flex: 1,
+    backgroundColor: colors.bg
   },
-  optionGrid: {
+  content: {
+    width: '100%',
+    maxWidth: 540,
+    alignSelf: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: 106,
+    gap: 10,
+    position: 'relative'
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: 4,
+    zIndex: 1
+  },
+  backButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  headerCopy: {
+    flex: 1
+  },
+  title: {
+    color: colors.ink,
+    fontSize: 25,
+    lineHeight: 30,
+    fontWeight: '900',
+    letterSpacing: 0
+  },
+  subtitle: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600'
+  },
+  errorCard: {
+    borderColor: colors.red,
+    zIndex: 1
+  },
+  sectionCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    padding: 13,
+    gap: 10,
+    shadowColor: '#163052',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 2,
+    zIndex: 1
+  },
+  sectionHeader: {
+    minHeight: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  sectionIcon: {
+    width: 31,
+    height: 31,
+    borderRadius: 999,
+    backgroundColor: colors.blueSoft,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  sectionTitle: {
+    color: colors.ink,
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '900',
+    letterSpacing: 0
+  },
+  sectionHelp: {
+    color: colors.muted,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '600'
+  },
+  statusGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm
   },
-  optionCard: {
-    minHeight: 66,
+  statusChoice: {
+    minHeight: 40,
+    flex: 1,
+    minWidth: 108,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5
+  },
+  statusChoiceSelected: {
+    borderColor: colors.blue,
+    backgroundColor: colors.blue
+  },
+  statusChoiceText: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '900',
+    textAlign: 'center',
+    textTransform: 'uppercase'
+  },
+  statusChoiceTextSelected: {
+    color: colors.surface
+  },
+  budgetChoice: {
+    minHeight: 62,
     borderRadius: 8,
-    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md
   },
-  optionCardSelected: {
+  budgetChoiceSelected: {
     borderColor: colors.blue,
-    backgroundColor: colors.blueSoft
+    backgroundColor: '#F4F8FF'
   },
-  optionInfo: {
+  documentMiniIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: colors.blueSoft,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  budgetCopy: {
     flex: 1,
-    gap: spacing.xs
+    gap: 3
   },
-  optionRight: {
+  budgetTitle: {
+    color: colors.ink,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '900'
+  },
+  budgetSubtitle: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600'
+  },
+  selectedPill: {
+    minHeight: 28,
+    borderRadius: 8,
+    backgroundColor: colors.blueSoft,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm
+  },
+  selectedText: {
+    color: colors.blue,
+    fontSize: 10,
+    fontWeight: '900'
+  },
+  budgetRight: {
     alignItems: 'flex-end',
     gap: spacing.xs
+  },
+  field: {
+    gap: 5
+  },
+  fieldLabel: {
+    color: colors.ink,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '900'
+  },
+  inputFrame: {
+    minHeight: 42,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  inputFrameMultiline: {
+    minHeight: 76,
+    alignItems: 'flex-start'
+  },
+  input: {
+    flex: 1,
+    minHeight: 40,
+    paddingHorizontal: spacing.md,
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: '600'
+  },
+  inputMultiline: {
+    minHeight: 74,
+    paddingTop: 11,
+    textAlignVertical: 'top'
+  },
+  inputAction: {
+    minWidth: 38,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingRight: spacing.sm
+  },
+  twoColumns: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  threeColumns: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  columnField: {
+    flex: 1,
+    minWidth: 130
+  },
+  documentActions: {
+    gap: spacing.sm
+  },
+  documentActionButton: {
+    minHeight: 38,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs
+  },
+  documentActionText: {
+    color: colors.blue,
+    fontSize: 12,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  documentActionTextDanger: {
+    color: colors.red
+  },
+  footerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingTop: 2,
+    zIndex: 1
+  },
+  footerButton: {
+    minHeight: 42,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm
+  },
+  footerButtonPrimary: {
+    flex: 1,
+    borderColor: colors.blue,
+    backgroundColor: colors.blue
+  },
+  footerButtonText: {
+    color: colors.blue,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  footerButtonTextPrimary: {
+    color: colors.surface
   }
 });

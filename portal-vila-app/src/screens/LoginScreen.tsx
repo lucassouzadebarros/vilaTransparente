@@ -1,8 +1,9 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ArrowLeft, CheckCircle2, Eye, EyeOff, Home, KeyRound, LockKeyhole, LogIn, Mail, Shield, ShieldCheck, Trash2, UserPlus, UserRound } from 'lucide-react-native';
+import { ArrowLeft, CheckCircle2, Eye, EyeOff, Home, IdCard, KeyRound, LockKeyhole, LogIn, Mail, Phone, Shield, ShieldCheck, Trash2, UserPlus, UserRound } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { Button, Card, Field, Value } from '../components/ui';
+import { SoftBackdrop } from '../components/SoftBackdrop';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
@@ -272,7 +273,7 @@ export function LoginScreen() {
   return (
     <KeyboardAvoidingView behavior={Platform.select({ ios: 'padding', default: undefined })} style={styles.keyboard}>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {mode === 'login' ? <LoginBackdrop /> : null}
+        {mode === 'login' ? <LoginBackdrop /> : mode === 'register' ? <SoftBackdrop /> : null}
         <View style={styles.brand}>
           <View style={styles.logoMark}>
             <Shield color={colors.teal} fill={colors.teal} size={86} strokeWidth={1.8} />
@@ -372,15 +373,15 @@ export function LoginScreen() {
             </Card>
           </View>
         ) : mode === 'register' ? (
-          <View style={styles.stack}>
-            <Card>
-              <View style={styles.registerHeader}>
-                <Pressable accessibilityRole="button" onPress={openLogin} style={styles.backButton}>
-                  <ArrowLeft color={colors.ink} size={20} />
+          <View style={styles.registerStackModern}>
+            <View style={styles.registerPanel}>
+              <View style={styles.registerHeaderModern}>
+                <Pressable accessibilityRole="button" onPress={openLogin} style={styles.registerBackButton}>
+                  <ArrowLeft color={colors.blue} size={21} />
                 </Pressable>
                 <View style={styles.headerCopy}>
-                  <Text style={styles.cardTitle}>Cadastro da casa</Text>
-                  <Text style={styles.muted}>Escolha sua casa e preencha os dados do responsavel.</Text>
+                  <Text style={styles.registerTitle}>Cadastro da casa</Text>
+                  <Text style={styles.registerSubtitle}>Escolha sua casa e preencha os dados do responsável.</Text>
                 </View>
               </View>
 
@@ -394,7 +395,7 @@ export function LoginScreen() {
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Casa</Text>
                 {housesLoading ? <Text style={styles.muted}>Carregando casas...</Text> : null}
-                <View style={styles.houseGrid}>
+                <View style={styles.houseGridModern}>
                   {houses.map((house) => {
                     const selected = selectedHouseId === house.houseId;
                     return (
@@ -404,34 +405,44 @@ export function LoginScreen() {
                         disabled={!house.available}
                         onPress={() => setSelectedHouseId(house.houseId)}
                         style={[
-                          styles.houseOption,
-                          selected ? styles.houseSelected : null,
-                          !house.available ? styles.houseDisabled : null
+                          styles.houseOptionModern,
+                          selected ? styles.houseSelectedModern : null,
+                          !house.available ? styles.houseDisabledModern : null
                         ]}
                       >
+                        <View style={[styles.houseIconBox, selected ? styles.houseIconBoxSelected : !house.available ? styles.houseIconBoxDisabled : null]}>
+                          <Home color={selected ? colors.blue : !house.available ? colors.muted : colors.teal} size={22} />
+                        </View>
                         <Text style={[styles.houseLabel, selected ? styles.houseLabelSelected : null]}>
                           Casa {String(house.number).padStart(2, '0')}
                         </Text>
                         <Text style={[styles.houseStatus, selected ? styles.houseStatusSelected : null]}>
                     {house.available ? (selected ? 'Selecionada' : 'Disponível') : 'Já cadastrada'}
                         </Text>
+                        {selected ? (
+                          <View style={styles.houseCheck}>
+                            <CheckCircle2 color={colors.surface} size={16} />
+                          </View>
+                        ) : null}
                       </Pressable>
                     );
                   })}
                 </View>
               </View>
 
-            <Field label="Nome do responsável" value={name} onChangeText={setName} errorText={name.trim() ? '' : undefined} />
-              <Field
+              <RegisterField icon={UserRound} label="Nome do responsável" value={name} onChangeText={setName} placeholder="Digite o nome completo" />
+              <RegisterField
+                icon={Mail}
                 label="E-mail"
                 value={registerEmail}
                 onChangeText={(value) => setRegisterEmail(normalizeEmail(value))}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                placeholder="Exemplo: morador@email.com"
                 errorText={registerEmailError}
-                helpText="Exemplo: morador@email.com"
               />
-              <Field
+              <RegisterField
+                icon={Phone}
                 label="Telefone"
                 value={phone}
                 onChangeText={(value) => setPhone(formatPhone(value))}
@@ -439,7 +450,8 @@ export function LoginScreen() {
                 placeholder="(21) 99999-9999"
                 errorText={phoneError}
               />
-              <Field
+              <RegisterField
+                icon={IdCard}
                 label="CPF/CNPJ"
                 value={documentNumber}
                 onChangeText={(value) => setDocumentNumber(formatCpfCnpj(value))}
@@ -447,13 +459,14 @@ export function LoginScreen() {
                 placeholder="000.000.000-00"
                 errorText={documentError}
               />
-              <Field
+              <RegisterField
+                icon={LockKeyhole}
                 label="Senha"
                 value={registerPassword}
                 onChangeText={setRegisterPassword}
                 secureTextEntry={!showRegisterPassword}
+                placeholder="Mínimo de 6 caracteres"
                 errorText={passwordError}
-                helpText="Mínimo de 6 caracteres."
                 right={
                   <PasswordToggle
                     visible={showRegisterPassword}
@@ -462,11 +475,13 @@ export function LoginScreen() {
                   />
                 }
               />
-              <Field
+              <RegisterField
+                icon={LockKeyhole}
                 label="Confirmar senha"
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry={!showConfirmPassword}
+                placeholder="Digite novamente sua senha"
                 errorText={confirmPasswordError}
                 right={
                   <PasswordToggle
@@ -478,23 +493,23 @@ export function LoginScreen() {
               />
 
               {registrationIssues.length ? (
-                <View style={styles.pendingBox}>
-                  <Text style={styles.pendingText}>Faltam: {registrationIssues.join(', ')}.</Text>
+                <View style={styles.pendingBoxModern}>
+                  <Text style={styles.pendingTextModern}>Faltam: {registrationIssues.join(', ')}.</Text>
                 </View>
               ) : (
-                <View style={styles.readyBox}>
+                <View style={styles.readyBoxModern}>
                   <CheckCircle2 color={colors.green} size={18} />
-                  <Text style={styles.readyText}>Dados prontos para cadastro.</Text>
+                  <Text style={styles.readyTextModern}>Dados prontos para cadastro.</Text>
                 </View>
               )}
 
-              <View style={styles.signupNotice}>
-                <CheckCircle2 color={colors.green} size={18} />
-                <Text style={styles.noticeText}>Ao salvar, o cadastro da casa sera criado e ela ficara bloqueada para novo cadastro.</Text>
+              <View style={styles.signupNoticeModern}>
+                <CheckCircle2 color={colors.teal} size={19} />
+                <Text style={styles.noticeTextModern}>Ao salvar, o cadastro da casa será criado e ela ficará bloqueada para novo cadastro.</Text>
               </View>
 
-              <Button title={loading ? 'Cadastrando...' : 'Cadastrar e entrar'} icon={UserPlus} onPress={submitRegistration} disabled={!canSubmitRegistration} />
-            </Card>
+              <LoginPrimaryButton title={loading ? 'Cadastrando...' : 'Cadastrar e entrar'} icon={UserPlus} onPress={submitRegistration} disabled={!canSubmitRegistration} />
+            </View>
           </View>
         ) : mode === 'forgot' ? (
           <View style={styles.stack}>
@@ -672,6 +687,53 @@ function LoginBackdrop() {
         <View style={[styles.backdropHouse, { height: 62, width: 56 }]} />
         <View style={[styles.backdropHouse, styles.backdropHouseMuted, { height: 44, width: 46 }]} />
       </View>
+    </View>
+  );
+}
+
+function RegisterField({
+  label,
+  value,
+  onChangeText,
+  icon: Icon,
+  placeholder,
+  keyboardType,
+  secureTextEntry,
+  autoCapitalize,
+  errorText,
+  right
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  icon: LucideIcon;
+  placeholder?: string;
+  keyboardType?: 'default' | 'numeric' | 'email-address';
+  secureTextEntry?: boolean;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  errorText?: string;
+  right?: ReactNode;
+}) {
+  return (
+    <View style={styles.registerField}>
+      <Text style={styles.registerFieldLabel}>{label}</Text>
+      <View style={[styles.registerInputFrame, errorText ? styles.registerInputFrameError : null]}>
+        <View style={styles.registerInputIcon}>
+          <Icon color={colors.muted} size={18} />
+        </View>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          keyboardType={keyboardType}
+          secureTextEntry={secureTextEntry}
+          autoCapitalize={autoCapitalize}
+          style={styles.registerInput}
+          placeholderTextColor={colors.muted}
+        />
+        {right ? <View style={styles.registerInputAction}>{right}</View> : null}
+      </View>
+      {errorText ? <Text style={styles.fieldError}>{errorText}</Text> : null}
     </View>
   );
 }
@@ -1340,6 +1402,208 @@ const styles = StyleSheet.create({
   supportActionsModern: {
     flexDirection: 'row',
     gap: spacing.sm
+  },
+  registerStackModern: {
+    gap: 14,
+    zIndex: 1
+  },
+  registerPanel: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E4EAF2',
+    padding: 14,
+    gap: 10,
+    shadowColor: '#163052',
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6
+  },
+  registerHeaderModern: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: 4
+  },
+  registerBackButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  registerTitle: {
+    color: colors.ink,
+    fontSize: 22,
+    lineHeight: 26,
+    fontWeight: '900',
+    letterSpacing: 0
+  },
+  registerSubtitle: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600'
+  },
+  houseGridModern: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  houseOptionModern: {
+    width: '31%',
+    minWidth: 0,
+    minHeight: 76,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: spacing.sm,
+    justifyContent: 'center',
+    gap: 4,
+    position: 'relative'
+  },
+  houseSelectedModern: {
+    borderColor: colors.blue,
+    backgroundColor: '#F4F8FF'
+  },
+  houseDisabledModern: {
+    opacity: 0.72,
+    backgroundColor: '#F8FAFC'
+  },
+  houseIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#EAF9F3',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  houseIconBoxSelected: {
+    backgroundColor: colors.blueSoft
+  },
+  houseIconBoxDisabled: {
+    backgroundColor: '#EEF1F5'
+  },
+  houseCopy: {
+    gap: 2
+  },
+  houseCheck: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 999,
+    backgroundColor: colors.blue,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  houseLabelModern: {
+    color: colors.ink,
+    fontWeight: '900',
+    fontSize: 14,
+    lineHeight: 18
+  },
+  houseStatusModern: {
+    color: colors.muted,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '700'
+  },
+  registerField: {
+    gap: 4
+  },
+  registerFieldLabel: {
+    color: colors.ink,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '900'
+  },
+  registerInputFrame: {
+    minHeight: 42,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    borderRadius: 9,
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  registerInputFrameError: {
+    borderColor: colors.red,
+    backgroundColor: '#FFF8F8'
+  },
+  registerInputIcon: {
+    width: 38,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  registerInput: {
+    flex: 1,
+    minHeight: 40,
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: '600',
+    paddingRight: spacing.sm
+  },
+  registerInputAction: {
+    minWidth: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingRight: spacing.xs
+  },
+  pendingBoxModern: {
+    minHeight: 46,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.amber,
+    backgroundColor: colors.amberSoft,
+    paddingHorizontal: spacing.md,
+    justifyContent: 'center'
+  },
+  pendingTextModern: {
+    color: colors.amber,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '900'
+  },
+  readyBoxModern: {
+    minHeight: 46,
+    borderRadius: 8,
+    backgroundColor: colors.greenSoft,
+    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  readyTextModern: {
+    color: colors.green,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '900'
+  },
+  signupNoticeModern: {
+    minHeight: 58,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#B8E7D4',
+    backgroundColor: '#E7F8F0',
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  noticeTextModern: {
+    flex: 1,
+    color: colors.teal,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '900'
   },
   calloutHeader: {
     flexDirection: 'row',

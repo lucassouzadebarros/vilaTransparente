@@ -1,8 +1,28 @@
 // @ts-nocheck
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { ArrowDown, ArrowUp, BarChart3, Bell, ChevronDown, ChevronRight, Lock, LogOut, QrCode, RefreshCw, ShieldCheck, TrendingUp, Users, WalletCards, Wrench } from 'lucide-react-native';
+import {
+  ArrowDown,
+  ArrowUp,
+  BarChart3,
+  Bell,
+  CalendarCheck,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Clock3,
+  FileText,
+  Lock,
+  LogOut,
+  QrCode,
+  RefreshCw,
+  ShieldCheck,
+  TrendingUp,
+  Users,
+  Wrench
+} from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SoftBackdrop } from '../components/SoftBackdrop';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { colors, spacing } from '../theme';
@@ -24,6 +44,7 @@ export function HomeScreen() {
   const [services, setServices] = useState([]);
   const [month] = useState(currentMonth());
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const loadInFlight = useRef(false);
 
   async function load() {
@@ -36,7 +57,7 @@ export function HomeScreen() {
       const [nextDashboard, nextContributions, nextCharges, nextServices] = await Promise.all([
         api.dashboard(month),
         api.contributions(month),
-        api.pixCharges(month),
+        isAdmin ? api.pixCharges(month) : api.syncMyPixCharges(),
         api.services()
       ]);
       setDashboard(nextDashboard);
@@ -49,12 +70,10 @@ export function HomeScreen() {
     }
   }
 
-  const [refreshing, setRefreshing] = useState(false);
-
   useFocusEffect(
     useCallback(() => {
       load();
-      const interval = setInterval(load, 30000);
+      const interval = setInterval(load, 15000);
       let events = null;
       if (typeof window !== 'undefined' && typeof window.EventSource === 'function') {
         events = new window.EventSource(api.dashboardEventsUrl());
@@ -66,38 +85,32 @@ export function HomeScreen() {
           events.close();
         }
       };
-    }, [month])
+    }, [isAdmin, month])
   );
 
-  const totals = {
-    collected: dashboard?.collected ?? 0,
-    checking: dashboard?.pending ?? 0,
-    pending: dashboard?.overdue ?? 0
-  };
   const movements = dashboard?.movements?.slice(0, 4) ?? [];
-  const maintenance = services.slice(0, 4);
+  const maintenance = services.slice(0, 3);
   const myContribution = contributions[0];
   const myCharge = charges.find((charge) => charge.id === myContribution?.pixChargeId) ?? charges[0];
-  const firstName = session?.name?.split(' ')[0] ?? 'Joao';
+  const firstName = session?.name?.split(' ')[0] ?? 'João';
   const greetingName = isAdmin ? firstName : myContribution?.houseLabel ?? firstName;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <SoftBackdrop compact />
+
       <View style={styles.topBar}>
         <View style={styles.topSpacer} />
-        <View style={styles.titleBlock}>
-          <Text style={styles.screenTitle}>Inicio</Text>
-          <Text style={styles.brandSubtitle}>Mensalidades, Pix, serviços e orçamentos</Text>
-        </View>
-        <Pressable accessibilityLabel="Atualizar inicio" style={[styles.headerIcon, refreshing ? styles.headerIconBusy : null]} onPress={load} disabled={refreshing}>
+        <Text style={styles.screenTitle}>Início</Text>
+        <Pressable accessibilityLabel="Atualizar início" style={styles.headerIcon} onPress={load} disabled={refreshing}>
           {isAdmin ? <RefreshCw color={refreshing ? colors.muted : colors.ink} size={20} /> : <Bell color={colors.ink} size={22} />}
         </Pressable>
       </View>
 
       <View style={styles.userArea}>
         <Pressable style={styles.greetingPlain} onPress={() => setUserMenuOpen((current) => !current)}>
-          <Text style={styles.greetingText}>Ola, <Text style={styles.greetingName}>{greetingName}</Text></Text>
-          <ChevronDown color={colors.muted} size={16} />
+          <Text style={styles.greetingText}>Olá, <Text style={styles.greetingName}>{greetingName}</Text></Text>
+          <ChevronDown color={colors.muted} size={18} />
         </Pressable>
         {userMenuOpen ? (
           <View style={styles.userMenu}>
@@ -110,70 +123,19 @@ export function HomeScreen() {
       </View>
 
       {isAdmin ? (
-        <>
-          <LocalCard style={styles.balanceCard}>
-            <Text style={styles.kicker}>SALDO ATUAL</Text>
-            <Text style={styles.balanceValue}>{formatCurrency(dashboard?.balance ?? 0)}</Text>
-          </LocalCard>
-
-          <View style={styles.summaryGrid}>
-            <SummaryCard title="ARRECADADO" value={totals.collected} />
-            <SummaryCard title="A CONFERIR" value={totals.checking} />
-            <SummaryCard title="PENDENTE" value={totals.pending} />
-          </View>
-        </>
-      ) : null}
-
-      {isAdmin ? (
-        <LocalCard style={styles.contributionCard}>
-          <View style={styles.cardHeaderRow}>
-            <View>
-              <Text style={styles.cardTitle}>Painel administrativo</Text>
-              <Text style={styles.cardSubtitle}>{monthLabel(month)} - {dashboard?.paidHouses ?? 0} casas pagas</Text>
-            </View>
-            <View style={styles.adminIcon}>
-              <ShieldCheck color={colors.blue} size={22} />
-            </View>
-          </View>
-          <View style={styles.inlineActions}>
-            <Pressable style={styles.primaryAction} onPress={() => navigation.navigate('AdminPixCharges')}>
-              <Text style={styles.primaryActionText}>Cobrancas Pix</Text>
-            </Pressable>
-            <Pressable style={styles.secondaryAction} onPress={() => navigation.navigate('Contributions')}>
-              <Text style={styles.secondaryActionText}>Contribuições</Text>
-            </Pressable>
-          </View>
-        </LocalCard>
+        <AdminHome
+          dashboard={dashboard}
+          month={month}
+          navigation={navigation}
+        />
       ) : (
         <>
-          <LocalCard style={styles.contributionCard}>
-            <View style={styles.cardHeaderRow}>
-              <View>
-                <Text style={styles.cardTitle}>Minha mensalidade</Text>
-                <Text style={styles.cardMonth}>{monthLabel(month)}</Text>
-              </View>
-              <StatusPill status={myContribution?.status} />
-            </View>
-            <Text style={styles.contributionValue}>{formatCurrency(myContribution?.amount ?? 0)}</Text>
-            <Text style={styles.cardSubtitle}>
-              {myContribution?.paymentDate
-                ? `Confirmado em ${formatDate(myContribution.paymentDate)}`
-                : myCharge?.dueDate
-                  ? `Vence em ${formatDate(myCharge.dueDate)}`
-        : 'Cobrança Pix ainda não gerada'}
-            </Text>
-            {myContribution?.status !== 'PAID' ? (
-              <Pressable
-                disabled={!myCharge?.id}
-                style={[styles.primaryAction, !myCharge?.id ? styles.disabledAction : null]}
-                onPress={() => navigation.navigate('PixPayment', { id: myCharge.id })}
-              >
-                <QrCode color={colors.surface} size={18} />
-              <Text style={styles.primaryActionText}>{myCharge?.id ? 'Ver Pix' : 'Pix não gerado'}</Text>
-              </Pressable>
-            ) : null}
-          </LocalCard>
-
+          <MonthlyCard
+            contribution={myContribution}
+            charge={myCharge}
+            month={month}
+            navigation={navigation}
+          />
           {dashboard?.transparencyEnabled ? (
             <TransparencyOpenCard dashboard={dashboard} navigation={navigation} />
           ) : (
@@ -182,7 +144,7 @@ export function HomeScreen() {
         </>
       )}
 
-      <SectionTitle title="Serviços e orçamentos" />
+      <SectionTitle icon={Wrench} title="Serviços e orçamentos" />
       <LocalCard style={styles.listCard}>
         {maintenance.length > 0 ? (
           maintenance.map((item, index) => (
@@ -194,18 +156,23 @@ export function HomeScreen() {
             />
           ))
         ) : (
-          <Text style={styles.emptyList}>Nenhum servico cadastrado.</Text>
+          <View style={styles.emptyRow}>
+            <View style={styles.emptyIcon}>
+              <FileText color={colors.muted} size={18} />
+            </View>
+            <Text style={styles.emptyList}>Nenhum serviço cadastrado.</Text>
+          </View>
         )}
       </LocalCard>
 
       {isAdmin || dashboard?.transparencyEnabled ? (
         <>
-          <SectionTitle title="Ultimos lancamentos" />
+          <SectionTitle icon={Clock3} title="Últimos lançamentos" />
           <LocalCard style={styles.launchCard}>
             {movements.length > 0 ? (
-              movements.map((movement, index) => <MovementRow key={`${movement.date}-${index}`} movement={movement} />)
+              movements.map((movement, index) => <MovementRow key={`${movement.date}-${index}`} movement={movement} last={index === movements.length - 1} />)
             ) : (
-              <Text style={styles.empty}>Nenhum lancamento recente.</Text>
+              <Text style={styles.empty}>Nenhum lançamento recente.</Text>
             )}
           </LocalCard>
         </>
@@ -214,17 +181,78 @@ export function HomeScreen() {
   );
 }
 
-function LocalCard({ children, style }) {
-  return <View style={[styles.card, style]}>{children}</View>;
+function AdminHome({ dashboard, month, navigation }) {
+  return (
+    <>
+      <LocalCard style={styles.adminBalanceCard}>
+        <View style={styles.adminIcon}>
+          <ShieldCheck color={colors.blue} size={24} />
+        </View>
+        <View style={styles.adminBalanceCopy}>
+          <Text style={styles.summaryLabel}>Saldo atual</Text>
+          <Text style={styles.balanceValue}>{formatCurrency(dashboard?.balance ?? 0)}</Text>
+        </View>
+      </LocalCard>
+      <LocalCard style={styles.transparencyCard}>
+        <Text style={styles.cardTitle}>Mensalidades do mês</Text>
+        <View style={styles.metricGrid}>
+          <MetricCard icon={TrendingUp} tone="blue" label="Arrecadado" value={formatCurrency(dashboard?.collected ?? 0)} caption={monthLabel(month)} />
+          <MetricCard icon={Users} tone="lilac" label="Casas pagas" value={String(dashboard?.paidHouses ?? 0)} />
+          <MetricCard icon={ArrowDown} tone="red" label="Pendentes" value={String(dashboard?.pendingHouses ?? 0)} />
+        </View>
+        <Pressable style={styles.primaryAction} onPress={() => navigation.navigate('AdminPixCharges')}>
+          <QrCode color={colors.surface} size={18} />
+          <Text style={styles.primaryActionText}>Gerenciar Pix</Text>
+        </Pressable>
+      </LocalCard>
+    </>
+  );
 }
 
-function SummaryCard({ title, value }) {
+function MonthlyCard({ contribution, charge, month, navigation }) {
+  const paid = contribution?.status === 'PAID';
+  const overdue = contribution?.status === 'OVERDUE';
   return (
-    <View style={styles.summaryCard}>
-      <Text style={styles.summaryTitle}>{title}</Text>
-      <Text style={styles.summaryValue}>{formatCurrency(value)}</Text>
-    </View>
+    <LocalCard style={styles.monthlyCard}>
+      <View style={styles.monthlyIcon}>
+        <CalendarCheck color={colors.teal} size={30} />
+      </View>
+      <View style={styles.monthlyCopy}>
+        <View style={styles.cardHeaderRow}>
+          <View>
+            <Text style={styles.cardTitle}>Minha mensalidade</Text>
+            <Text style={styles.cardMonth}>{contribution?.month ? monthLabel(contribution.month) : monthLabel(month)}</Text>
+          </View>
+          <StatusPill status={contribution?.status} />
+        </View>
+        <Text style={styles.contributionValue}>{formatCurrency(contribution?.amount ?? charge?.value ?? 0)}</Text>
+        <View style={styles.confirmRow}>
+          {paid ? <CheckCircle2 color={colors.teal} size={18} /> : null}
+          <Text style={styles.cardSubtitle}>
+            {paid && contribution?.paymentDate
+              ? `Confirmado em ${formatDate(contribution.paymentDate)}`
+              : charge?.dueDate
+                ? `${overdue ? 'Vencido em' : 'Vence em'} ${formatDate(charge.dueDate)}`
+                : 'Cobrança Pix ainda não gerada'}
+          </Text>
+        </View>
+        {!paid ? (
+          <Pressable
+            disabled={!charge?.id}
+            style={[styles.primaryAction, !charge?.id ? styles.disabledAction : null]}
+            onPress={() => navigation.navigate('PixPayment', { id: charge.id })}
+          >
+            <QrCode color={colors.surface} size={18} />
+            <Text style={styles.primaryActionText}>{charge?.id ? 'Ver Pix' : 'Pix não gerado'}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </LocalCard>
   );
+}
+
+function LocalCard({ children, style }) {
+  return <View style={[styles.card, style]}>{children}</View>;
 }
 
 function TransparencyLockedCard() {
@@ -233,41 +261,42 @@ function TransparencyLockedCard() {
       <Text style={styles.cardTitle}>Transparência financeira</Text>
       <View style={styles.lockedBody}>
         <View style={styles.lockCircle}>
-          <Lock color={colors.ink} size={27} />
+          <Lock color={colors.ink} size={26} />
         </View>
         <View style={styles.lockedCopy}>
           <Text style={styles.lockedTitle}>Desbloqueie todas as funcionalidades</Text>
-          <Text style={styles.lockedText}>
-            Faça seu primeiro pagamento para desbloquear.
-          </Text>
+          <Text style={styles.lockedText}>Faça seu primeiro pagamento para desbloquear.</Text>
         </View>
       </View>
       <View style={styles.disabledInfo}>
-        <Text style={styles.disabledInfoText}>Aguardando desbloqueio</Text>
+        <Text style={styles.disabledInfoText}>Aguardando pagamento</Text>
       </View>
     </LocalCard>
   );
 }
 
 function TransparencyOpenCard({ dashboard, navigation }) {
+  const totalCollected = dashboard?.totalCollected ?? dashboard?.collected ?? 0;
+  const expenses = dashboard?.expenses ?? 0;
+  const balance = dashboard?.balance ?? 0;
   return (
     <LocalCard style={styles.transparencyCard}>
       <Text style={styles.cardTitle}>Saldo acumulado da vila</Text>
-      <Text style={styles.balanceOpenValue}>{formatCurrency(dashboard?.balance ?? 0)}</Text>
+      <Text style={styles.balanceOpenValue}>{formatCurrency(balance)}</Text>
       <View style={styles.metricGrid}>
         <MetricCard
           icon={TrendingUp}
           tone="blue"
           label="Arrecadado total"
-          value={formatCurrency(dashboard?.totalCollected ?? dashboard?.collected ?? 0)}
+          value={formatCurrency(totalCollected)}
           caption={`Mês ${formatCurrency(dashboard?.collected ?? 0)}`}
         />
-        <MetricCard icon={ArrowDown} tone="red" label="Despesas" value={formatCurrency(dashboard?.expenses ?? 0)} />
+        <MetricCard icon={ArrowDown} tone="red" label="Despesas" value={formatCurrency(expenses)} />
         <MetricCard icon={Users} tone="lilac" label="Casas pagas" value={String(dashboard?.paidHouses ?? 0)} />
       </View>
       <Pressable style={styles.primaryAction} onPress={() => navigation.navigate('Caixa')}>
         <BarChart3 color={colors.surface} size={18} />
-        <Text style={styles.primaryActionText}>Ver transparencia</Text>
+        <Text style={styles.primaryActionText}>Ver transparência</Text>
       </Pressable>
     </LocalCard>
   );
@@ -288,8 +317,15 @@ function MetricCard({ icon: Icon, tone, label, value, caption }) {
   );
 }
 
-function SectionTitle({ title }) {
-  return <Text style={styles.sectionTitle}>{title}</Text>;
+function SectionTitle({ icon: Icon, title }) {
+  return (
+    <View style={styles.sectionHeading}>
+      <View style={styles.sectionHeadingIcon}>
+        <Icon color={colors.surface} size={19} />
+      </View>
+      <Text style={styles.sectionTitle}>{title}</Text>
+    </View>
+  );
 }
 
 function StatusPill({ status }) {
@@ -310,17 +346,19 @@ function ShortcutRow({ item, last, onPress }) {
       <View style={styles.serviceIconCircle}>
         <Wrench color={colors.blue} size={21} />
       </View>
-      <Text style={styles.shortcutTitle}>{item.title}</Text>
-      <Text style={styles.shortcutStatus}>{formatStatus(item.status)}</Text>
+      <View style={styles.shortcutText}>
+        <Text style={styles.shortcutTitle}>{item.title}</Text>
+        <Text style={styles.shortcutStatus}>{formatStatus(item.status)}</Text>
+      </View>
       <ChevronRight color={colors.muted} size={20} />
     </Pressable>
   );
 }
 
-function MovementRow({ movement }) {
+function MovementRow({ movement, last }) {
   const isExpense = Number(movement.amount) < 0;
   return (
-    <View style={styles.movementRow}>
+    <View style={[styles.movementRow, last ? styles.lastRow : null]}>
       <View style={[styles.movementIcon, isExpense ? styles.movementExpenseIcon : styles.movementIncomeIcon]}>
         {isExpense ? <ArrowUp color={colors.red} size={20} /> : <ArrowDown color={colors.green} size={20} />}
       </View>
@@ -352,13 +390,6 @@ function sortMaintenance(items) {
   });
 }
 
-function formatServiceSubtitle(item) {
-  const category = item.category || 'Manutencao';
-  const value = item.finalValue ?? item.expectedValue;
-  const amount = value ? ` · ${formatCurrency(value)}` : '';
-  return `${category} · ${formatStatus(item.status)}${amount}`;
-}
-
 function formatStatus(status) {
   const labels = {
     PLANEJADO: 'Planejado',
@@ -367,11 +398,11 @@ function formatStatus(status) {
     FINALIZADO: 'Finalizado',
     CANCELADO: 'Cancelado'
   };
-  return labels[status] || status || 'Em analise';
+  return labels[status] || status || 'Em análise';
 }
 
 function formatCurrency(value) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value ?? 0);
 }
 
 function formatDate(value) {
@@ -388,51 +419,42 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg
   },
   content: {
+    width: '100%',
+    maxWidth: 430,
+    alignSelf: 'center',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: 96,
-    gap: spacing.md
+    paddingTop: 8,
+    paddingBottom: 106,
+    gap: spacing.md,
+    position: 'relative'
   },
   topBar: {
-    minHeight: 52,
+    minHeight: 58,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between'
+    justifyContent: 'space-between',
+    zIndex: 1
   },
   topSpacer: {
-    width: 42
+    width: 44
   },
   headerIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 8,
-    backgroundColor: 'transparent',
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: 'center',
-    justifyContent: 'center',
-    opacity: 1
-  },
-  headerIconBusy: {
-    opacity: 0.55
+    justifyContent: 'center'
   },
   screenTitle: {
     color: colors.ink,
-    fontSize: 23,
+    fontSize: 24,
     fontWeight: '900',
     letterSpacing: 0,
     textAlign: 'center'
   },
-  titleBlock: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 0
-  },
-  brandSubtitle: {
-    display: 'none'
-  },
   greetingPlain: {
     alignSelf: 'flex-start',
-    minHeight: 36,
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs
@@ -452,10 +474,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
     padding: spacing.xs,
-    shadowColor: '#000',
+    shadowColor: '#163052',
     shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
     elevation: 4
   },
   logoutMenuItem: {
@@ -474,7 +496,7 @@ const styles = StyleSheet.create({
   greetingText: {
     color: colors.ink,
     fontWeight: '900',
-    fontSize: 20
+    fontSize: 24
   },
   greetingName: {
     color: colors.blue
@@ -484,200 +506,69 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: spacing.lg
+    padding: spacing.lg,
+    shadowColor: '#163052',
+    shadowOpacity: 0.07,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+    zIndex: 1
   },
-  balanceCard: {
-    minHeight: 112,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.lg
-  },
-  kicker: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '900',
-    textAlign: 'center'
-  },
-  balanceValue: {
-    color: colors.blue,
-    fontSize: 28,
-    fontWeight: '900',
-    textAlign: 'center',
-    marginTop: spacing.xs
-  },
-  summaryGrid: {
+  monthlyCard: {
+    minHeight: 160,
     flexDirection: 'row',
-    gap: spacing.sm
+    gap: spacing.lg,
+    alignItems: 'flex-start'
   },
-  summaryCard: {
-    flex: 1,
-    minHeight: 72,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    padding: spacing.sm,
+  monthlyIcon: {
+    width: 78,
+    height: 78,
+    borderRadius: 999,
+    backgroundColor: '#E3F7ED',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs
+    flexShrink: 0
   },
-  summaryTitle: {
-    color: colors.muted,
-    fontSize: 10,
-    fontWeight: '900',
-    textAlign: 'center'
-  },
-  summaryValue: {
-    color: colors.ink,
-    fontSize: 13,
-    fontWeight: '900',
-    textAlign: 'center'
-  },
-  contributionCard: {
-    gap: spacing.md
+  monthlyCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: spacing.sm
   },
   cardHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.md
   },
   cardTitle: {
     color: colors.ink,
-    fontSize: 19,
+    fontSize: 20,
+    lineHeight: 24,
     fontWeight: '900'
   },
   cardMonth: {
     color: colors.muted,
-    fontSize: 17,
-    fontWeight: '700',
-    marginTop: spacing.xs
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '800',
+    marginTop: 2
   },
   cardSubtitle: {
     color: colors.muted,
-    fontSize: 13,
-    marginTop: 4
-  },
-  adminIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  transparencyCard: {
-    gap: spacing.md,
-    padding: spacing.lg
-  },
-  lockedBody: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.lg,
-    marginTop: spacing.sm
-  },
-  lockCircle: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
-    backgroundColor: colors.blueSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0
-  },
-  lockedCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: spacing.sm
-  },
-  lockedTitle: {
-    color: colors.ink,
-    fontSize: 18,
-    lineHeight: 24,
-    fontWeight: '900'
-  },
-  lockedText: {
-    color: colors.muted,
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '700'
-  },
-  disabledInfo: {
-    minHeight: 50,
-    borderRadius: 8,
-    backgroundColor: '#E8ECF2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md
-  },
-  disabledInfoText: {
-    color: colors.muted,
-    fontSize: 17,
-    fontWeight: '900',
-    textAlign: 'center'
-  },
-  balanceOpenValue: {
-    color: colors.green,
-    fontSize: 30,
-    fontWeight: '900'
-  },
-  metricGrid: {
-    flexDirection: 'row',
-    gap: spacing.sm
-  },
-  metricCard: {
-    flex: 1,
-    minHeight: 120,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
-    gap: spacing.xs
-  },
-  metricIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xs
-  },
-  metricLabel: {
-    color: colors.ink,
-    fontSize: 13,
-    fontWeight: '800',
-    textAlign: 'center'
-  },
-  metricValue: {
-    color: colors.ink,
     fontSize: 14,
-    fontWeight: '900',
-    textAlign: 'center'
+    lineHeight: 18,
+    fontWeight: '600'
   },
-  metricCaption: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: '800',
-    textAlign: 'center'
-  },
-  contributionInfo: {
+  confirmRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.xs
-  },
-  contributionLabel: {
-    color: colors.muted,
-    fontSize: 13
   },
   contributionValue: {
     color: colors.ink,
-    fontSize: 28,
+    fontSize: 34,
+    lineHeight: 40,
     fontWeight: '900'
-  },
-  inlineActions: {
-    flexDirection: 'row',
-    gap: spacing.sm
   },
   primaryAction: {
     minHeight: 44,
@@ -689,30 +580,16 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.md
   },
-  secondaryAction: {
-    minHeight: 44,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md
-  },
   primaryActionText: {
     color: colors.surface,
-    fontSize: 14,
-    fontWeight: '900'
-  },
-  secondaryActionText: {
-    color: colors.blue,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '900'
   },
   disabledAction: {
     opacity: 0.5
   },
   statusPill: {
-    minHeight: 28,
+    minHeight: 30,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -740,21 +617,137 @@ const styles = StyleSheet.create({
   statusTextOverdue: {
     color: colors.red
   },
+  transparencyCard: {
+    gap: spacing.md
+  },
+  balanceOpenValue: {
+    color: colors.green,
+    fontSize: 36,
+    lineHeight: 42,
+    fontWeight: '900'
+  },
+  metricGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  metricCard: {
+    flex: 1,
+    minHeight: 124,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+    gap: spacing.xs,
+    backgroundColor: colors.surface
+  },
+  metricIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs
+  },
+  metricLabel: {
+    color: colors.ink,
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  metricValue: {
+    color: colors.ink,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  metricCaption: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: '800',
+    textAlign: 'center'
+  },
+  lockedBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+    marginTop: spacing.sm
+  },
+  lockCircle: {
+    width: 74,
+    height: 74,
+    borderRadius: 999,
+    backgroundColor: colors.blueSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
+  lockedCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: spacing.sm
+  },
+  lockedTitle: {
+    color: colors.ink,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '900'
+  },
+  lockedText: {
+    color: colors.muted,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '700'
+  },
+  disabledInfo: {
+    minHeight: 48,
+    borderRadius: 8,
+    backgroundColor: '#E8ECF2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md
+  },
+  disabledInfoText: {
+    color: colors.muted,
+    fontSize: 15,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  sectionHeading: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    zIndex: 1
+  },
+  sectionHeadingIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: colors.blue,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
   sectionTitle: {
     color: colors.ink,
-    fontSize: 20,
-    fontWeight: '900',
-    marginTop: spacing.xs
+    fontSize: 21,
+    lineHeight: 25,
+    fontWeight: '900'
   },
   listCard: {
     padding: 0,
-    gap: 0
+    gap: 0,
+    overflow: 'hidden'
   },
   shortcutRow: {
     minHeight: 74,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.md,
     paddingHorizontal: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.border
@@ -763,12 +756,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0
   },
   serviceIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 12,
     backgroundColor: colors.blueSoft,
-    alignItems: 'center'
-    ,
+    alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0
   },
@@ -778,58 +770,45 @@ const styles = StyleSheet.create({
   },
   shortcutTitle: {
     color: colors.ink,
-    fontSize: 16,
-    fontWeight: '900',
-    flex: 1,
-    minWidth: 0
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: '900'
   },
   shortcutStatus: {
     color: colors.blue,
-    fontSize: 13,
-    fontWeight: '900'
-  },
-  shortcutSubtitle: {
-    color: colors.muted,
     fontSize: 12,
-    fontWeight: '700',
+    lineHeight: 16,
+    fontWeight: '900',
     marginTop: 2
   },
-  rowAction: {
-    minWidth: 66,
-    minHeight: 34,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
+  emptyRow: {
+    minHeight: 72,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg
   },
-  rowActionText: {
-    color: colors.blue,
-    fontSize: 12,
-    fontWeight: '900'
-  },
-  warningBadge: {
-    minHeight: 34,
-    borderRadius: 8,
-    backgroundColor: colors.redSoft,
-    borderWidth: 1,
-    borderColor: '#F7B7A8',
+  emptyIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: '#EEF1F5',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm
+    justifyContent: 'center'
   },
-  warningText: {
-    color: colors.red,
-    fontSize: 12,
-    fontWeight: '900'
+  emptyList: {
+    flex: 1,
+    color: colors.muted,
+    fontWeight: '900',
+    fontSize: 15
   },
   launchCard: {
     padding: 0,
-    gap: 0
+    gap: 0,
+    overflow: 'hidden'
   },
   movementRow: {
-    minHeight: 76,
+    minHeight: 70,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
@@ -838,9 +817,9 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border
   },
   movementIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0
@@ -858,7 +837,8 @@ const styles = StyleSheet.create({
   movementDescription: {
     color: colors.ink,
     fontSize: 15,
-    fontWeight: '800'
+    lineHeight: 19,
+    fontWeight: '900'
   },
   movementDate: {
     color: colors.muted,
@@ -876,14 +856,38 @@ const styles = StyleSheet.create({
   expenseValue: {
     color: colors.red
   },
-  emptyList: {
-    color: colors.muted,
-    fontWeight: '800',
-    padding: spacing.lg
-  },
   empty: {
     color: colors.muted,
     fontWeight: '700',
     padding: spacing.lg
+  },
+  adminBalanceCard: {
+    minHeight: 132,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg
+  },
+  adminIcon: {
+    width: 76,
+    height: 76,
+    borderRadius: 999,
+    backgroundColor: colors.blueSoft,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  adminBalanceCopy: {
+    flex: 1,
+    gap: spacing.xs
+  },
+  summaryLabel: {
+    color: colors.muted,
+    fontSize: 15,
+    fontWeight: '700'
+  },
+  balanceValue: {
+    color: colors.ink,
+    fontSize: 36,
+    lineHeight: 42,
+    fontWeight: '900'
   }
 });
