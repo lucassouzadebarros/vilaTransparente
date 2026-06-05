@@ -287,7 +287,7 @@ export function LoginScreen() {
             <Card style={[styles.raisedCard, styles.loginCard]}>
               <View style={styles.loginCardHeader}>
                 <View style={styles.userIconBubble}>
-                  <UserRound color={colors.surface} size={30} strokeWidth={2.6} />
+                  <UserRound color={colors.surface} size={19} strokeWidth={2.6} />
                 </View>
                 <View style={styles.loginHeading}>
                 <Text style={styles.loginCardTitle}>Entrar</Text>
@@ -349,7 +349,7 @@ export function LoginScreen() {
             <Card style={[styles.raisedCard, styles.signupCard]}>
               <View style={styles.signupHeaderModern}>
                 <View style={styles.signupIconPanel}>
-                  <Home color={colors.blue} size={36} strokeWidth={2.1} />
+                  <Home color={colors.blue} size={29} strokeWidth={2.1} />
                 </View>
                 <View style={styles.signupCopy}>
                   <Text style={styles.signupTitle}>Cadastrar minha casa</Text>
@@ -361,7 +361,7 @@ export function LoginScreen() {
 
             <Card style={[styles.raisedCard, styles.supportCardModern]}>
               <View style={styles.supportHeaderModern}>
-                <ShieldCheck color={colors.teal} size={26} />
+                <ShieldCheck color={colors.teal} size={22} />
                 <Text style={styles.supportTitle}>Suporte e acesso administrativo</Text>
               </View>
               <View style={styles.supportActionsModern}>
@@ -648,7 +648,7 @@ function PasswordToggle({ visible, onPress, label }: { visible: boolean; onPress
   const Icon = visible ? EyeOff : Eye;
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={styles.passwordToggle}>
-      <Icon color={colors.muted} size={20} />
+      <Icon color={colors.muted} size={17} />
     </Pressable>
   );
 }
@@ -683,7 +683,7 @@ function LoginField({
       <Text style={styles.loginFieldLabel}>{label}</Text>
       <View style={[styles.loginInputFrame, errorText ? styles.loginInputFrameError : null]}>
         <View style={styles.loginInputIcon}>
-          <Icon color={colors.muted} size={24} />
+          <Icon color={colors.muted} size={19} />
         </View>
         <TextInput
           value={value}
@@ -713,7 +713,7 @@ function LoginPrimaryButton({ title, icon: Icon, onPress, disabled }: { title: s
         { opacity: disabled ? 0.95 : pressed ? 0.86 : 1 }
       ]}
     >
-      <Icon color={colors.surface} size={30} />
+      <Icon color={colors.surface} size={22} />
       <Text style={styles.loginPrimaryButtonText}>{title}</Text>
     </Pressable>
   );
@@ -740,7 +740,7 @@ function LoginGhostButton({
         { opacity: pressed ? 0.82 : 1 }
       ]}
     >
-      <Icon color={colors.blue} size={compact ? 24 : 30} />
+      <Icon color={colors.blue} size={compact ? 18 : 23} />
       <Text style={[styles.loginGhostButtonText, compact ? styles.loginGhostButtonTextCompact : null]}>{title}</Text>
     </Pressable>
   );
@@ -850,10 +850,10 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 430,
     alignSelf: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 18,
+    paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: spacing.xl,
-    gap: 14
+    gap: 13
   },
   brand: {
     alignItems: 'center',
@@ -894,12 +894,12 @@ const styles = StyleSheet.create({
     gap: spacing.md
   },
   loginStack: {
-    gap: 16
+    gap: 14
   },
   raisedCard: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderColor: '#E4EAF2',
-    padding: 16,
+    padding: 14,
     shadowColor: '#163052',
     shadowOpacity: 0.1,
     shadowRadius: 18,
@@ -913,18 +913,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0
   },
   loginCard: {
-    gap: 11,
-    paddingTop: 16,
-    paddingBottom: 18
+    gap: 9,
+    paddingTop: 14,
+    paddingBottom: 14
   },
   loginCardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12
+    gap: 9
   },
   userIconBubble: {
-    width: 48,
-    height: 48,
+    width: 28,
+    height: 28,
     borderRadius: 999,
     backgroundColor: colors.blue,
     alignItems: 'center',
@@ -932,19 +932,19 @@ const styles = StyleSheet.create({
   },
   loginHeading: {
     flex: 1,
-    gap: 6
+    gap: 2
   },
   loginCardTitle: {
     color: colors.ink,
-    fontSize: 23,
-    lineHeight: 28,
+    fontSize: 18,
+    lineHeight: 22,
     fontWeight: '900',
     letterSpacing: 0
   },
   loginCardSubtitle: {
     color: colors.muted,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 10,
+    lineHeight: 14,
     fontWeight: '600'
   },
   muted: {
@@ -1004,26 +1004,26 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   },
   passwordToggle: {
-    width: 38,
-    height: 38,
+    width: 34,
+    height: 34,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center'
   },
   loginField: {
-    gap: 6
+    gap: 5
   },
   loginFieldLabel: {
     color: colors.ink,
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '900'
   },
   loginInputFrame: {
-    minHeight: 52,
+    minHeight: 42,
     borderWidth: 1.5,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center'
   },
@@ -1032,29 +1032,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF8F8'
   },
   loginInputIcon: {
-    width: 50,
+    width: 40,
     alignItems: 'center',
     justifyContent: 'center'
   },
   loginInput: {
     flex: 1,
-    minHeight: 50,
+    minHeight: 40,
     color: colors.ink,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '600',
     paddingRight: spacing.md
   },
   loginInputAction: {
-    minWidth: 50,
-    height: 50,
+    minWidth: 42,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
     paddingRight: spacing.sm
   },
   loginFieldHelp: {
     color: colors.muted,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 11,
+    lineHeight: 15,
     fontWeight: '600'
   },
   fieldError: {
@@ -1081,27 +1081,27 @@ const styles = StyleSheet.create({
   },
   forgotRow: {
     alignItems: 'flex-end',
-    marginTop: -5,
-    marginBottom: 2
+    marginTop: -4,
+    marginBottom: 1
   },
   loginHint: {
     color: colors.muted,
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '700'
   },
   inlineAction: {
     color: colors.blue,
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '900'
   },
   loginPrimaryButton: {
-    minHeight: 56,
-    borderRadius: 12,
+    minHeight: 44,
+    borderRadius: 10,
     backgroundColor: colors.blue,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.sm,
     shadowColor: colors.blue,
     shadowOpacity: 0.22,
     shadowRadius: 14,
@@ -1110,7 +1110,7 @@ const styles = StyleSheet.create({
   },
   loginPrimaryButtonText: {
     color: colors.surface,
-    fontSize: 20,
+    fontSize: 15,
     fontWeight: '900',
     letterSpacing: 0
   },
@@ -1123,8 +1123,8 @@ const styles = StyleSheet.create({
     paddingTop: 2
   },
   loginGhostButton: {
-    minHeight: 50,
-    borderRadius: 10,
+    minHeight: 42,
+    borderRadius: 9,
     borderWidth: 1.5,
     borderColor: colors.blue,
     backgroundColor: colors.surface,
@@ -1136,17 +1136,17 @@ const styles = StyleSheet.create({
   },
   loginGhostButtonCompact: {
     flex: 1,
-    minHeight: 50,
+    minHeight: 42,
     minWidth: 0
   },
   loginGhostButtonText: {
     color: colors.blue,
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '900',
     letterSpacing: 0
   },
   loginGhostButtonTextCompact: {
-    fontSize: 13
+    fontSize: 11
   },
   supportCard: {
     padding: spacing.md,
@@ -1164,17 +1164,17 @@ const styles = StyleSheet.create({
     fontWeight: '900'
   },
   signupCard: {
-    gap: spacing.md
+    gap: 12
   },
   signupHeaderModern: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md
+    gap: 12
   },
   signupIconPanel: {
-    width: 64,
-    height: 64,
-    borderRadius: 14,
+    width: 54,
+    height: 54,
+    borderRadius: 12,
     backgroundColor: colors.blueSoft,
     alignItems: 'center',
     justifyContent: 'center'
@@ -1185,24 +1185,24 @@ const styles = StyleSheet.create({
   },
   signupTitle: {
     color: colors.ink,
-    fontSize: 20,
-    lineHeight: 24,
+    fontSize: 18,
+    lineHeight: 22,
     fontWeight: '900'
   },
   signupText: {
     color: colors.muted,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 12,
+    lineHeight: 17,
     fontWeight: '600'
   },
   supportCardModern: {
-    gap: spacing.md
+    gap: 12
   },
   supportHeaderModern: {
-    minHeight: 34,
+    minHeight: 28,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md
+    gap: spacing.sm
   },
   supportActionsModern: {
     flexDirection: 'row',
