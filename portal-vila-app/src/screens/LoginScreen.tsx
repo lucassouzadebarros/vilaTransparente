@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { ArrowLeft, CheckCircle2, Eye, EyeOff, Home, KeyRound, LogIn, Mail, ShieldCheck, Trash2, UserPlus } from 'lucide-react-native';
+import { ReactNode, useEffect, useState } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ArrowLeft, CheckCircle2, CircleUserRound, Eye, EyeOff, Home, KeyRound, LockKeyhole, LogIn, Mail, Shield, ShieldCheck, Trash2, UserPlus } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
 import { Button, Card, Field, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
@@ -23,7 +24,6 @@ export function LoginScreen() {
   const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
   const [resetDebugCode, setResetDebugCode] = useState<string | null>(null);
   const [resetInfoMessage, setResetInfoMessage] = useState('');
-  const [showSupportActions, setShowSupportActions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -192,7 +192,6 @@ export function LoginScreen() {
   function openRegister() {
     setMode('register');
     setErrorMessage('');
-    setShowSupportActions(false);
   }
 
   function openForgot() {
@@ -204,7 +203,6 @@ export function LoginScreen() {
     setResetDebugCode(null);
     setResetInfoMessage('');
     setErrorMessage('');
-    setShowSupportActions(false);
   }
 
   function openLogin() {
@@ -275,19 +273,25 @@ export function LoginScreen() {
     <KeyboardAvoidingView behavior={Platform.select({ ios: 'padding', default: undefined })} style={styles.keyboard}>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <View style={styles.brand}>
-          <View style={styles.logo}>
-            <ShieldCheck color={colors.surface} size={30} />
+          <View style={styles.logoMark}>
+            <Shield color={colors.teal} fill={colors.teal} size={96} strokeWidth={1.8} />
+            <Home color={colors.surface} fill={colors.surface} size={34} style={styles.logoHome} />
           </View>
           <Text style={styles.title}>Portal da Vila</Text>
           <Text style={styles.subtitle}>Mensalidades, Pix, serviços e orçamentos</Text>
         </View>
 
         {mode === 'login' ? (
-          <View style={styles.stack}>
-            <Card style={styles.loginCard}>
-              <View style={styles.loginHeading}>
-                <Text style={styles.cardTitle}>Entrar</Text>
-                <Text style={styles.muted}>Acesse com o e-mail e senha da sua casa ou da administração.</Text>
+          <View style={styles.loginStack}>
+            <Card style={[styles.raisedCard, styles.loginCard]}>
+              <View style={styles.loginCardHeader}>
+                <View style={styles.userIconBubble}>
+                  <CircleUserRound color={colors.surface} size={38} strokeWidth={2.4} />
+                </View>
+                <View style={styles.loginHeading}>
+                <Text style={styles.loginCardTitle}>Entrar</Text>
+                <Text style={styles.loginCardSubtitle}>Acesse com o e-mail e senha da sua casa ou da administração.</Text>
+                </View>
               </View>
               {errorMessage ? (
                 <View style={styles.errorBanner}>
@@ -295,25 +299,28 @@ export function LoginScreen() {
                   <Text style={styles.errorBannerText}>{errorMessage}</Text>
                 </View>
               ) : null}
-              <Field
+              <LoginField
                 label="E-mail"
                 value={email}
                 onChangeText={(value) => {
                   setEmail(normalizeEmail(value));
                   setErrorMessage('');
                 }}
+                icon={Mail}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                placeholder="seu@email.com"
                 errorText={loginEmailError}
                 helpText="Use o e-mail cadastrado para sua casa."
               />
-              <Field
+              <LoginField
                 label="Senha"
                 value={password}
                 onChangeText={(value) => {
                   setPassword(value);
                   setErrorMessage('');
                 }}
+                icon={LockKeyhole}
                 secureTextEntry={!showLoginPassword}
                 errorText={loginPasswordError}
                 right={
@@ -324,13 +331,13 @@ export function LoginScreen() {
                   />
                 }
               />
-              <View style={styles.passwordHelpRow}>
+              <View style={styles.forgotRow}>
                 <Pressable accessibilityRole="button" onPress={openForgot}>
                   <Text style={styles.inlineAction}>Esqueci minha senha</Text>
                 </Pressable>
               </View>
-              <Button title={loading ? 'Entrando...' : 'Entrar'} icon={LogIn} onPress={submit} disabled={!canSubmitLogin} />
-              <View style={styles.loginFooter}>
+              <LoginPrimaryButton title={loading ? 'Entrando...' : 'Entrar'} icon={LogIn} onPress={submit} disabled={!canSubmitLogin} />
+              <View style={styles.loginFooterModern}>
                 <Text style={styles.loginHint}>Sem acesso ainda?</Text>
                 <Pressable accessibilityRole="button" onPress={openRegister}>
                   <Text style={styles.inlineAction}>Cadastrar minha casa</Text>
@@ -338,30 +345,28 @@ export function LoginScreen() {
               </View>
             </Card>
 
-            <Card>
-              <View style={styles.calloutHeader}>
-                <View style={styles.calloutIcon}>
-                  <Home color={colors.blue} size={20} />
+            <Card style={[styles.raisedCard, styles.signupCard]}>
+              <View style={styles.signupHeaderModern}>
+                <View style={styles.signupIconPanel}>
+                  <Home color={colors.blue} size={36} strokeWidth={2.1} />
                 </View>
-                <View style={styles.calloutText}>
-                  <Text style={styles.cardTitle}>Cadastrar minha casa</Text>
-                  <Text style={styles.muted}>Moradores das casas 02 a 11 podem criar o acesso da propria casa.</Text>
+                <View style={styles.signupCopy}>
+                  <Text style={styles.signupTitle}>Cadastrar minha casa</Text>
+                  <Text style={styles.signupText}>Moradores das casas 02 a 11 podem criar o acesso da própria casa.</Text>
                 </View>
               </View>
-              <Button title="Comecar cadastro" icon={UserPlus} onPress={openRegister} />
+              <LoginGhostButton title="Começar cadastro" icon={UserPlus} onPress={openRegister} />
             </Card>
 
-            <Card style={styles.supportCard}>
-              <Pressable accessibilityRole="button" onPress={() => setShowSupportActions((current) => !current)} style={styles.supportHeader}>
-                <ShieldCheck color={colors.muted} size={18} />
+            <Card style={[styles.raisedCard, styles.supportCardModern]}>
+              <View style={styles.supportHeaderModern}>
+                <ShieldCheck color={colors.teal} size={26} />
                 <Text style={styles.supportTitle}>Suporte e acesso administrativo</Text>
-              </Pressable>
-              {showSupportActions ? (
-                <View style={styles.shortcut}>
-                  <Button title="Preencher admin" icon={ShieldCheck} variant="ghost" onPress={() => { setEmail('admin@vila.com'); setPassword('123456'); setErrorMessage(''); }} />
-          <Button title="Limpar sessão" icon={Trash2} variant="ghost" onPress={clearSession} />
-                </View>
-              ) : null}
+              </View>
+              <View style={styles.supportActionsModern}>
+                <LoginGhostButton title="Preencher admin" icon={ShieldCheck} onPress={() => { setEmail('admin@vila.com'); setPassword('123456'); setErrorMessage(''); }} compact />
+                <LoginGhostButton title="Limpar sessão" icon={Trash2} onPress={clearSession} compact />
+              </View>
             </Card>
           </View>
         ) : mode === 'register' ? (
@@ -647,6 +652,99 @@ function PasswordToggle({ visible, onPress, label }: { visible: boolean; onPress
   );
 }
 
+function LoginField({
+  label,
+  value,
+  onChangeText,
+  icon: Icon,
+  placeholder,
+  keyboardType,
+  secureTextEntry,
+  autoCapitalize,
+  errorText,
+  helpText,
+  right
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  icon: LucideIcon;
+  placeholder?: string;
+  keyboardType?: 'default' | 'numeric' | 'email-address';
+  secureTextEntry?: boolean;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  errorText?: string;
+  helpText?: string;
+  right?: ReactNode;
+}) {
+  return (
+    <View style={styles.loginField}>
+      <Text style={styles.loginFieldLabel}>{label}</Text>
+      <View style={[styles.loginInputFrame, errorText ? styles.loginInputFrameError : null]}>
+        <View style={styles.loginInputIcon}>
+          <Icon color={colors.muted} size={24} />
+        </View>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          keyboardType={keyboardType}
+          secureTextEntry={secureTextEntry}
+          autoCapitalize={autoCapitalize}
+          style={styles.loginInput}
+          placeholderTextColor={colors.muted}
+        />
+        {right ? <View style={styles.loginInputAction}>{right}</View> : null}
+      </View>
+      {errorText ? <Text style={styles.fieldError}>{errorText}</Text> : helpText ? <Text style={styles.loginFieldHelp}>{helpText}</Text> : null}
+    </View>
+  );
+}
+
+function LoginPrimaryButton({ title, icon: Icon, onPress, disabled }: { title: string; icon: LucideIcon; onPress: () => void; disabled?: boolean }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.loginPrimaryButton,
+        { opacity: disabled ? 0.76 : pressed ? 0.86 : 1 }
+      ]}
+    >
+      <Icon color={colors.surface} size={30} />
+      <Text style={styles.loginPrimaryButtonText}>{title}</Text>
+    </Pressable>
+  );
+}
+
+function LoginGhostButton({
+  title,
+  icon: Icon,
+  onPress,
+  compact
+}: {
+  title: string;
+  icon: LucideIcon;
+  onPress: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.loginGhostButton,
+        compact ? styles.loginGhostButtonCompact : null,
+        { opacity: pressed ? 0.82 : 1 }
+      ]}
+    >
+      <Icon color={colors.blue} size={compact ? 24 : 30} />
+      <Text style={[styles.loginGhostButtonText, compact ? styles.loginGhostButtonTextCompact : null]}>{title}</Text>
+    </Pressable>
+  );
+}
+
 function onlyDigits(value: string) {
   return value.replace(/\D/g, '');
 }
@@ -751,36 +849,57 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 430,
     alignSelf: 'center',
-    padding: spacing.lg,
+    paddingHorizontal: 20,
+    paddingTop: 34,
     paddingBottom: spacing.xl,
-    gap: spacing.lg
+    gap: 22
   },
   brand: {
     alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.lg
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm
   },
-  logo: {
-    width: 64,
-    height: 64,
-    borderRadius: 8,
-    backgroundColor: colors.teal,
+  logoMark: {
+    width: 112,
+    height: 116,
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center'
   },
+  logoHome: {
+    position: 'absolute',
+    top: 37
+  },
   title: {
     color: colors.ink,
-    fontSize: 30,
+    fontSize: 40,
     fontWeight: '900',
-    letterSpacing: 0
+    letterSpacing: 0,
+    lineHeight: 46
   },
   subtitle: {
     color: colors.muted,
     fontWeight: '700',
-    textAlign: 'center'
+    textAlign: 'center',
+    fontSize: 17,
+    lineHeight: 24
   },
   stack: {
     gap: spacing.md
+  },
+  loginStack: {
+    gap: 18
+  },
+  raisedCard: {
+    borderRadius: 16,
+    borderColor: '#E4EAF2',
+    padding: 18,
+    shadowColor: '#163052',
+    shadowOpacity: 0.12,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6
   },
   cardTitle: {
     color: colors.ink,
@@ -789,10 +908,39 @@ const styles = StyleSheet.create({
     letterSpacing: 0
   },
   loginCard: {
-    gap: spacing.lg
+    gap: 16,
+    paddingTop: 20,
+    paddingBottom: 20
+  },
+  loginCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14
+  },
+  userIconBubble: {
+    width: 50,
+    height: 50,
+    borderRadius: 999,
+    backgroundColor: colors.blue,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   loginHeading: {
-    gap: spacing.xs
+    flex: 1,
+    gap: 6
+  },
+  loginCardTitle: {
+    color: colors.ink,
+    fontSize: 25,
+    lineHeight: 30,
+    fontWeight: '900',
+    letterSpacing: 0
+  },
+  loginCardSubtitle: {
+    color: colors.muted,
+    fontSize: 16,
+    lineHeight: 23,
+    fontWeight: '600'
   },
   muted: {
     color: colors.muted,
@@ -857,6 +1005,59 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   },
+  loginField: {
+    gap: 8
+  },
+  loginFieldLabel: {
+    color: colors.ink,
+    fontSize: 17,
+    fontWeight: '900'
+  },
+  loginInputFrame: {
+    minHeight: 64,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  loginInputFrameError: {
+    borderColor: colors.red,
+    backgroundColor: '#FFF8F8'
+  },
+  loginInputIcon: {
+    width: 54,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  loginInput: {
+    flex: 1,
+    minHeight: 60,
+    color: colors.ink,
+    fontSize: 17,
+    fontWeight: '600',
+    paddingRight: spacing.md
+  },
+  loginInputAction: {
+    minWidth: 52,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingRight: spacing.sm
+  },
+  loginFieldHelp: {
+    color: colors.muted,
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '600'
+  },
+  fieldError: {
+    color: colors.red,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '700'
+  },
   shortcut: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -873,15 +1074,74 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     marginTop: -spacing.sm
   },
+  forgotRow: {
+    alignItems: 'flex-end',
+    marginTop: -8,
+    marginBottom: 4
+  },
   loginHint: {
     color: colors.muted,
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '700'
   },
   inlineAction: {
     color: colors.blue,
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '900'
+  },
+  loginPrimaryButton: {
+    minHeight: 64,
+    borderRadius: 12,
+    backgroundColor: colors.blue,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: spacing.md,
+    shadowColor: colors.blue,
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 4
+  },
+  loginPrimaryButtonText: {
+    color: colors.surface,
+    fontSize: 24,
+    fontWeight: '900',
+    letterSpacing: 0
+  },
+  loginFooterModern: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    paddingTop: spacing.xs
+  },
+  loginGhostButton: {
+    minHeight: 58,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: colors.blue,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  loginGhostButtonCompact: {
+    flex: 1,
+    minHeight: 58,
+    minWidth: 0
+  },
+  loginGhostButtonText: {
+    color: colors.blue,
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: 0
+  },
+  loginGhostButtonTextCompact: {
+    fontSize: 15
   },
   supportCard: {
     padding: spacing.md,
@@ -894,9 +1154,54 @@ const styles = StyleSheet.create({
     gap: spacing.sm
   },
   supportTitle: {
+    color: colors.ink,
+    fontSize: 17,
+    fontWeight: '900'
+  },
+  signupCard: {
+    gap: spacing.lg
+  },
+  signupHeaderModern: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg
+  },
+  signupIconPanel: {
+    width: 78,
+    height: 78,
+    borderRadius: 16,
+    backgroundColor: colors.blueSoft,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  signupCopy: {
+    flex: 1,
+    gap: spacing.xs
+  },
+  signupTitle: {
+    color: colors.ink,
+    fontSize: 23,
+    lineHeight: 28,
+    fontWeight: '900'
+  },
+  signupText: {
     color: colors.muted,
-    fontSize: 13,
-    fontWeight: '800'
+    fontSize: 16,
+    lineHeight: 23,
+    fontWeight: '600'
+  },
+  supportCardModern: {
+    gap: spacing.lg
+  },
+  supportHeaderModern: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md
+  },
+  supportActionsModern: {
+    flexDirection: 'row',
+    gap: spacing.sm
   },
   calloutHeader: {
     flexDirection: 'row',
