@@ -8,6 +8,11 @@ export type Session = {
   residentId?: number | null;
 };
 
+export type PasswordResetResponse = {
+  message: string;
+  debugCode?: string | null;
+};
+
 export type Dashboard = {
   month: string;
   balance: number;

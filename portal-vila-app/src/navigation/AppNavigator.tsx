@@ -6,6 +6,7 @@ import { AdminPixChargesScreen } from '../screens/AdminPixChargesScreen';
 import { BudgetDetailsScreen } from '../screens/BudgetDetailsScreen';
 import { BudgetFormScreen } from '../screens/BudgetFormScreen';
 import { BudgetsScreen } from '../screens/BudgetsScreen';
+import { ChangePasswordScreen } from '../screens/ChangePasswordScreen';
 import { CashBoxScreen } from '../screens/CashBoxScreen';
 import { ContributionsScreen } from '../screens/ContributionsScreen';
 import { DocumentsScreen } from '../screens/DocumentsScreen';
@@ -77,6 +78,7 @@ function PortalTabs() {
       <Tabs.Screen name="AdminPixCharges" component={AdminPixChargesScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="WebhookEvents" component={WebhookEventsScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="Settings" component={SettingsScreen} options={hiddenTabOptions} />
+      <Tabs.Screen name="ChangePassword" component={ChangePasswordScreen} options={hiddenTabOptions} />
     </Tabs.Navigator>
   );
 }

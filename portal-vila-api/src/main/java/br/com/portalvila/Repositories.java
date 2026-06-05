@@ -21,6 +21,10 @@ interface AppUserRepository extends JpaRepository<AppUser, Long> {
     Optional<AppUser> findByResidentId(Long residentId);
 }
 
+interface PasswordResetCodeRepository extends JpaRepository<PasswordResetCode, Long> {
+    Optional<PasswordResetCode> findFirstByUserIdAndUsedAtIsNullOrderByCreatedAtDesc(Long userId);
+}
+
 interface SettingsRepository extends JpaRepository<Settings, Long> {
 }
 

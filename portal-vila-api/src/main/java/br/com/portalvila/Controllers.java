@@ -38,6 +38,8 @@ class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final PixGatewayClient gatewayClient;
+    private final PasswordResetService passwordResetService;
+    private final CurrentUserService currentUser;
 
     AuthController(
         AppUserRepository users,
@@ -45,7 +47,9 @@ class AuthController {
         HouseRepository houses,
         PasswordEncoder passwordEncoder,
         JwtService jwtService,
-        PixGatewayClient gatewayClient
+        PixGatewayClient gatewayClient,
+        PasswordResetService passwordResetService,
+        CurrentUserService currentUser
     ) {
         this.users = users;
         this.residents = residents;
@@ -53,6 +57,8 @@ class AuthController {
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.gatewayClient = gatewayClient;
+        this.passwordResetService = passwordResetService;
+        this.currentUser = currentUser;
     }
 
     @PostMapping("/login")
@@ -62,6 +68,21 @@ class AuthController {
             .filter(u -> passwordEncoder.matches(request.password(), u.passwordHash))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciais inválidas."));
         return new LoginResponse(jwtService.issue(user), user.name, user.email, user.role, user.residentId);
+    }
+
+    @PostMapping("/password-reset/request")
+    PasswordResetResponse requestPasswordReset(@Valid @RequestBody PasswordResetRequest request) {
+        return passwordResetService.requestReset(request);
+    }
+
+    @PostMapping("/password-reset/confirm")
+    PasswordResetResponse confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest request) {
+        return passwordResetService.confirmReset(request);
+    }
+
+    @PostMapping("/change-password")
+    PasswordResetResponse changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        return passwordResetService.changePassword(currentUser.current(), request);
     }
 
     @PostMapping("/register-resident")
@@ -585,19 +606,22 @@ class ResidentController {
     private final AppUserRepository users;
     private final PasswordEncoder passwordEncoder;
     private final PixGatewayClient gatewayClient;
+    private final PasswordResetService passwordResetService;
 
     ResidentController(
         ResidentRepository residents,
         HouseRepository houses,
         AppUserRepository users,
         PasswordEncoder passwordEncoder,
-        PixGatewayClient gatewayClient
+        PixGatewayClient gatewayClient,
+        PasswordResetService passwordResetService
     ) {
         this.residents = residents;
         this.houses = houses;
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.gatewayClient = gatewayClient;
+        this.passwordResetService = passwordResetService;
     }
 
     @GetMapping("/registration-houses")
@@ -694,6 +718,14 @@ class ResidentController {
         Resident resident = residents.findById(id).orElseThrow();
         syncGatewayCustomer(resident);
         return residents.save(resident);
+    }
+
+    @PostMapping("/{id}/password-reset")
+    @PreAuthorize("hasRole('ADMIN')")
+    PasswordResetResponse requestPasswordReset(@PathVariable Long id) {
+        Resident resident = residents.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Morador não encontrado."));
+        return passwordResetService.requestResetForResident(resident.id);
     }
 
     private void syncGatewayCustomer(Resident resident) {

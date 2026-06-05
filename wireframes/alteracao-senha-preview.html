@@ -1,0 +1,704 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portal da Vila - Fluxo de senha</title>
+  <style>
+    :root {
+      --bg: #f7fafc;
+      --surface: #ffffff;
+      --ink: #15202b;
+      --muted: #667085;
+      --border: #d9e2ec;
+      --blue: #2764c9;
+      --blue-soft: #e6f0ff;
+      --green: #16835b;
+      --green-soft: #ddf6eb;
+      --red: #c43d3d;
+      --red-soft: #fde3e3;
+      --teal: #0f766e;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #eef4f8;
+      color: var(--ink);
+      font-family: Inter, Arial, Helvetica, sans-serif;
+    }
+
+    .page {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    .page-header {
+      margin-bottom: 22px;
+    }
+
+    .page-title {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .page-subtitle {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 24px;
+      align-items: start;
+    }
+
+    .preview {
+      display: grid;
+      gap: 10px;
+    }
+
+    .preview-title {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .phone {
+      width: 390px;
+      max-width: 100%;
+      min-height: 760px;
+      margin: 0 auto;
+      background: var(--bg);
+      border: 1px solid #cfd8e3;
+      border-radius: 28px;
+      box-shadow: 0 18px 45px rgba(21, 32, 43, 0.14);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .phone-body {
+      height: 100%;
+      min-height: 760px;
+      padding: 18px 16px 94px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .login-body {
+      justify-content: flex-start;
+    }
+
+    .brand {
+      display: grid;
+      place-items: center;
+      gap: 8px;
+      padding: 16px 0 6px;
+      text-align: center;
+    }
+
+    .logo {
+      width: 64px;
+      height: 64px;
+      border-radius: 8px;
+      background: var(--teal);
+      display: grid;
+      place-items: center;
+      color: white;
+      font-size: 30px;
+      font-weight: 900;
+    }
+
+    .brand h1,
+    .screen-title {
+      margin: 0;
+      color: var(--ink);
+      font-size: 28px;
+      line-height: 1.1;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .brand p,
+    .screen-subtitle,
+    .muted {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 18px;
+      font-weight: 700;
+    }
+
+    .header {
+      min-height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .header-copy {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .icon-button {
+      width: 42px;
+      height: 42px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      display: grid;
+      place-items: center;
+      color: var(--ink);
+      font-size: 20px;
+      font-weight: 900;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .card-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .field {
+      display: grid;
+      gap: 5px;
+    }
+
+    .field label {
+      font-size: 13px;
+      color: var(--ink);
+      font-weight: 800;
+    }
+
+    .input {
+      min-height: 46px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      color: var(--ink);
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .input.with-action {
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .input.error {
+      border-color: var(--red);
+      background: #fff8f8;
+    }
+
+    .help {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 17px;
+    }
+
+    .error-text {
+      color: var(--red);
+      font-size: 12px;
+      line-height: 17px;
+      font-weight: 800;
+    }
+
+    .button {
+      min-height: 46px;
+      border-radius: 8px;
+      border: 1px solid var(--blue);
+      background: var(--blue);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 900;
+      text-align: center;
+      padding: 0 14px;
+    }
+
+    .button.ghost {
+      background: transparent;
+      color: var(--blue);
+      border-color: var(--border);
+    }
+
+    .inline-link {
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .login-footer {
+      display: flex;
+      justify-content: center;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    .code-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+    }
+
+    .code-box {
+      height: 48px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      display: grid;
+      place-items: center;
+      font-size: 20px;
+      font-weight: 900;
+      color: var(--ink);
+    }
+
+    .success-box,
+    .warning-box,
+    .info-box {
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .success-box {
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    .warning-box {
+      background: var(--red-soft);
+      color: var(--red);
+    }
+
+    .info-box {
+      background: var(--blue-soft);
+      color: var(--blue);
+    }
+
+    .check-list {
+      display: grid;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--green);
+    }
+
+    .bottom-nav {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 78px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      align-items: center;
+      padding-bottom: 8px;
+    }
+
+    .nav-item {
+      display: grid;
+      place-items: center;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .nav-item.active {
+      color: var(--blue);
+    }
+
+    .nav-icon {
+      font-size: 23px;
+      line-height: 1;
+    }
+
+    .menu-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .menu-row {
+      min-height: 48px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--blue);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 14px;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .resident-card {
+      gap: 12px;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .badge {
+      min-height: 28px;
+      border-radius: 8px;
+      background: var(--green-soft);
+      color: var(--green);
+      display: grid;
+      place-items: center;
+      padding: 0 12px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(21, 32, 43, 0.18);
+      display: grid;
+      place-items: center;
+      padding: 18px;
+    }
+
+    .modal {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      display: grid;
+      gap: 14px;
+      box-shadow: 0 18px 38px rgba(21, 32, 43, 0.18);
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    @media (max-width: 460px) {
+      .page {
+        padding: 16px;
+      }
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      .phone {
+        border-radius: 0;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <h1 class="page-title">Fluxo de alteração de senha</h1>
+      <p class="page-subtitle">Prévia visual no padrão atual do Portal da Vila. Apenas wireframe visual, sem lógica implementada.</p>
+    </header>
+
+    <section class="grid">
+      <article class="preview">
+        <div class="preview-title">Login com recuperação</div>
+        <div class="phone">
+          <div class="phone-body login-body">
+            <div class="brand">
+              <div class="logo">⌂</div>
+              <h1>Portal da Vila</h1>
+              <p>Mensalidades, Pix, serviços e orçamentos</p>
+            </div>
+            <div class="card">
+              <div>
+                <h2 class="card-title">Entrar</h2>
+                <p class="muted">Acesse com o e-mail e senha da sua casa ou da administração.</p>
+              </div>
+              <div class="field">
+                <label>E-mail</label>
+                <div class="input">casa10@email.com</div>
+                <div class="help">Use o e-mail cadastrado para sua casa.</div>
+              </div>
+              <div class="field">
+                <label>Senha</label>
+                <div class="input with-action"><span>••••••••</span><span>◉</span></div>
+              </div>
+              <div class="inline-link">Esqueci minha senha</div>
+              <div class="button">↪ Entrar</div>
+              <div class="login-footer">
+                <span class="muted">Sem acesso ainda?</span>
+                <span class="inline-link">Cadastrar minha casa</span>
+              </div>
+            </div>
+            <div class="card">
+              <div class="row">
+                <div>
+                  <h2 class="card-title">Cadastrar minha casa</h2>
+                  <p class="muted">Moradores das casas 02 a 11 podem criar o acesso da própria casa.</p>
+                </div>
+              </div>
+              <div class="button">＋ Começar cadastro</div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="preview">
+        <div class="preview-title">Recuperar senha</div>
+        <div class="phone">
+          <div class="phone-body">
+            <div class="header">
+              <div class="icon-button">‹</div>
+              <div class="header-copy">
+                <h1 class="screen-title">Recuperar senha</h1>
+                <p class="screen-subtitle">Acesso à conta</p>
+              </div>
+              <div class="icon-button">↻</div>
+            </div>
+            <div class="card">
+              <div>
+                <h2 class="card-title">Informe seu e-mail</h2>
+                <p class="muted">Enviaremos um código para você criar uma nova senha.</p>
+              </div>
+              <div class="field">
+                <label>E-mail</label>
+                <div class="input">morador@email.com</div>
+              </div>
+              <div class="button">Enviar código</div>
+              <div class="button ghost">Voltar para login</div>
+            </div>
+            <div class="info-box">
+              <strong>i</strong>
+              <span class="muted">Por segurança, a resposta será igual mesmo se o e-mail não existir no cadastro.</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="preview">
+        <div class="preview-title">Validar código</div>
+        <div class="phone">
+          <div class="phone-body">
+            <div class="header">
+              <div class="icon-button">‹</div>
+              <div class="header-copy">
+                <h1 class="screen-title">Verificar código</h1>
+                <p class="screen-subtitle">Recuperação de senha</p>
+              </div>
+              <div class="icon-button">↻</div>
+            </div>
+            <div class="card">
+              <div>
+                <h2 class="card-title">Código de segurança</h2>
+                <p class="muted">Digite o código de 6 dígitos enviado para seu e-mail.</p>
+              </div>
+              <div class="field">
+                <label>Código</label>
+                <div class="code-grid">
+                  <div class="code-box">1</div>
+                  <div class="code-box">8</div>
+                  <div class="code-box">4</div>
+                  <div class="code-box">2</div>
+                  <div class="code-box">0</div>
+                  <div class="code-box">9</div>
+                </div>
+                <div class="help">O código expira em 15 minutos.</div>
+              </div>
+              <div class="button">Validar código</div>
+              <div class="inline-link">Reenviar código</div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="preview">
+        <div class="preview-title">Nova senha</div>
+        <div class="phone">
+          <div class="phone-body">
+            <div class="header">
+              <div class="icon-button">‹</div>
+              <div class="header-copy">
+                <h1 class="screen-title">Nova senha</h1>
+                <p class="screen-subtitle">Segurança da conta</p>
+              </div>
+              <div class="icon-button">↻</div>
+            </div>
+            <div class="card">
+              <div>
+                <h2 class="card-title">Crie sua nova senha</h2>
+                <p class="muted">Use uma senha fácil de lembrar e difícil de adivinhar.</p>
+              </div>
+              <div class="field">
+                <label>Nova senha</label>
+                <div class="input with-action"><span>••••••••</span><span>◉</span></div>
+              </div>
+              <div class="field">
+                <label>Confirmar nova senha</label>
+                <div class="input with-action"><span>••••••••</span><span>◉</span></div>
+              </div>
+              <div class="check-list">
+                <span>✓ Mínimo de 6 caracteres</span>
+                <span>✓ As senhas conferem</span>
+              </div>
+              <div class="button">Salvar nova senha</div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="preview">
+        <div class="preview-title">Alterar senha logado</div>
+        <div class="phone">
+          <div class="phone-body">
+            <div class="header">
+              <div class="header-copy">
+                <h1 class="screen-title">Alterar senha</h1>
+                <p class="screen-subtitle">Segurança da conta</p>
+              </div>
+              <div class="icon-button">↻</div>
+            </div>
+            <div class="card">
+              <h2 class="card-title">Atualizar senha</h2>
+              <div class="field">
+                <label>Senha atual</label>
+                <div class="input with-action"><span>••••••</span><span>◉</span></div>
+              </div>
+              <div class="field">
+                <label>Nova senha</label>
+                <div class="input with-action"><span>••••••••</span><span>◉</span></div>
+              </div>
+              <div class="field">
+                <label>Confirmar nova senha</label>
+                <div class="input with-action"><span>••••••••</span><span>◉</span></div>
+              </div>
+              <div class="success-box">
+                <strong>✓</strong>
+                <span>Senha forte e confirmação correta.</span>
+              </div>
+              <div class="button">Salvar alteração</div>
+            </div>
+            <nav class="bottom-nav">
+              <div class="nav-item"><div class="nav-icon">⌂</div>Início</div>
+              <div class="nav-item"><div class="nav-icon">▣</div>Caixa</div>
+              <div class="nav-item"><div class="nav-icon">⌘</div>Serviços</div>
+              <div class="nav-item"><div class="nav-icon">□</div>Docs</div>
+              <div class="nav-item active"><div class="nav-icon">•••</div>Mais</div>
+            </nav>
+          </div>
+        </div>
+      </article>
+
+      <article class="preview">
+        <div class="preview-title">Menu Mais com alteração</div>
+        <div class="phone">
+          <div class="phone-body">
+            <div class="card" style="padding:12px; width:max-content;">
+              <strong>Olá, Casa 10 ˅</strong>
+            </div>
+            <div class="card">
+              <h2 class="card-title">Menu</h2>
+              <div class="menu-list">
+                <div class="menu-row">☑ Contribuições</div>
+                <div class="menu-row">▤ Despesas</div>
+                <div class="menu-row">▥ Orçamentos</div>
+                <div class="menu-row">▧ Relatórios</div>
+                <div class="menu-row">🔒 Alterar senha</div>
+              </div>
+            </div>
+            <nav class="bottom-nav">
+              <div class="nav-item"><div class="nav-icon">⌂</div>Início</div>
+              <div class="nav-item"><div class="nav-icon">▣</div>Caixa</div>
+              <div class="nav-item"><div class="nav-icon">⌘</div>Serviços</div>
+              <div class="nav-item"><div class="nav-icon">□</div>Docs</div>
+              <div class="nav-item active"><div class="nav-icon">•••</div>Mais</div>
+            </nav>
+          </div>
+        </div>
+      </article>
+
+      <article class="preview">
+        <div class="preview-title">Admin redefine senha do morador</div>
+        <div class="phone">
+          <div class="phone-body">
+            <div class="header">
+              <div class="header-copy">
+                <h1 class="screen-title">Moradores</h1>
+                <p class="screen-subtitle">Casas da vila</p>
+              </div>
+              <div class="icon-button">↻</div>
+            </div>
+            <div class="card resident-card">
+              <div class="row">
+                <div>
+                  <h2 class="card-title">Lorrane Moreira</h2>
+                  <p class="muted">Casa 10</p>
+                </div>
+                <div class="badge">ATIVO</div>
+              </div>
+              <p class="muted">lorrane@email.com<br />(21) 99999-0000</p>
+              <div class="button ghost">Atualizar dados Asaas</div>
+              <div class="button ghost">Enviar redefinição de senha</div>
+            </div>
+            <div class="modal-backdrop">
+              <div class="modal">
+                <h2 class="card-title">Redefinir senha</h2>
+                <p class="muted">Enviaremos um código de recuperação para o e-mail do morador.</p>
+                <div class="info-box"><strong>@</strong><span>lorrane@email.com</span></div>
+                <div class="button-row">
+                  <div class="button ghost">Cancelar</div>
+                  <div class="button">Enviar código</div>
+                </div>
+              </div>
+            </div>
+            <nav class="bottom-nav">
+              <div class="nav-item"><div class="nav-icon">⌂</div>Início</div>
+              <div class="nav-item"><div class="nav-icon">▣</div>Caixa</div>
+              <div class="nav-item"><div class="nav-icon">⌘</div>Serviços</div>
+              <div class="nav-item"><div class="nav-icon">□</div>Docs</div>
+              <div class="nav-item active"><div class="nav-icon">•••</div>Mais</div>
+            </nav>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

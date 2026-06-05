@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
-import { BarChart3, ChevronDown, ClipboardList, FileClock, ListChecks, LockOpen, LogOut, ReceiptText, Settings, Users, WalletCards } from 'lucide-react-native';
+import { BarChart3, ChevronDown, ClipboardList, FileClock, KeyRound, ListChecks, LockOpen, LogOut, ReceiptText, Settings, Users, WalletCards } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
@@ -30,6 +30,7 @@ export function MoreScreen() {
       </View>
       <Card>
         <Value>Menu</Value>
+        <Button title="Alterar senha" icon={KeyRound} variant="ghost" onPress={() => navigation.navigate('ChangePassword')} />
           <Button title="Contribuições" icon={ListChecks} variant="ghost" onPress={() => navigation.navigate('Contributions')} />
         <Button title="Despesas" icon={ReceiptText} variant="ghost" onPress={() => navigation.navigate('Expenses')} />
           <Button title="Orçamentos" icon={ClipboardList} variant="ghost" onPress={() => navigation.navigate('Budgets')} />

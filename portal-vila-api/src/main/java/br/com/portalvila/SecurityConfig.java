@@ -44,7 +44,14 @@ class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/login", "/api/auth/register-resident", "/api/webhooks/asaas", "/actuator/health").permitAll()
+                .requestMatchers(
+                    "/api/auth/login",
+                    "/api/auth/register-resident",
+                    "/api/auth/password-reset/request",
+                    "/api/auth/password-reset/confirm",
+                    "/api/webhooks/asaas",
+                    "/actuator/health"
+                ).permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/events/dashboard").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/residents/registration-houses").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/residents/self-registration").permitAll()

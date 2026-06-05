@@ -27,6 +27,9 @@ portal:
   jwt:
     secret: ${JWT_SECRET:portal-vila-dev-secret-with-32-chars-minimum}
     expiration-minutes: ${JWT_EXPIRATION_MINUTES:480}
+  password-reset:
+    debug: ${PORTAL_PASSWORD_RESET_DEBUG:false}
+    expiration-minutes: ${PORTAL_PASSWORD_RESET_EXPIRATION_MINUTES:15}
   asaas:
     base-url: ${ASAAS_BASE_URL:https://api-sandbox.asaas.com/v3}
     api-key: ${ASAAS_API_KEY:}

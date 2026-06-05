@@ -15,6 +15,18 @@ record LoginRequest(@NotBlank String email, @NotBlank String password) {
 record LoginResponse(String token, String name, String email, String role, Long residentId) {
 }
 
+record PasswordResetRequest(@NotBlank String email) {
+}
+
+record PasswordResetConfirmRequest(@NotBlank String email, @NotBlank String code, @NotBlank String password) {
+}
+
+record ChangePasswordRequest(@NotBlank String currentPassword, @NotBlank String newPassword) {
+}
+
+record PasswordResetResponse(String message, String debugCode) {
+}
+
 record RegistrationHouseOption(Long houseId, Integer number, String label, boolean available) {
 }
 

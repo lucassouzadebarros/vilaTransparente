@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { ArrowLeft, CheckCircle2, Eye, EyeOff, Home, LogIn, ShieldCheck, Trash2, UserPlus } from 'lucide-react-native';
-import { Button, Card, Field } from '../components/ui';
+import { ArrowLeft, CheckCircle2, Eye, EyeOff, Home, KeyRound, LogIn, Mail, ShieldCheck, Trash2, UserPlus } from 'lucide-react-native';
+import { Button, Card, Field, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
 import { RegistrationHouseOption } from '../types';
 
-type Mode = 'login' | 'register';
+type Mode = 'login' | 'register' | 'forgot' | 'reset' | 'resetDone';
 
 export function LoginScreen() {
   const { login, logout } = useAuth();
@@ -15,6 +15,14 @@ export function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetCode, setResetCode] = useState('');
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
+  const [resetDebugCode, setResetDebugCode] = useState<string | null>(null);
+  const [resetInfoMessage, setResetInfoMessage] = useState('');
   const [showSupportActions, setShowSupportActions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -49,6 +57,18 @@ export function LoginScreen() {
   const loginEmailError = emailFieldError(email);
   const loginPasswordError = password ? '' : '';
   const canSubmitLogin = Boolean(email.trim() && password && !loginEmailError && !loading);
+  const resetEmailError = emailFieldError(resetEmail);
+  const resetCodeError = resetCode ? (onlyDigits(resetCode).length === 6 ? '' : 'Informe o código de 6 dígitos.') : '';
+  const resetPasswordError = passwordFieldError(resetPassword);
+  const resetConfirmPasswordError = confirmPasswordFieldError(resetPassword, resetConfirmPassword);
+  const canSubmitForgot = Boolean(resetEmail.trim() && !resetEmailError && !loading);
+  const canSubmitReset = Boolean(
+    resetEmail.trim()
+      && onlyDigits(resetCode).length === 6
+      && resetPassword.length >= 6
+      && resetPassword === resetConfirmPassword
+      && !loading
+  );
 
   useEffect(() => {
     if (mode !== 'register') {
@@ -153,7 +173,7 @@ export function LoginScreen() {
       return 'Informe um telefone com DDD. Exemplo: (21) 99999-9999.';
     }
     if (!(documentDigits.length === 11 || documentDigits.length === 14)) {
-      return 'Informe CPF com 11 digitos ou CNPJ com 14 digitos.';
+      return 'Informe CPF com 11 dígitos ou CNPJ com 14 dígitos.';
     }
     if (registerPassword.length < 6) {
       return 'A senha precisa ter pelo menos 6 caracteres.';
@@ -175,9 +195,80 @@ export function LoginScreen() {
     setShowSupportActions(false);
   }
 
+  function openForgot() {
+    setMode('forgot');
+    setResetEmail(email);
+    setResetCode('');
+    setResetPassword('');
+    setResetConfirmPassword('');
+    setResetDebugCode(null);
+    setResetInfoMessage('');
+    setErrorMessage('');
+    setShowSupportActions(false);
+  }
+
   function openLogin() {
     setMode('login');
     setErrorMessage('');
+  }
+
+  async function submitPasswordResetRequest() {
+    const normalized = normalizeEmail(resetEmail);
+    if (!normalized) {
+      setErrorMessage('Informe o e-mail cadastrado para recuperar a senha.');
+      return;
+    }
+    if (!isValidEmail(normalized)) {
+      setErrorMessage('Informe um e-mail válido. Exemplo: nome@email.com');
+      return;
+    }
+    setLoading(true);
+    setErrorMessage('');
+    try {
+      const response = await api.requestPasswordReset(normalized);
+      setResetEmail(normalized);
+      setResetDebugCode(response.debugCode ?? null);
+      setResetInfoMessage(response.message);
+      setMode('reset');
+    } catch (error) {
+      setErrorMessage(apiErrorMessage(error, 'Não consegui iniciar a recuperação de senha.'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submitPasswordResetConfirm() {
+    const code = onlyDigits(resetCode);
+    if (code.length !== 6) {
+      setErrorMessage('Informe o código de 6 dígitos enviado para seu e-mail.');
+      return;
+    }
+    if (resetPassword.length < 6) {
+      setErrorMessage('A senha precisa ter pelo menos 6 caracteres.');
+      return;
+    }
+    if (resetPassword !== resetConfirmPassword) {
+      setErrorMessage('As senhas não conferem.');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage('');
+    try {
+      const response = await api.confirmPasswordReset(normalizeEmail(resetEmail), code, resetPassword);
+      setEmail(normalizeEmail(resetEmail));
+      setPassword('');
+      setResetCode('');
+      setResetPassword('');
+      setResetConfirmPassword('');
+      setResetDebugCode(null);
+      setResetInfoMessage(response.message);
+      setMode('resetDone');
+    } catch (error) {
+      setErrorMessage(apiErrorMessage(error, 'Não consegui alterar a senha. Confira o código e tente novamente.'));
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -233,6 +324,11 @@ export function LoginScreen() {
                   />
                 }
               />
+              <View style={styles.passwordHelpRow}>
+                <Pressable accessibilityRole="button" onPress={openForgot}>
+                  <Text style={styles.inlineAction}>Esqueci minha senha</Text>
+                </Pressable>
+              </View>
               <Button title={loading ? 'Entrando...' : 'Entrar'} icon={LogIn} onPress={submit} disabled={!canSubmitLogin} />
               <View style={styles.loginFooter}>
                 <Text style={styles.loginHint}>Sem acesso ainda?</Text>
@@ -268,7 +364,7 @@ export function LoginScreen() {
               ) : null}
             </Card>
           </View>
-        ) : (
+        ) : mode === 'register' ? (
           <View style={styles.stack}>
             <Card>
               <View style={styles.registerHeader}>
@@ -350,7 +446,7 @@ export function LoginScreen() {
                 onChangeText={setRegisterPassword}
                 secureTextEntry={!showRegisterPassword}
                 errorText={passwordError}
-                helpText="Minimo de 6 caracteres."
+                helpText="Mínimo de 6 caracteres."
                 right={
                   <PasswordToggle
                     visible={showRegisterPassword}
@@ -391,6 +487,149 @@ export function LoginScreen() {
               </View>
 
               <Button title={loading ? 'Cadastrando...' : 'Cadastrar e entrar'} icon={UserPlus} onPress={submitRegistration} disabled={!canSubmitRegistration} />
+            </Card>
+          </View>
+        ) : mode === 'forgot' ? (
+          <View style={styles.stack}>
+            <Card>
+              <View style={styles.registerHeader}>
+                <Pressable accessibilityRole="button" onPress={openLogin} style={styles.backButton}>
+                  <ArrowLeft color={colors.ink} size={20} />
+                </Pressable>
+                <View style={styles.headerCopy}>
+                  <Text style={styles.cardTitle}>Recuperar senha</Text>
+                  <Text style={styles.muted}>Informe o e-mail da conta para receber um código de verificação.</Text>
+                </View>
+              </View>
+
+              {errorMessage ? (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorBannerTitle}>Não consegui enviar o código</Text>
+                  <Text style={styles.errorBannerText}>{errorMessage}</Text>
+                </View>
+              ) : null}
+
+              <View style={styles.recoveryHero}>
+                <View style={styles.recoveryIcon}>
+                  <Mail color={colors.blue} size={24} />
+                </View>
+                <View style={styles.headerCopy}>
+                  <Value>Validação por e-mail</Value>
+                  <Text style={styles.muted}>O código expira em alguns minutos por segurança.</Text>
+                </View>
+              </View>
+
+              <Field
+                label="E-mail cadastrado"
+                value={resetEmail}
+                onChangeText={(value) => {
+                  setResetEmail(normalizeEmail(value));
+                  setErrorMessage('');
+                }}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                errorText={resetEmailError}
+                helpText="Use o mesmo e-mail cadastrado no portal."
+              />
+              <Button title={loading ? 'Enviando...' : 'Enviar código'} icon={Mail} onPress={submitPasswordResetRequest} disabled={!canSubmitForgot} />
+              <View style={styles.securityNote}>
+                <ShieldCheck color={colors.muted} size={18} />
+                <Text style={styles.securityNoteText}>Para sua segurança, a tela não informa se o e-mail existe ou não.</Text>
+              </View>
+            </Card>
+          </View>
+        ) : mode === 'reset' ? (
+          <View style={styles.stack}>
+            <Card>
+              <View style={styles.registerHeader}>
+                <Pressable accessibilityRole="button" onPress={openForgot} style={styles.backButton}>
+                  <ArrowLeft color={colors.ink} size={20} />
+                </Pressable>
+                <View style={styles.headerCopy}>
+                  <Text style={styles.cardTitle}>Verificar código</Text>
+                  <Text style={styles.muted}>Digite o código enviado e escolha uma nova senha.</Text>
+                </View>
+              </View>
+
+              {resetInfoMessage ? (
+                <View style={styles.infoBanner}>
+                  <Mail color={colors.blue} size={18} />
+                  <Text style={styles.infoBannerText}>{resetInfoMessage}</Text>
+                </View>
+              ) : null}
+              {resetDebugCode ? (
+                <View style={styles.debugCodeBox}>
+                  <Text style={styles.debugLabel}>Código de teste</Text>
+                  <Text style={styles.debugCode}>{resetDebugCode}</Text>
+                </View>
+              ) : null}
+              {errorMessage ? (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorBannerTitle}>Não consegui alterar a senha</Text>
+                  <Text style={styles.errorBannerText}>{errorMessage}</Text>
+                </View>
+              ) : null}
+
+              <Field
+                label="Código de verificação"
+                value={resetCode}
+                onChangeText={(value) => {
+                  setResetCode(onlyDigits(value).slice(0, 6));
+                  setErrorMessage('');
+                }}
+                keyboardType="numeric"
+                placeholder="000000"
+                errorText={resetCodeError}
+                helpText="Informe os 6 dígitos recebidos."
+              />
+              <Field
+                label="Nova senha"
+                value={resetPassword}
+                onChangeText={(value) => {
+                  setResetPassword(value);
+                  setErrorMessage('');
+                }}
+                secureTextEntry={!showResetPassword}
+                errorText={resetPasswordError}
+                helpText="Mínimo de 6 caracteres."
+                right={
+                  <PasswordToggle
+                    visible={showResetPassword}
+                    onPress={() => setShowResetPassword((current) => !current)}
+                    label={showResetPassword ? 'Ocultar nova senha' : 'Mostrar nova senha'}
+                  />
+                }
+              />
+              <Field
+                label="Confirmar nova senha"
+                value={resetConfirmPassword}
+                onChangeText={(value) => {
+                  setResetConfirmPassword(value);
+                  setErrorMessage('');
+                }}
+                secureTextEntry={!showResetConfirmPassword}
+                errorText={resetConfirmPasswordError}
+                right={
+                  <PasswordToggle
+                    visible={showResetConfirmPassword}
+                    onPress={() => setShowResetConfirmPassword((current) => !current)}
+                    label={showResetConfirmPassword ? 'Ocultar confirmação' : 'Mostrar confirmação'}
+                  />
+                }
+              />
+              <Button title={loading ? 'Alterando...' : 'Alterar senha'} icon={KeyRound} onPress={submitPasswordResetConfirm} disabled={!canSubmitReset} />
+              <Button title="Reenviar código" icon={Mail} variant="ghost" onPress={submitPasswordResetRequest} disabled={loading} />
+            </Card>
+          </View>
+        ) : (
+          <View style={styles.stack}>
+            <Card style={styles.centerCard}>
+              <View style={styles.successIcon}>
+                <CheckCircle2 color={colors.surface} size={32} />
+              </View>
+              <Text style={styles.cardTitle}>Senha alterada</Text>
+              <Text style={styles.centerText}>{resetInfoMessage || 'Sua senha foi alterada com sucesso.'}</Text>
+              <Button title="Entrar agora" icon={LogIn} onPress={openLogin} />
             </Card>
           </View>
         )}
@@ -440,7 +679,7 @@ function documentFieldError(value: string) {
   if (!digits) {
     return '';
   }
-  return digits.length === 11 || digits.length === 14 ? '' : 'Informe CPF com 11 digitos ou CNPJ com 14 digitos.';
+  return digits.length === 11 || digits.length === 14 ? '' : 'Informe CPF com 11 dígitos ou CNPJ com 14 dígitos.';
 }
 
 function passwordFieldError(value: string) {
@@ -630,6 +869,10 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.xs
   },
+  passwordHelpRow: {
+    alignItems: 'flex-end',
+    marginTop: -spacing.sm
+  },
   loginHint: {
     color: colors.muted,
     fontSize: 13,
@@ -738,6 +981,96 @@ const styles = StyleSheet.create({
   },
   houseStatusSelected: {
     color: colors.blue
+  },
+  recoveryHero: {
+    minHeight: 74,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md
+  },
+  recoveryIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: colors.blueSoft,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  securityNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    borderRadius: 8,
+    backgroundColor: colors.bg,
+    padding: spacing.md
+  },
+  securityNoteText: {
+    flex: 1,
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '700'
+  },
+  infoBanner: {
+    minHeight: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.blue,
+    backgroundColor: colors.blueSoft,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm
+  },
+  infoBannerText: {
+    flex: 1,
+    color: colors.blue,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '800'
+  },
+  debugCodeBox: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.amber,
+    backgroundColor: colors.amberSoft,
+    padding: spacing.md,
+    gap: spacing.xs
+  },
+  debugLabel: {
+    color: colors.amber,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  debugCode: {
+    color: colors.ink,
+    fontSize: 30,
+    fontWeight: '900',
+    letterSpacing: 0
+  },
+  centerCard: {
+    alignItems: 'center',
+    gap: spacing.md
+  },
+  successIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+    backgroundColor: colors.green,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  centerText: {
+    color: colors.muted,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    fontWeight: '700'
   },
   signupNotice: {
     flexDirection: 'row',

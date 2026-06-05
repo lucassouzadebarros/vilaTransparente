@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Edit3, Plus, RefreshCw, Save, X } from 'lucide-react-native';
+import { Edit3, KeyRound, Plus, RefreshCw, Save, X } from 'lucide-react-native';
 import { Badge, Button, Card, Field, Label, Row, Screen, Stack, Value } from '../components/ui';
 import { api, apiErrorMessage } from '../services/api';
 import { Resident } from '../types';
@@ -13,6 +13,7 @@ export function ResidentsScreen() {
   const [draft, setDraft] = useState<Resident | null>(null);
   const [saving, setSaving] = useState(false);
   const [syncingId, setSyncingId] = useState<number | null>(null);
+  const [resettingPasswordId, setResettingPasswordId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ residentId: number; text: string; type: 'success' | 'error' } | null>(null);
@@ -62,7 +63,7 @@ export function ResidentsScreen() {
     }
     const documentDigits = (draft.documentNumber ?? '').replace(/\D/g, '');
     if (documentDigits && documentDigits.length !== 11 && documentDigits.length !== 14) {
-      setMessage({ residentId: draft.id ?? 0, type: 'error', text: 'Informe um CPF com 11 digitos ou CNPJ com 14 digitos.' });
+      setMessage({ residentId: draft.id ?? 0, type: 'error', text: 'Informe um CPF com 11 dígitos ou CNPJ com 14 dígitos.' });
       return;
     }
     if (!draft.id && !documentDigits) {
@@ -110,6 +111,39 @@ export function ResidentsScreen() {
       Alert.alert('Asaas', text);
     } finally {
       setSyncingId(null);
+    }
+  }
+
+  function confirmPasswordReset(item: Resident) {
+    Alert.alert(
+      'Redefinir senha',
+      `Enviar um código de redefinição para ${item.name}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Enviar', onPress: () => sendPasswordReset(item) }
+      ]
+    );
+  }
+
+  async function sendPasswordReset(item: Resident) {
+    if (!item.id) {
+      return;
+    }
+    setResettingPasswordId(item.id);
+    setMessage(null);
+    try {
+      const response = await api.requestResidentPasswordReset(item.id);
+      const text = response.debugCode
+        ? `${response.message} Código de teste: ${response.debugCode}`
+        : response.message;
+      setMessage({ residentId: item.id, type: 'success', text });
+      Alert.alert('Redefinição de senha', text);
+    } catch (error) {
+      const text = apiErrorMessage(error, 'Não consegui gerar a redefinição de senha.');
+      setMessage({ residentId: item.id, type: 'error', text });
+      Alert.alert('Redefinição de senha', text);
+    } finally {
+      setResettingPasswordId(null);
     }
   }
 
@@ -212,6 +246,13 @@ export function ResidentsScreen() {
                 icon={Edit3}
                 variant="ghost"
                 onPress={() => startEdit(item)}
+              />
+              <Button
+                title={resettingPasswordId === item.id ? 'Enviando...' : 'Enviar redefinição de senha'}
+                icon={KeyRound}
+                variant="ghost"
+                onPress={() => confirmPasswordReset(item)}
+                disabled={resettingPasswordId === item.id || item.status !== 'ACTIVE'}
               />
               <Button
                 title={syncingId === item.id ? 'Sincronizando...' : 'Sincronizar Asaas'}

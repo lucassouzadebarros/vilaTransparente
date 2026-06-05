@@ -5,6 +5,7 @@ import {
   Contribution,
   Dashboard,
   Expense,
+  PasswordResetResponse,
   PixCharge,
   PortalDocument,
   RegistrationHouseOption,
@@ -92,6 +93,12 @@ export const api = {
   async login(email: string, password: string): Promise<Session> {
     return requestData<Session>(apiClient.post('/auth/login', { email, password }));
   },
+  requestPasswordReset: (email: string) =>
+    requestData<PasswordResetResponse>(apiClient.post('/auth/password-reset/request', { email })),
+  confirmPasswordReset: (email: string, code: string, password: string) =>
+    requestData<PasswordResetResponse>(apiClient.post('/auth/password-reset/confirm', { email, code, password })),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    requestData<PasswordResetResponse>(apiClient.post('/auth/change-password', { currentPassword, newPassword })),
   registrationHouses: () => requestData<RegistrationHouseOption[]>(apiClient.get('/residents/registration-houses')),
   registerResident: (registration: ResidentRegistration) =>
     requestData<ResidentRegistrationResponse>(apiClient.post('/auth/register-resident', registration)),
@@ -153,6 +160,8 @@ export const api = {
   createResident: (resident: Resident) => requestData<Resident>(apiClient.post('/residents', resident)),
   updateResident: (id: number, resident: Resident) => requestData<Resident>(apiClient.put(`/residents/${id}`, resident)),
   syncResidentAsaas: (id: number) => requestData<Resident>(apiClient.post(`/residents/${id}/sync-asaas`)),
+  requestResidentPasswordReset: (id: number) =>
+    requestData<PasswordResetResponse>(apiClient.post(`/residents/${id}/password-reset`)),
   releaseHouse: (houseId: number) => requestData<Resident>(apiClient.post(`/admin/houses/${houseId}/release`)),
   settings: () => requestData(apiClient.get('/settings')),
   dashboardEventsUrl: () => `${baseURL.replace(/\/$/, '')}/events/dashboard`
