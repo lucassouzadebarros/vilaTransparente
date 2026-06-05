@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ArrowLeft, CheckCircle2, CircleUserRound, Eye, EyeOff, Home, KeyRound, LockKeyhole, LogIn, Mail, Shield, ShieldCheck, Trash2, UserPlus } from 'lucide-react-native';
+import { ArrowLeft, CheckCircle2, Eye, EyeOff, Home, KeyRound, LockKeyhole, LogIn, Mail, Shield, ShieldCheck, Trash2, UserPlus, UserRound } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { Button, Card, Field, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
@@ -274,8 +274,9 @@ export function LoginScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <View style={styles.brand}>
           <View style={styles.logoMark}>
-            <Shield color={colors.teal} fill={colors.teal} size={96} strokeWidth={1.8} />
-            <Home color={colors.surface} fill={colors.surface} size={34} style={styles.logoHome} />
+            <Shield color={colors.teal} fill={colors.teal} size={86} strokeWidth={1.8} />
+            <Shield color={colors.surface} size={63} strokeWidth={2.3} style={styles.logoShieldInner} />
+            <Home color={colors.surface} fill={colors.surface} size={28} style={styles.logoHome} />
           </View>
           <Text style={styles.title}>Portal da Vila</Text>
           <Text style={styles.subtitle}>Mensalidades, Pix, serviços e orçamentos</Text>
@@ -286,7 +287,7 @@ export function LoginScreen() {
             <Card style={[styles.raisedCard, styles.loginCard]}>
               <View style={styles.loginCardHeader}>
                 <View style={styles.userIconBubble}>
-                  <CircleUserRound color={colors.surface} size={38} strokeWidth={2.4} />
+                  <UserRound color={colors.surface} size={30} strokeWidth={2.6} />
                 </View>
                 <View style={styles.loginHeading}>
                 <Text style={styles.loginCardTitle}>Entrar</Text>
@@ -709,7 +710,7 @@ function LoginPrimaryButton({ title, icon: Icon, onPress, disabled }: { title: s
       onPress={onPress}
       style={({ pressed }) => [
         styles.loginPrimaryButton,
-        { opacity: disabled ? 0.76 : pressed ? 0.86 : 1 }
+        { opacity: disabled ? 0.95 : pressed ? 0.86 : 1 }
       ]}
     >
       <Icon color={colors.surface} size={30} />
@@ -850,55 +851,59 @@ const styles = StyleSheet.create({
     maxWidth: 430,
     alignSelf: 'center',
     paddingHorizontal: 20,
-    paddingTop: 34,
+    paddingTop: 18,
     paddingBottom: spacing.xl,
-    gap: 22
+    gap: 14
   },
   brand: {
     alignItems: 'center',
     gap: spacing.xs,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm
+    marginTop: 0,
+    marginBottom: 10
   },
   logoMark: {
-    width: 112,
-    height: 116,
+    width: 88,
+    height: 92,
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center'
   },
+  logoShieldInner: {
+    position: 'absolute',
+    top: 14
+  },
   logoHome: {
     position: 'absolute',
-    top: 37
+    top: 33
   },
   title: {
     color: colors.ink,
-    fontSize: 40,
+    fontSize: 30,
     fontWeight: '900',
     letterSpacing: 0,
-    lineHeight: 46
+    lineHeight: 36
   },
   subtitle: {
     color: colors.muted,
     fontWeight: '700',
     textAlign: 'center',
-    fontSize: 17,
-    lineHeight: 24
+    fontSize: 15,
+    lineHeight: 20
   },
   stack: {
     gap: spacing.md
   },
   loginStack: {
-    gap: 18
+    gap: 16
   },
   raisedCard: {
     borderRadius: 16,
     borderColor: '#E4EAF2',
-    padding: 18,
+    padding: 16,
     shadowColor: '#163052',
-    shadowOpacity: 0.12,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
     elevation: 6
   },
   cardTitle: {
@@ -908,18 +913,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0
   },
   loginCard: {
-    gap: 16,
-    paddingTop: 20,
-    paddingBottom: 20
+    gap: 11,
+    paddingTop: 16,
+    paddingBottom: 18
   },
   loginCardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 14
+    gap: 12
   },
   userIconBubble: {
-    width: 50,
-    height: 50,
+    width: 48,
+    height: 48,
     borderRadius: 999,
     backgroundColor: colors.blue,
     alignItems: 'center',
@@ -931,15 +936,15 @@ const styles = StyleSheet.create({
   },
   loginCardTitle: {
     color: colors.ink,
-    fontSize: 25,
-    lineHeight: 30,
+    fontSize: 23,
+    lineHeight: 28,
     fontWeight: '900',
     letterSpacing: 0
   },
   loginCardSubtitle: {
     color: colors.muted,
-    fontSize: 16,
-    lineHeight: 23,
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: '600'
   },
   muted: {
@@ -1006,19 +1011,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   loginField: {
-    gap: 8
+    gap: 6
   },
   loginFieldLabel: {
     color: colors.ink,
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '900'
   },
   loginInputFrame: {
-    minHeight: 64,
+    minHeight: 52,
     borderWidth: 1.5,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    borderRadius: 14,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center'
   },
@@ -1027,29 +1032,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF8F8'
   },
   loginInputIcon: {
-    width: 54,
+    width: 50,
     alignItems: 'center',
     justifyContent: 'center'
   },
   loginInput: {
     flex: 1,
-    minHeight: 60,
+    minHeight: 50,
     color: colors.ink,
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '600',
     paddingRight: spacing.md
   },
   loginInputAction: {
-    minWidth: 52,
-    height: 52,
+    minWidth: 50,
+    height: 50,
     alignItems: 'center',
     justifyContent: 'center',
     paddingRight: spacing.sm
   },
   loginFieldHelp: {
     color: colors.muted,
-    fontSize: 15,
-    lineHeight: 21,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: '600'
   },
   fieldError: {
@@ -1076,21 +1081,21 @@ const styles = StyleSheet.create({
   },
   forgotRow: {
     alignItems: 'flex-end',
-    marginTop: -8,
-    marginBottom: 4
+    marginTop: -5,
+    marginBottom: 2
   },
   loginHint: {
     color: colors.muted,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700'
   },
   inlineAction: {
     color: colors.blue,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '900'
   },
   loginPrimaryButton: {
-    minHeight: 64,
+    minHeight: 56,
     borderRadius: 12,
     backgroundColor: colors.blue,
     alignItems: 'center',
@@ -1105,7 +1110,7 @@ const styles = StyleSheet.create({
   },
   loginPrimaryButtonText: {
     color: colors.surface,
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '900',
     letterSpacing: 0
   },
@@ -1115,10 +1120,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexWrap: 'wrap',
     gap: spacing.xs,
-    paddingTop: spacing.xs
+    paddingTop: 2
   },
   loginGhostButton: {
-    minHeight: 58,
+    minHeight: 50,
     borderRadius: 10,
     borderWidth: 1.5,
     borderColor: colors.blue,
@@ -1131,17 +1136,17 @@ const styles = StyleSheet.create({
   },
   loginGhostButtonCompact: {
     flex: 1,
-    minHeight: 58,
+    minHeight: 50,
     minWidth: 0
   },
   loginGhostButtonText: {
     color: colors.blue,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '900',
     letterSpacing: 0
   },
   loginGhostButtonTextCompact: {
-    fontSize: 15
+    fontSize: 13
   },
   supportCard: {
     padding: spacing.md,
@@ -1155,21 +1160,21 @@ const styles = StyleSheet.create({
   },
   supportTitle: {
     color: colors.ink,
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '900'
   },
   signupCard: {
-    gap: spacing.lg
+    gap: spacing.md
   },
   signupHeaderModern: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.lg
+    gap: spacing.md
   },
   signupIconPanel: {
-    width: 78,
-    height: 78,
-    borderRadius: 16,
+    width: 64,
+    height: 64,
+    borderRadius: 14,
     backgroundColor: colors.blueSoft,
     alignItems: 'center',
     justifyContent: 'center'
@@ -1180,18 +1185,18 @@ const styles = StyleSheet.create({
   },
   signupTitle: {
     color: colors.ink,
-    fontSize: 23,
-    lineHeight: 28,
+    fontSize: 20,
+    lineHeight: 24,
     fontWeight: '900'
   },
   signupText: {
     color: colors.muted,
-    fontSize: 16,
-    lineHeight: 23,
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: '600'
   },
   supportCardModern: {
-    gap: spacing.lg
+    gap: spacing.md
   },
   supportHeaderModern: {
     minHeight: 34,
