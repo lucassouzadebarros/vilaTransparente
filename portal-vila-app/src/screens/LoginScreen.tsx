@@ -272,6 +272,7 @@ export function LoginScreen() {
   return (
     <KeyboardAvoidingView behavior={Platform.select({ ios: 'padding', default: undefined })} style={styles.keyboard}>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        {mode === 'login' ? <LoginBackdrop /> : null}
         <View style={styles.brand}>
           <View style={styles.logoMark}>
             <Shield color={colors.teal} fill={colors.teal} size={86} strokeWidth={1.8} />
@@ -644,6 +645,37 @@ export function LoginScreen() {
   );
 }
 
+function LoginBackdrop() {
+  return (
+    <View pointerEvents="none" style={styles.loginBackdrop}>
+      <View style={styles.backdropGlow} />
+      <View style={[styles.backdropCloud, styles.backdropCloudLeft]} />
+      <View style={[styles.backdropCloud, styles.backdropCloudRight]} />
+
+      <View style={styles.backdropLeafGroupLeft}>
+        <View style={[styles.backdropLeaf, styles.backdropLeafOne]} />
+        <View style={[styles.backdropLeaf, styles.backdropLeafTwo]} />
+        <View style={[styles.backdropLeaf, styles.backdropLeafThree]} />
+      </View>
+      <View style={styles.backdropLeafGroupRight}>
+        <View style={[styles.backdropLeaf, styles.backdropLeafOne]} />
+        <View style={[styles.backdropLeaf, styles.backdropLeafTwo]} />
+        <View style={[styles.backdropLeaf, styles.backdropLeafThree]} />
+      </View>
+
+      <View style={styles.backdropVillage}>
+        <View style={[styles.backdropHouse, styles.backdropHouseMuted, { height: 46, width: 45 }]} />
+        <View style={[styles.backdropHouse, { height: 68, width: 58 }]} />
+        <View style={[styles.backdropHouse, styles.backdropHouseSoft, { height: 52, width: 48 }]} />
+        <View style={[styles.backdropHouse, { height: 76, width: 64 }]} />
+        <View style={[styles.backdropHouse, styles.backdropHouseSoft, { height: 58, width: 52 }]} />
+        <View style={[styles.backdropHouse, { height: 62, width: 56 }]} />
+        <View style={[styles.backdropHouse, styles.backdropHouseMuted, { height: 44, width: 46 }]} />
+      </View>
+    </View>
+  );
+}
+
 function PasswordToggle({ visible, onPress, label }: { visible: boolean; onPress: () => void; label: string }) {
   const Icon = visible ? EyeOff : Eye;
   return (
@@ -853,13 +885,113 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: spacing.xl,
-    gap: 13
+    gap: 13,
+    position: 'relative'
+  },
+  loginBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: -28,
+    right: -28,
+    height: 250,
+    alignItems: 'center',
+    overflow: 'hidden'
+  },
+  backdropGlow: {
+    position: 'absolute',
+    top: 4,
+    width: 430,
+    height: 220,
+    borderRadius: 220,
+    backgroundColor: '#EDF7FC',
+    opacity: 0.78
+  },
+  backdropCloud: {
+    position: 'absolute',
+    width: 54,
+    height: 15,
+    borderRadius: 999,
+    backgroundColor: '#E3EDF7',
+    opacity: 0.45
+  },
+  backdropCloudLeft: {
+    top: 84,
+    left: 44
+  },
+  backdropCloudRight: {
+    top: 82,
+    right: 42
+  },
+  backdropLeafGroupLeft: {
+    position: 'absolute',
+    top: 88,
+    left: '50%',
+    width: 82,
+    height: 42,
+    marginLeft: -150,
+    opacity: 0.48,
+    transform: [{ rotate: '-6deg' }]
+  },
+  backdropLeafGroupRight: {
+    position: 'absolute',
+    top: 88,
+    left: '50%',
+    width: 82,
+    height: 42,
+    marginLeft: 68,
+    opacity: 0.42,
+    transform: [{ scaleX: -1 }, { rotate: '-6deg' }]
+  },
+  backdropLeaf: {
+    position: 'absolute',
+    width: 32,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#C8E0E4'
+  },
+  backdropLeafOne: {
+    top: 2,
+    left: 4,
+    transform: [{ rotate: '28deg' }]
+  },
+  backdropLeafTwo: {
+    top: 17,
+    left: 26,
+    transform: [{ rotate: '-18deg' }]
+  },
+  backdropLeafThree: {
+    top: 28,
+    left: 8,
+    transform: [{ rotate: '18deg' }]
+  },
+  backdropVillage: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    bottom: 1,
+    height: 105,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    opacity: 0.2
+  },
+  backdropHouse: {
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    backgroundColor: '#DCE9F4'
+  },
+  backdropHouseSoft: {
+    backgroundColor: '#E6F0F8'
+  },
+  backdropHouseMuted: {
+    backgroundColor: '#D4E3F0'
   },
   brand: {
     alignItems: 'center',
     gap: spacing.xs,
     marginTop: 0,
-    marginBottom: 10
+    marginBottom: 10,
+    zIndex: 1
   },
   logoMark: {
     width: 88,
@@ -894,7 +1026,8 @@ const styles = StyleSheet.create({
     gap: spacing.md
   },
   loginStack: {
-    gap: 14
+    gap: 14,
+    zIndex: 1
   },
   raisedCard: {
     borderRadius: 14,
