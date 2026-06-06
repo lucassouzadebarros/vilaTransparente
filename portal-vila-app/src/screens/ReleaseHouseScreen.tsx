@@ -76,7 +76,7 @@ export function ReleaseHouseScreen() {
           <Value>Regra da liberação</Value>
           <LockOpen color={colors.blue} size={22} />
         </Row>
-        <Label>Use quando uma casa mudou de responsavel. O morador atual fica inativo, o login dele e bloqueado e a casa volta para a tela de cadastro.</Label>
+        <Label>Use quando uma casa mudou de responsável. O morador atual fica inativo, o login dele é bloqueado e a casa volta para a tela de cadastro.</Label>
       </Card>
 
       {message ? (
@@ -88,7 +88,7 @@ export function ReleaseHouseScreen() {
       {loading ? (
         <Card>
           <Value>Carregando casas...</Value>
-          <Label>Buscando moradores ativos e historico salvo.</Label>
+          <Label>Buscando moradores ativos e histórico salvo.</Label>
         </Card>
       ) : null}
 
@@ -101,7 +101,7 @@ export function ReleaseHouseScreen() {
                 <Row>
                   <View style={styles.houseTitle}>
                     <Value>Casa {String(house.houseId).padStart(2, '0')}</Value>
-                    {house.inactiveCount > 0 ? <Label>{house.inactiveCount} morador(es) antigo(s) no historico</Label> : null}
+                    {house.inactiveCount > 0 ? <Label>{house.inactiveCount} morador(es) antigo(s) no histórico</Label> : null}
                   </View>
                   <Badge status={released ? 'LIBERADA' : 'ACTIVE'} />
                 </Row>
@@ -146,7 +146,7 @@ export function ReleaseHouseScreen() {
                   <View style={styles.releasedBox}>
                     <CheckCircle2 color={colors.green} size={22} />
                     <View style={styles.releasedCopy}>
-                      <Text style={styles.releasedTitle}>Disponivel para cadastro</Text>
+                      <Text style={styles.releasedTitle}>Disponível para cadastro</Text>
                       <Text style={styles.releasedText}>A próxima pessoa pode se cadastrar escolhendo esta casa.</Text>
                     </View>
                   </View>
@@ -166,15 +166,15 @@ const styles = StyleSheet.create({
     gap: spacing.xs
   },
   releasedBox: {
-    minHeight: 68,
-    borderRadius: 8,
+    minHeight: 64,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.bg,
-    padding: spacing.md,
+    padding: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md
+    gap: spacing.sm
   },
   releasedCopy: {
     flex: 1,
@@ -182,31 +182,33 @@ const styles = StyleSheet.create({
   },
   releasedTitle: {
     color: colors.ink,
-    fontSize: 14,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: '900'
   },
   releasedText: {
     color: colors.muted,
-    fontSize: 12,
+    fontSize: 11,
     lineHeight: 17,
     fontWeight: '700'
   },
   confirmBox: {
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.red,
     backgroundColor: colors.redSoft,
-    padding: spacing.md,
+    padding: spacing.sm,
     gap: spacing.sm
   },
   confirmTitle: {
     color: colors.red,
-    fontSize: 14,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: '900'
   },
   confirmText: {
     color: colors.ink,
-    fontSize: 12,
+    fontSize: 11,
     lineHeight: 17,
     fontWeight: '700'
   },
@@ -216,7 +218,8 @@ const styles = StyleSheet.create({
   },
   successText: {
     color: colors.green,
-    fontSize: 13,
+    fontSize: 12,
+    lineHeight: 17,
     fontWeight: '900'
   },
   errorCard: {
@@ -225,7 +228,8 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: colors.red,
-    fontSize: 13,
+    fontSize: 12,
+    lineHeight: 17,
     fontWeight: '900'
   }
 });

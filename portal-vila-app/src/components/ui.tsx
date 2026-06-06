@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, TextStyle, View, ViewStyle } from 'react-native';
 import { LucideIcon } from 'lucide-react-native';
 import { colors, spacing } from '../theme';
+import { SoftBackdrop } from './SoftBackdrop';
 
 type ScreenProps = {
   children: ReactNode;
@@ -13,6 +14,7 @@ type ScreenProps = {
 export function Screen({ children, title, subtitle, right }: ScreenProps) {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
+      <SoftBackdrop compact />
       {(title || right) && (
         <View style={styles.header}>
           <View style={styles.headerText}>
@@ -92,6 +94,7 @@ type ButtonProps = {
 export function Button({ title, onPress, icon: Icon, variant = 'primary', disabled }: ButtonProps) {
   const bg = variant === 'danger' ? colors.red : variant === 'ghost' ? 'transparent' : colors.blue;
   const fg = variant === 'ghost' ? colors.blue : colors.surface;
+  const iconOnly = !title;
   return (
     <Pressable
       accessibilityRole="button"
@@ -99,11 +102,12 @@ export function Button({ title, onPress, icon: Icon, variant = 'primary', disabl
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
+        iconOnly ? styles.buttonIconOnly : null,
         { backgroundColor: bg, opacity: disabled ? 0.5 : pressed ? 0.82 : 1, borderColor: variant === 'ghost' ? colors.border : bg }
       ]}
     >
-      {Icon ? <Icon color={fg} size={18} /> : null}
-      <Text style={[styles.buttonText, { color: fg }]}>{title}</Text>
+      {Icon ? <Icon color={fg} size={iconOnly ? 18 : 16} /> : null}
+      {title ? <Text style={[styles.buttonText, { color: fg }]}>{title}</Text> : null}
     </Pressable>
   );
 }
@@ -177,8 +181,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg
   },
   screenContent: {
-    padding: spacing.lg,
-    paddingBottom: 96,
+    width: '100%',
+    maxWidth: 430,
+    alignSelf: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: 104,
     gap: spacing.md
   },
   header: {
@@ -186,68 +194,84 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
-    marginBottom: spacing.sm
+    marginBottom: 2
   },
   headerText: {
-    flex: 1
+    flex: 1,
+    minWidth: 0
   },
   title: {
     color: colors.ink,
-    fontSize: 26,
+    fontSize: 24,
+    lineHeight: 29,
     fontWeight: '800',
     letterSpacing: 0
   },
   subtitle: {
     color: colors.muted,
-    fontSize: 14,
+    fontSize: 13,
+    lineHeight: 18,
     marginTop: 2
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: 10,
     borderColor: colors.border,
     borderWidth: 1,
-    padding: spacing.lg,
-    gap: spacing.md
+    padding: spacing.md,
+    gap: spacing.sm,
+    shadowColor: '#1D2939',
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 2
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.md
+    gap: spacing.md,
+    minWidth: 0
   },
   label: {
     color: colors.muted,
-    fontSize: 13
+    fontSize: 12,
+    lineHeight: 17,
+    flexShrink: 1
   },
   value: {
     color: colors.ink,
-    fontSize: 16,
-    fontWeight: '700'
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '800',
+    flexShrink: 1
   },
   money: {
     color: colors.ink,
-    fontSize: 18,
-    fontWeight: '700'
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '800',
+    flexShrink: 0
   },
   moneyStrong: {
     color: colors.ink,
-    fontSize: 32,
+    fontSize: 29,
+    lineHeight: 35,
     fontWeight: '900'
   },
   badge: {
-    minHeight: 28,
+    minHeight: 26,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.md
+    paddingHorizontal: spacing.sm
   },
   badgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800'
   },
   button: {
-    minHeight: 46,
+    minHeight: 41,
     borderRadius: 8,
     borderWidth: 1,
     paddingHorizontal: spacing.md,
@@ -256,13 +280,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm
   },
+  buttonIconOnly: {
+    width: 42,
+    minHeight: 42,
+    paddingHorizontal: 0
+  },
   buttonText: {
-    fontSize: 14,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: '800'
   },
   iconButton: {
-    width: 42,
-    height: 42,
+    width: 40,
+    height: 40,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
@@ -275,11 +305,12 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     color: colors.ink,
-    fontSize: 13,
-    fontWeight: '700'
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '800'
   },
   inputFrame: {
-    minHeight: 46,
+    minHeight: 42,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -296,33 +327,33 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    minHeight: 44,
-    paddingHorizontal: spacing.md,
+    minHeight: 40,
+    paddingHorizontal: spacing.sm,
     color: colors.ink,
-    fontSize: 16
+    fontSize: 14
   },
   inputMultiline: {
-    minHeight: 96,
-    paddingTop: spacing.md,
+    minHeight: 88,
+    paddingTop: spacing.sm,
     textAlignVertical: 'top'
   },
   inputAction: {
-    minWidth: 44,
-    height: 44,
+    minWidth: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
     paddingRight: spacing.xs
   },
   fieldError: {
     color: colors.red,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11,
+    lineHeight: 16,
     fontWeight: '700'
   },
   fieldHelp: {
     color: colors.muted,
-    fontSize: 12,
-    lineHeight: 17
+    fontSize: 11,
+    lineHeight: 16
   },
   empty: {
     color: colors.muted,

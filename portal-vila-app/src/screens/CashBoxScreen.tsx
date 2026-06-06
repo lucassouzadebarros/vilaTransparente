@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { CalendarDays, Home, ListChecks, Lock, QrCode, ReceiptText, RefreshCw, WalletCards } from 'lucide-react-native';
+import { CalendarDays, Home, ListChecks, Lock, ReceiptText, RefreshCw, WalletCards } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Badge } from '../components/ui';
@@ -118,7 +118,7 @@ export function CashBoxScreen() {
           <View style={styles.balanceCard}>
             <View style={styles.balanceTop}>
               <View style={styles.walletIcon}>
-                <WalletCards color={colors.surface} size={33} />
+                <WalletCards color={colors.surface} size={25} />
               </View>
               <View style={styles.balanceCopy}>
                 <Text style={styles.summaryLabel}>Saldo acumulado da vila</Text>
@@ -133,11 +133,11 @@ export function CashBoxScreen() {
 
           <View style={styles.actionsRow}>
             <Pressable style={styles.primaryAction} onPress={() => navigation.navigate('Contributions')}>
-              <ListChecks color={colors.surface} size={22} />
+              <ListChecks color={colors.surface} size={16} />
               <Text style={styles.primaryActionText}>Contribuições</Text>
             </Pressable>
             <Pressable style={styles.secondaryAction} onPress={() => navigation.navigate('Expenses')}>
-              <ReceiptText color={colors.blue} size={22} />
+              <ReceiptText color={colors.blue} size={16} />
               <Text style={styles.secondaryActionText}>Despesas</Text>
             </Pressable>
           </View>
@@ -180,7 +180,7 @@ function SummaryRow({ icon: Icon, label, value }: { icon: LucideIcon; label: str
   return (
     <View style={styles.summaryRow}>
       <View style={styles.summaryLabelRow}>
-        <Icon color={colors.blue} size={22} />
+        <Icon color={colors.blue} size={15} />
         <Text style={styles.summaryLabel}>{label}</Text>
       </View>
       <Text style={styles.summaryValue}>{value}</Text>
@@ -209,7 +209,7 @@ function ContributionCard({
     <View style={styles.chargeCard}>
       <View style={styles.chargeTop}>
         <View style={styles.houseIcon}>
-          <Home color={colors.blue} size={34} />
+          <Home color={colors.blue} size={25} />
         </View>
         <View style={styles.chargeCopy}>
           <Text style={styles.chargeTitle}>{title}</Text>
@@ -227,7 +227,12 @@ function ContributionCard({
         style={[styles.pixButton, !pixChargeId ? styles.disabledAction : null]}
         onPress={onOpenPix}
       >
-        <QrCode color={colors.blue} size={24} />
+        <View style={styles.pixMark}>
+          <View style={styles.pixDiamond} />
+          <View style={styles.pixDiamond} />
+          <View style={styles.pixDiamond} />
+          <View style={styles.pixDiamond} />
+        </View>
         <Text style={styles.pixButtonText}>{pixChargeId ? 'Ver Pix' : 'Pix não gerado'}</Text>
       </Pressable>
     </View>
@@ -263,14 +268,14 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 430,
     alignSelf: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    paddingHorizontal: 14,
+    paddingTop: 16,
     paddingBottom: 106,
-    gap: spacing.lg,
+    gap: 12,
     position: 'relative'
   },
   header: {
-    minHeight: 74,
+    minHeight: 58,
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
@@ -278,22 +283,22 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.ink,
-    fontSize: 34,
-    lineHeight: 40,
+    fontSize: 26,
+    lineHeight: 31,
     fontWeight: '900',
     letterSpacing: 0
   },
   subtitle: {
     color: colors.muted,
-    fontSize: 17,
-    lineHeight: 22,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: '600',
     marginTop: 2
   },
   refreshButton: {
-    width: 58,
-    height: 58,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -310,23 +315,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: spacing.lg,
-    gap: spacing.md,
+    padding: 14,
+    gap: 10,
     shadowColor: '#163052',
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 7 },
-    elevation: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
     zIndex: 1
   },
   balanceTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.lg
+    gap: 12
   },
   walletIcon: {
-    width: 78,
-    height: 78,
+    width: 56,
+    height: 56,
     borderRadius: 999,
     backgroundColor: colors.blue,
     alignItems: 'center',
@@ -343,14 +348,14 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     color: colors.muted,
-    fontSize: 16,
-    lineHeight: 21,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '600'
   },
   balanceValue: {
     color: colors.ink,
-    fontSize: 42,
-    lineHeight: 48,
+    fontSize: 32,
+    lineHeight: 37,
     fontWeight: '900'
   },
   divider: {
@@ -358,39 +363,39 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border
   },
   summaryRow: {
-    minHeight: 44,
+    minHeight: 34,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.md
+    gap: 10
   },
   summaryLabelRow: {
     flex: 1,
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md
+    gap: 10
   },
   summaryValue: {
     color: colors.ink,
-    fontSize: 20,
-    lineHeight: 25,
+    fontSize: 15,
+    lineHeight: 19,
     fontWeight: '900'
   },
   actionsRow: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: 10,
     zIndex: 1
   },
   primaryAction: {
     flex: 1,
-    minHeight: 58,
+    minHeight: 38,
     borderRadius: 8,
     backgroundColor: colors.blue,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.md,
+    gap: 8,
     shadowColor: colors.blue,
     shadowOpacity: 0.18,
     shadowRadius: 13,
@@ -399,7 +404,7 @@ const styles = StyleSheet.create({
   },
   secondaryAction: {
     flex: 1,
-    minHeight: 58,
+    minHeight: 38,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
@@ -407,16 +412,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.md
+    gap: 8
   },
   primaryActionText: {
     color: colors.surface,
-    fontSize: 18,
+    fontSize: 13,
     fontWeight: '900'
   },
   secondaryActionText: {
     color: colors.blue,
-    fontSize: 18,
+    fontSize: 13,
     fontWeight: '900'
   },
   chargeCard: {
@@ -424,24 +429,24 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: spacing.lg,
-    gap: spacing.lg,
+    padding: 14,
+    gap: 12,
     shadowColor: '#163052',
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 7 },
-    elevation: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
     zIndex: 1
   },
   chargeTop: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md
+    alignItems: 'center',
+    gap: 12
   },
   houseIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 12,
+    width: 46,
+    height: 46,
+    borderRadius: 9,
     backgroundColor: colors.blueSoft,
     alignItems: 'center',
     justifyContent: 'center',
@@ -450,38 +455,38 @@ const styles = StyleSheet.create({
   chargeCopy: {
     flex: 1,
     minWidth: 0,
-    gap: spacing.xs
+    gap: 3
   },
   chargeTitle: {
     color: colors.ink,
-    fontSize: 24,
-    lineHeight: 29,
+    fontSize: 18,
+    lineHeight: 22,
     fontWeight: '900'
   },
   chargeName: {
     color: colors.muted,
-    fontSize: 18,
-    lineHeight: 23,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: '600'
   },
   chargeDescription: {
     color: colors.muted,
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '600'
   },
   chargeRight: {
     alignItems: 'flex-end',
-    gap: spacing.md
+    gap: 8
   },
   chargeValue: {
     color: colors.ink,
-    fontSize: 24,
-    lineHeight: 29,
+    fontSize: 17,
+    lineHeight: 21,
     fontWeight: '900'
   },
   pixButton: {
-    minHeight: 54,
+    minHeight: 38,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
@@ -489,12 +494,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.md
+    gap: 8
   },
   pixButtonText: {
     color: colors.blue,
-    fontSize: 20,
+    fontSize: 13,
     fontWeight: '900'
+  },
+  pixMark: {
+    width: 18,
+    height: 18,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '45deg' }]
+  },
+  pixDiamond: {
+    width: 7,
+    height: 7,
+    borderRadius: 2,
+    borderWidth: 1.5,
+    borderColor: colors.blue,
+    margin: 1
   },
   disabledAction: {
     opacity: 0.5
@@ -504,10 +526,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: spacing.lg,
+    padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: 12,
     zIndex: 1
   },
   lockedCopy: {
@@ -516,14 +538,14 @@ const styles = StyleSheet.create({
   },
   lockedTitle: {
     color: colors.ink,
-    fontSize: 18,
-    lineHeight: 23,
+    fontSize: 15,
+    lineHeight: 20,
     fontWeight: '900'
   },
   lockedText: {
     color: colors.muted,
-    fontSize: 14,
-    lineHeight: 19,
+    fontSize: 12,
+    lineHeight: 17,
     fontWeight: '700'
   }
 });

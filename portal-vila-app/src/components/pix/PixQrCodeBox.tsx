@@ -17,21 +17,28 @@ export function PixQrCodeBox({ base64 }: { base64?: string }) {
 
 const styles = StyleSheet.create({
   box: {
-    minHeight: 220,
-    borderRadius: 8,
+    minHeight: 204,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: '#FDFEFF',
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm
+    gap: spacing.sm,
+    shadowColor: '#1D2939',
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 2
   },
   qr: {
-    width: 168,
-    height: 168
+    width: 156,
+    height: 156
   },
   label: {
     color: colors.muted,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '700'
   }
 });

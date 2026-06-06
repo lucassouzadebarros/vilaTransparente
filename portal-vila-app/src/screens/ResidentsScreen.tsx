@@ -83,8 +83,8 @@ export function ResidentsScreen() {
       setCreating(false);
       setEditingId(null);
       setDraft(null);
-      setMessage({ residentId: saved.id ?? draft.id ?? 0, type: 'success', text: 'Dados salvos e cliente sincronizado no Asaas Sandbox.' });
-      Alert.alert('Moradores', 'Dados salvos e cliente sincronizado no Asaas Sandbox.');
+      setMessage({ residentId: saved.id ?? draft.id ?? 0, type: 'success', text: 'Dados salvos e cliente sincronizado.' });
+      Alert.alert('Moradores', 'Dados salvos e cliente sincronizado.');
     } catch (error) {
       const text = apiErrorMessage(error, 'Não consegui salvar o morador.');
       setMessage({ residentId: draft.id ?? 0, type: 'error', text });
@@ -103,8 +103,8 @@ export function ResidentsScreen() {
     try {
       const saved = await api.syncResidentAsaas(item.id);
       setItems((current) => current.map((resident) => resident.id === saved.id ? saved : resident));
-      setMessage({ residentId: saved.id ?? item.id, type: 'success', text: 'Cliente sincronizado no Asaas Sandbox.' });
-      Alert.alert('Asaas', 'Cliente sincronizado no Asaas Sandbox.');
+      setMessage({ residentId: saved.id ?? item.id, type: 'success', text: 'Cliente sincronizado.' });
+      Alert.alert('Moradores', 'Cliente sincronizado.');
     } catch (error) {
       const text = apiErrorMessage(error, 'Não consegui sincronizar com o Asaas.');
       setMessage({ residentId: item.id, type: 'error', text });
@@ -167,7 +167,7 @@ export function ResidentsScreen() {
           <Field label="E-mail" value={draft.email} onChangeText={(value) => changeDraft('email', value)} keyboardType="email-address" />
           <Field label="Telefone" value={draft.phone ?? ''} onChangeText={(value) => changeDraft('phone', value)} />
           <Field
-            label="CPF/CNPJ completo para Asaas"
+            label="CPF/CNPJ completo"
             value={draft.documentNumber ?? ''}
             onChangeText={(value) => changeDraft('documentNumber', value)}
             keyboardType="numeric"
@@ -211,7 +211,7 @@ export function ResidentsScreen() {
               <Field label="E-mail" value={draft.email} onChangeText={(value) => changeDraft('email', value)} keyboardType="email-address" />
               <Field label="Telefone" value={draft.phone ?? ''} onChangeText={(value) => changeDraft('phone', value)} />
               <Field
-                label="CPF/CNPJ completo para Asaas"
+                label="CPF/CNPJ completo"
                 value={draft.documentNumber ?? ''}
                 onChangeText={(value) => changeDraft('documentNumber', value)}
                 keyboardType="numeric"
@@ -232,13 +232,13 @@ export function ResidentsScreen() {
               <Label>{item.phone}</Label>
               <Label>
                 {item.documentRegistered
-                  ? `CPF/CNPJ Asaas cadastrado (${item.documentMasked ?? 'documento protegido'})`
-                  : 'CPF/CNPJ Asaas pendente'}
+                  ? `CPF/CNPJ cadastrado (${item.documentMasked ?? 'documento protegido'})`
+                  : 'CPF/CNPJ pendente'}
               </Label>
               <Label>
                 {item.gatewayCustomerId
-                  ? `Cliente Asaas sincronizado (${item.gatewayCustomerId})`
-                  : 'Cliente Asaas ainda não sincronizado'}
+                  ? `Cliente sincronizado (${item.gatewayCustomerId})`
+                  : 'Cliente ainda não sincronizado'}
               </Label>
               {message && message.residentId === item.id ? <Label>{message.text}</Label> : null}
               <Button
@@ -255,7 +255,7 @@ export function ResidentsScreen() {
                 disabled={resettingPasswordId === item.id || item.status !== 'ACTIVE'}
               />
               <Button
-                title={syncingId === item.id ? 'Sincronizando...' : 'Sincronizar Asaas'}
+                title={syncingId === item.id ? 'Sincronizando...' : 'Sincronizar cadastro'}
                 icon={RefreshCw}
                 variant="ghost"
                 onPress={() => syncAsaas(item)}

@@ -7,15 +7,15 @@ export function ChargeStatusTimeline({ status, paidAt }: { status: string; paidA
   return (
     <View style={styles.timeline}>
       <View style={styles.item}>
-        <ReceiptText color={colors.blue} size={18} />
+        <ReceiptText color={colors.blue} size={17} />
         <Text style={styles.text}>Cobrança gerada</Text>
       </View>
       <View style={styles.item}>
-        <Clock color={paid ? colors.green : colors.amber} size={18} />
+        <Clock color={paid ? colors.green : colors.amber} size={17} />
         <Text style={styles.text}>{paid ? 'Webhook recebido' : 'Aguardando pagamento'}</Text>
       </View>
       <View style={styles.item}>
-        <CheckCircle2 color={paid ? colors.green : colors.border} size={18} />
+        <CheckCircle2 color={paid ? colors.green : colors.border} size={17} />
         <Text style={styles.text}>{paidAt ? `Pago em ${paidAt.slice(0, 10)}` : 'Confirmação automática'}</Text>
       </View>
     </View>
@@ -33,6 +33,8 @@ const styles = StyleSheet.create({
   },
   text: {
     color: colors.ink,
-    fontWeight: '700'
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '800'
   }
 });

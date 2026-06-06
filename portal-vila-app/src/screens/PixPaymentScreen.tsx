@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Alert, Text } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
-import { Copy, RefreshCw } from 'lucide-react-native';
+import { Copy, QrCode, RefreshCw } from 'lucide-react-native';
 import { ChargeStatusTimeline } from '../components/pix/ChargeStatusTimeline';
 import { PixQrCodeBox } from '../components/pix/PixQrCodeBox';
 import { Badge, Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
 import { api } from '../services/api';
 import { PixCharge } from '../types';
-import { colors } from '../theme';
+import { colors, spacing } from '../theme';
 
 export function PixPaymentScreen() {
   const route = useRoute<any>();
@@ -22,7 +22,7 @@ export function PixPaymentScreen() {
   async function copy() {
     if (charge?.pixCopyPaste) {
       await Clipboard.setStringAsync(charge.pixCopyPaste);
-      Alert.alert('Pix', 'Codigo copiado.');
+      Alert.alert('Pix', 'Código Pix copiado.');
     }
   }
 
@@ -35,22 +35,34 @@ export function PixPaymentScreen() {
       {charge ? (
         <>
           <Card>
-            <Row>
-              <Value>Cobranca Pix</Value>
-              <Badge status={charge.status} />
-            </Row>
-            <Money value={charge.value} strong />
-            <Row>
-              <Label>Vencimento</Label>
-              <Value>{charge.dueDate}</Value>
-            </Row>
+            <View style={styles.chargeHeader}>
+              <View style={styles.pixIcon}>
+                <QrCode color={colors.blue} size={22} />
+              </View>
+              <View style={styles.chargeInfo}>
+                <Row>
+                  <Value>Cobrança Pix</Value>
+                  <Badge status={charge.status} />
+                </Row>
+                <Money value={charge.value} strong />
+                <Row>
+                  <Label>Vencimento</Label>
+                  <Value>{charge.dueDate}</Value>
+                </Row>
+              </View>
+            </View>
           </Card>
+
           <PixQrCodeBox base64={charge.qrCodeBase64} />
+
           <Card>
-            <Label>Pix Copia e Cola</Label>
-            <Text style={{ color: colors.ink }}>{charge.pixCopyPaste}</Text>
-            <Button title="Copiar codigo Pix" icon={Copy} onPress={copy} />
+            <Value>Pix Copia e Cola</Value>
+            <View style={styles.copyBox}>
+              <Text style={styles.copyText}>{charge.pixCopyPaste}</Text>
+            </View>
+            <Button title="Copiar código Pix" icon={Copy} onPress={copy} />
           </Card>
+
           <Card>
             <ChargeStatusTimeline status={charge.status} paidAt={charge.paidAt} />
           </Card>
@@ -59,3 +71,37 @@ export function PixPaymentScreen() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  chargeHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md
+  },
+  pixIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: colors.blueSoft,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  chargeInfo: {
+    flex: 1,
+    gap: spacing.sm,
+    minWidth: 0
+  },
+  copyBox: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    backgroundColor: colors.bg,
+    padding: spacing.sm,
+    maxHeight: 120
+  },
+  copyText: {
+    color: colors.ink,
+    fontSize: 12,
+    lineHeight: 17
+  }
+});

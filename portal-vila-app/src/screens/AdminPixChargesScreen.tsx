@@ -302,12 +302,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm
   },
   modeButton: {
-    minHeight: 72,
-    borderRadius: 8,
+    minHeight: 60,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    padding: spacing.md,
+    padding: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md
@@ -318,11 +318,12 @@ const styles = StyleSheet.create({
   },
   modeText: {
     flex: 1,
-    gap: spacing.xs
+    gap: 2
   },
   modeTitle: {
     color: colors.ink,
-    fontSize: 14,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: '900'
   },
   modeTitleSelected: {
@@ -330,7 +331,7 @@ const styles = StyleSheet.create({
   },
   modeSubtitle: {
     color: colors.muted,
-    fontSize: 12,
+    fontSize: 11,
     lineHeight: 16
   },
   houseSection: {
@@ -338,19 +339,20 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: colors.ink,
-    fontSize: 13,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '800'
   },
   houseList: {
     gap: spacing.sm
   },
   houseOption: {
-    minHeight: 64,
-    borderRadius: 8,
+    minHeight: 56,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    padding: spacing.md,
+    padding: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -362,11 +364,12 @@ const styles = StyleSheet.create({
   },
   houseInfo: {
     flex: 1,
-    gap: spacing.xs
+    gap: 2
   },
   houseTitle: {
     color: colors.ink,
-    fontSize: 15,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: '900'
   },
   houseTitleSelected: {
@@ -374,18 +377,19 @@ const styles = StyleSheet.create({
   },
   houseResident: {
     color: colors.muted,
-    fontSize: 12,
+    fontSize: 11,
+    lineHeight: 16,
     fontWeight: '700'
   },
   selectedHint: {
     color: colors.blue,
-    fontSize: 12,
+    fontSize: 11,
     lineHeight: 17,
     fontWeight: '800'
   },
   muted: {
     color: colors.muted,
-    fontSize: 13,
-    lineHeight: 18
+    fontSize: 12,
+    lineHeight: 17
   }
 });
