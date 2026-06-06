@@ -1,5 +1,6 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { FileText, Home, MoreHorizontal, WalletCards, Wrench } from 'lucide-react-native';
 import { colors } from '../theme';
 import { AdminPixChargesScreen } from '../screens/AdminPixChargesScreen';
@@ -16,6 +17,7 @@ import { HomeScreen } from '../screens/HomeScreen';
 import { MoreScreen } from '../screens/MoreScreen';
 import { PixPaymentScreen } from '../screens/PixPaymentScreen';
 import { ReleaseHouseScreen } from '../screens/ReleaseHouseScreen';
+import { ReportProblemScreen } from '../screens/ReportProblemScreen';
 import { ReportsScreen } from '../screens/ReportsScreen';
 import { ResidentsScreen } from '../screens/ResidentsScreen';
 import { ServiceDetailsScreen } from '../screens/ServiceDetailsScreen';
@@ -25,10 +27,20 @@ import { SettingsScreen } from '../screens/SettingsScreen';
 import { WebhookEventsScreen } from '../screens/WebhookEventsScreen';
 
 const Tabs = createBottomTabNavigator();
+const MoreStack = createNativeStackNavigator();
 const hiddenTabOptions = {
   tabBarButton: () => null,
   tabBarItemStyle: { display: 'none' as const }
 };
+
+function MoreStackNavigator() {
+  return (
+    <MoreStack.Navigator screenOptions={{ headerShown: false }}>
+      <MoreStack.Screen name="MoreMenu" component={MoreScreen} />
+      <MoreStack.Screen name="ReportProblem" component={ReportProblemScreen} />
+    </MoreStack.Navigator>
+  );
+}
 
 function PortalTabs() {
   return (
@@ -43,9 +55,12 @@ function PortalTabs() {
           paddingBottom: 12,
           borderTopColor: colors.border
         },
+        tabBarActiveBackgroundColor: colors.blueSoft,
         tabBarItemStyle: {
           height: 58,
-          paddingVertical: 2
+          paddingVertical: 2,
+          borderRadius: 12,
+          marginHorizontal: 2
         },
         tabBarLabelStyle: {
           fontSize: 11,
@@ -62,7 +77,7 @@ function PortalTabs() {
       <Tabs.Screen name="Caixa" component={CashBoxScreen} options={{ tabBarIcon: ({ color, size }) => <WalletCards color={color} size={size} /> }} />
       <Tabs.Screen name="Servicos" component={ServicesScreen} options={{ tabBarLabel: 'Serviços', tabBarIcon: ({ color, size }) => <Wrench color={color} size={size} /> }} />
       <Tabs.Screen name="Docs" component={DocumentsScreen} options={{ tabBarIcon: ({ color, size }) => <FileText color={color} size={size} /> }} />
-      <Tabs.Screen name="Mais" component={MoreScreen} options={{ tabBarIcon: ({ color, size }) => <MoreHorizontal color={color} size={size} /> }} />
+      <Tabs.Screen name="Mais" component={MoreStackNavigator} options={{ tabBarIcon: ({ color, size }) => <MoreHorizontal color={color} size={size} /> }} />
       <Tabs.Screen name="Contributions" component={ContributionsScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="PixPayment" component={PixPaymentScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="Expenses" component={ExpensesScreen} options={hiddenTabOptions} />
