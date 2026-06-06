@@ -52,8 +52,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
       await AsyncStorage.removeItem('portal-vila-session');
       setSession(null);
       const next = await api.login(email.trim(), password);
-      setSession(next);
       await AsyncStorage.setItem('portal-vila-session', JSON.stringify(next));
+      setSession(next);
     },
     async logout() {
       setSession(null);

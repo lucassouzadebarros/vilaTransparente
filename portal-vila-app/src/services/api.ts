@@ -17,9 +17,13 @@ import {
   WebhookEvent
 } from '../types';
 
-const webBaseURL = typeof window !== 'undefined' && window.location?.origin
-  ? `${window.location.origin}/api`
-  : 'http://localhost:8080/api';
+const webOrigin = typeof window !== 'undefined' ? window.location?.origin : undefined;
+const isLocalWeb = !!webOrigin && /\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(webOrigin);
+const webBaseURL = isLocalWeb
+  ? 'http://localhost:8080/api'
+  : webOrigin
+    ? `${webOrigin}/api`
+    : 'http://localhost:8080/api';
 const baseURL = process.env.EXPO_PUBLIC_API_URL ?? webBaseURL;
 const publicBaseURL = baseURL.replace(/\/api\/?$/, '');
 
