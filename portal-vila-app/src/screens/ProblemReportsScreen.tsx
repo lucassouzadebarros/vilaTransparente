@@ -17,6 +17,7 @@ import {
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { SoftBackdrop } from '../components/SoftBackdrop';
+import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors } from '../theme';
 import { ProblemReport } from '../types';
@@ -45,6 +46,7 @@ const statusLabels: Record<ProblemReport['status'], string> = {
 
 export function ProblemReportsScreen() {
   const navigation = useNavigation<any>();
+  const { isAdmin } = useAuth();
   const [status, setStatus] = useState('TODOS');
   const [items, setItems] = useState<ProblemReport[]>([]);
   const [loading, setLoading] = useState(false);
@@ -129,7 +131,13 @@ export function ProblemReportsScreen() {
               <ProblemCard
                 key={item.id}
                 item={item}
-                onPress={() => Alert.alert(item.title, item.description || 'Sem descrição informada.')}
+                onPress={() => {
+                  if (isAdmin && item.id) {
+                    navigation.navigate('ReportProblem', { report: item, formKey: Date.now() });
+                    return;
+                  }
+                  Alert.alert(item.title, item.description || 'Sem descrição informada.');
+                }}
               />
             ))
           : null}

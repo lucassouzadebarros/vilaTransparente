@@ -1,16 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import {
   ArrowLeft,
   BrickWall,
   Brush,
   Camera,
+  CheckCircle2,
   ChevronDown,
   CircleAlert,
   CircleArrowDown,
   CircleArrowUp,
   CircleMinus,
+  CircleX,
+  Clock3,
   Droplet,
   Fence,
   FileText,
@@ -28,6 +31,7 @@ import {
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { SoftBackdrop } from '../components/SoftBackdrop';
+import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
 import { ProblemReport } from '../types';
@@ -51,20 +55,57 @@ const priorities = [
   { label: 'Urgente', icon: CircleAlert, color: colors.red }
 ];
 
+const statusOptions: Array<{ value: ProblemReport['status']; label: string; icon: LucideIcon; color: string }> = [
+  { value: 'ABERTO', label: 'Aberto', icon: CircleAlert, color: colors.blue },
+  { value: 'EM_ANALISE', label: 'Em análise', icon: Clock3, color: '#D59A00' },
+  { value: 'RESOLVIDO', label: 'Resolvido', icon: CheckCircle2, color: colors.green },
+  { value: 'CANCELADO', label: 'Cancelado', icon: CircleX, color: colors.red }
+];
+
 export function ReportProblemScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const { isAdmin } = useAuth();
   const { width } = useWindowDimensions();
   const compact = Math.min(width, 430) < 560;
+  const editingReport = route.params?.report as ProblemReport | undefined;
+  const isEditing = Boolean(editingReport?.id);
   const [title, setTitle] = useState('');
   const [location, setLocation] = useState('');
   const [category, setCategory] = useState('Iluminação');
   const [priority, setPriority] = useState('Urgente');
+  const [status, setStatus] = useState<ProblemReport['status']>('ABERTO');
   const [description, setDescription] = useState('');
   const [photoName, setPhotoName] = useState('');
   const [photoPreview, setPhotoPreview] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const canSubmit = Boolean(title.trim() && location.trim() && description.trim() && !saving);
+
+  useEffect(() => {
+    if (editingReport?.id) {
+      setTitle(editingReport.title ?? '');
+      setLocation(editingReport.location ?? '');
+      setCategory(editingReport.category || 'Outro');
+      setPriority(fromProblemPriority(editingReport.priority));
+      setStatus(editingReport.status ?? 'ABERTO');
+      setDescription(editingReport.description ?? '');
+      setPhotoName(editingReport.attachmentName ?? '');
+      setPhotoPreview('');
+      setError('');
+      return;
+    }
+
+    setTitle('');
+    setLocation('');
+    setCategory('Iluminação');
+    setPriority('Urgente');
+    setStatus('ABERTO');
+    setDescription('');
+    setPhotoName('');
+    setPhotoPreview('');
+    setError('');
+  }, [editingReport?.id, route.params?.formKey]);
 
   function selectLocation() {
     const currentIndex = locations.indexOf(location);
@@ -99,26 +140,40 @@ export function ReportProblemScreen() {
     if (saving) {
       return;
     }
+    if (isEditing && !isAdmin) {
+      setError('Apenas o administrador pode editar um relato já cadastrado.');
+      return;
+    }
     if (!canSubmit) {
-      Alert.alert('Relatar problema', 'Informe o título, selecione o local e descreva o problema.');
+      Alert.alert(isEditing ? 'Editar problema' : 'Relatar problema', 'Informe o título, selecione o local e descreva o problema.');
       return;
     }
     setSaving(true);
     setError('');
     try {
-      await api.createProblemReport({
+      const payload: ProblemReport = {
         title: title.trim(),
         location: location.trim(),
         category,
         priority: toProblemPriority(priority),
-        status: 'ABERTO',
+        status: isEditing ? status : 'ABERTO',
         description: description.trim(),
         attachmentName: photoName || null
-      });
-      Alert.alert('Relatar problema', 'Relato cadastrado para acompanhamento no aplicativo.');
+      };
+
+      if (isEditing && editingReport?.id) {
+        await api.updateProblemReport(editingReport.id, payload);
+      } else {
+        await api.createProblemReport(payload);
+      }
+
+      Alert.alert(
+        isEditing ? 'Editar problema' : 'Relatar problema',
+        isEditing ? 'Relato atualizado para acompanhamento no aplicativo.' : 'Relato cadastrado para acompanhamento no aplicativo.'
+      );
       navigation.navigate('ProblemReports', { refreshKey: Date.now() });
     } catch (err) {
-      setError(apiErrorMessage(err, 'Não consegui cadastrar o relato.'));
+      setError(apiErrorMessage(err, isEditing ? 'Não consegui atualizar o relato.' : 'Não consegui cadastrar o relato.'));
     } finally {
       setSaving(false);
     }
@@ -143,8 +198,10 @@ export function ReportProblemScreen() {
             <ArrowLeft color={colors.muted} size={compact ? 22 : 28} />
           </Pressable>
           <View style={styles.formHeaderCopy}>
-            <Text style={[styles.title, compact ? styles.titleCompact : null]}>Relatar problema</Text>
-            <Text style={[styles.subtitle, compact ? styles.subtitleCompact : null]}>Descreva o problema encontrado para a administração analisar.</Text>
+            <Text style={[styles.title, compact ? styles.titleCompact : null]}>{isEditing ? 'Editar problema' : 'Relatar problema'}</Text>
+            <Text style={[styles.subtitle, compact ? styles.subtitleCompact : null]}>
+              {isEditing ? 'Atualize status, prioridade e detalhes para acompanhamento.' : 'Descreva o problema encontrado para a administração analisar.'}
+            </Text>
           </View>
         </View>
 
@@ -166,6 +223,24 @@ export function ReportProblemScreen() {
             <CircleAlert color={colors.red} size={compact ? 20 : 26} />
             <Text style={[styles.errorText, compact ? styles.errorTextCompact : null]}>{error}</Text>
           </View>
+        ) : null}
+
+        {isEditing ? (
+          <FormField label="Status do relato" compact={compact}>
+            <View style={[styles.statusGrid, compact ? styles.chipGridCompact : null]}>
+              {statusOptions.map((item) => (
+                <SelectableChip
+                  key={item.value}
+                  label={item.label}
+                  icon={item.icon}
+                  selected={status === item.value}
+                  color={item.color}
+                  compact={compact}
+                  onPress={() => setStatus(item.value)}
+                />
+              ))}
+            </View>
+          </FormField>
         ) : null}
 
         <FormField label="Local" compact={compact}>
@@ -258,7 +333,9 @@ export function ReportProblemScreen() {
 
         <View style={styles.successBanner}>
           <ShieldCheck color={colors.teal} size={28} />
-          <Text style={[styles.successText, compact ? styles.successTextCompact : null]}>Seu relato será salvo no aplicativo para análise e acompanhamento.</Text>
+          <Text style={[styles.successText, compact ? styles.successTextCompact : null]}>
+            {isEditing ? 'As alterações ficarão disponíveis para acompanhamento no aplicativo.' : 'Seu relato será salvo no aplicativo para análise e acompanhamento.'}
+          </Text>
         </View>
 
         <View style={[styles.footerActions, compact ? styles.footerActionsCompact : null]}>
@@ -267,7 +344,7 @@ export function ReportProblemScreen() {
           </Pressable>
           <Pressable accessibilityRole="button" onPress={submitReport} style={[styles.submitButton, compact ? styles.footerButtonCompact : null, !canSubmit ? styles.submitButtonDisabled : null]}>
             <Send color={colors.surface} size={compact ? 19 : 25} />
-            <Text style={[styles.submitButtonText, compact ? styles.footerButtonTextCompact : null]}>{saving ? 'Salvando...' : 'Enviar relato'}</Text>
+            <Text style={[styles.submitButtonText, compact ? styles.footerButtonTextCompact : null]}>{saving ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Enviar relato'}</Text>
           </Pressable>
         </View>
       </View>
@@ -342,6 +419,19 @@ function toProblemPriority(value: string): ProblemReport['priority'] {
     return 'URGENTE';
   }
   return 'MEDIA';
+}
+
+function fromProblemPriority(value?: ProblemReport['priority']) {
+  if (value === 'BAIXA') {
+    return 'Baixa';
+  }
+  if (value === 'ALTA') {
+    return 'Alta';
+  }
+  if (value === 'URGENTE') {
+    return 'Urgente';
+  }
+  return 'Média';
 }
 
 const styles = StyleSheet.create({
@@ -543,6 +633,11 @@ const styles = StyleSheet.create({
     color: colors.muted
   },
   chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16
+  },
+  statusGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 16
