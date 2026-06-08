@@ -17,6 +17,17 @@ spring:
         format_sql: true
   flyway:
     enabled: true
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:true}
 
 portal:
   seed:
@@ -30,6 +41,8 @@ portal:
   password-reset:
     debug: ${PORTAL_PASSWORD_RESET_DEBUG:false}
     expiration-minutes: ${PORTAL_PASSWORD_RESET_EXPIRATION_MINUTES:15}
+  mail:
+    from: ${MAIL_FROM:${MAIL_USERNAME:}}
   asaas:
     base-url: ${ASAAS_BASE_URL:https://api-sandbox.asaas.com/v3}
     api-key: ${ASAAS_API_KEY:}

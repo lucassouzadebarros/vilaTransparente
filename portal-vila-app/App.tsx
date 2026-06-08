@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Platform, StyleSheet, View } from 'react-native';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
+import { ChangePasswordScreen } from './src/screens/ChangePasswordScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { colors } from './src/theme';
 
@@ -12,7 +13,7 @@ function Entry() {
     <View style={styles.host}>
       <View style={styles.appFrame}>
         <StatusBar style="dark" />
-        {session ? <AppNavigator /> : <LoginScreen />}
+        {session?.mustChangePassword ? <ChangePasswordScreen forced /> : session ? <AppNavigator /> : <LoginScreen />}
       </View>
     </View>
   );

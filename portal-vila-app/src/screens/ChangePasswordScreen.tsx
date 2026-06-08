@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CheckCircle2, Eye, EyeOff, KeyRound, ShieldCheck } from 'lucide-react-native';
 import { Button, Card, Field, Label, Screen, Stack, Value } from '../components/ui';
+import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
 
-export function ChangePasswordScreen() {
+export function ChangePasswordScreen({ forced = false }: { forced?: boolean } = {}) {
+  const { markPasswordChanged } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -21,7 +23,7 @@ export function ChangePasswordScreen() {
 
   async function submit() {
     if (!currentPassword) {
-      setMessage({ type: 'error', text: 'Informe sua senha atual.' });
+      setMessage({ type: 'error', text: forced ? 'Informe a senha temporaria recebida por e-mail.' : 'Informe sua senha atual.' });
       return;
     }
     if (newPassword.length < 6) {
@@ -29,7 +31,7 @@ export function ChangePasswordScreen() {
       return;
     }
     if (newPassword !== confirmPassword) {
-      setMessage({ type: 'error', text: 'As senhas não conferem.' });
+      setMessage({ type: 'error', text: 'As senhas nao conferem.' });
       return;
     }
 
@@ -41,9 +43,10 @@ export function ChangePasswordScreen() {
       setNewPassword('');
       setConfirmPassword('');
       setMessage({ type: 'success', text: response.message });
+      await markPasswordChanged();
       Alert.alert('Alterar senha', response.message);
     } catch (error) {
-      const text = apiErrorMessage(error, 'Não consegui alterar a senha. Confira os dados e tente novamente.');
+      const text = apiErrorMessage(error, 'Nao consegui alterar a senha. Confira os dados e tente novamente.');
       setMessage({ type: 'error', text });
       Alert.alert('Alterar senha', text);
     } finally {
@@ -52,14 +55,18 @@ export function ChangePasswordScreen() {
   }
 
   return (
-    <Screen title="Alterar senha" subtitle="Segurança da conta">
+    <Screen title="Alterar senha" subtitle={forced ? 'Cadastre sua senha definitiva' : 'Seguranca da conta'}>
       <Card style={styles.heroCard}>
         <View style={styles.heroIcon}>
           <KeyRound color={colors.blue} size={24} />
         </View>
         <View style={styles.heroCopy}>
-          <Value>Senha de acesso</Value>
-          <Label>Atualize sua senha para manter sua conta protegida.</Label>
+          <Value>{forced ? 'Troca obrigatoria' : 'Senha de acesso'}</Value>
+          <Label>
+            {forced
+              ? 'Use a senha temporaria recebida por e-mail e escolha uma nova senha.'
+              : 'Atualize sua senha para manter sua conta protegida.'}
+          </Label>
         </View>
       </Card>
 
@@ -73,7 +80,7 @@ export function ChangePasswordScreen() {
           ) : null}
 
           <Field
-            label="Senha atual"
+            label={forced ? 'Senha temporaria' : 'Senha atual'}
             value={currentPassword}
             onChangeText={(value) => {
               setCurrentPassword(value);
@@ -97,7 +104,7 @@ export function ChangePasswordScreen() {
             }}
             secureTextEntry={!showNew}
             errorText={newPasswordError}
-            helpText="Mínimo de 6 caracteres."
+            helpText="Minimo de 6 caracteres."
             right={
               <PasswordToggle
                 visible={showNew}
@@ -119,7 +126,7 @@ export function ChangePasswordScreen() {
               <PasswordToggle
                 visible={showConfirm}
                 onPress={() => setShowConfirm((current) => !current)}
-                label={showConfirm ? 'Ocultar confirmação' : 'Mostrar confirmação'}
+                label={showConfirm ? 'Ocultar confirmacao' : 'Mostrar confirmacao'}
               />
             }
           />
@@ -155,7 +162,7 @@ function confirmPasswordFieldError(password: string, confirmation: string) {
   if (!confirmation) {
     return '';
   }
-  return password === confirmation ? '' : 'As senhas não conferem.';
+  return password === confirmation ? '' : 'As senhas nao conferem.';
 }
 
 const styles = StyleSheet.create({

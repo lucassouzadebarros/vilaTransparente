@@ -12,14 +12,18 @@ import java.time.LocalDateTime;
 
 @Service
 class PasswordResetService {
-    private static final String RESET_SENT_MESSAGE = "Se o e-mail estiver cadastrado, enviaremos um código para alterar sua senha.";
+    private static final String RESET_SENT_MESSAGE = "Se o e-mail estiver cadastrado, enviaremos uma senha temporaria para acesso.";
+    private static final String RESET_DEBUG_MESSAGE = "Senha temporaria gerada. Use-a para entrar e cadastrar uma nova senha.";
     private static final String RESET_CONFIRMED_MESSAGE = "Senha alterada com sucesso. Entre novamente com a nova senha.";
     private static final String CHANGE_CONFIRMED_MESSAGE = "Senha alterada com sucesso.";
+    private static final String EMAIL_NOT_CONFIGURED_MESSAGE = "Envio de e-mail nao configurado. Fale com a administracao para recuperar a senha.";
     private static final int MAX_ATTEMPTS = 5;
+    private static final String TEMP_PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 
     private final AppUserRepository users;
     private final PasswordResetCodeRepository resetCodes;
     private final PasswordEncoder passwordEncoder;
+    private final PasswordEmailService passwordEmailService;
     private final SecureRandom random = new SecureRandom();
     private final boolean debugCodeEnabled;
     private final long expirationMinutes;
@@ -28,12 +32,14 @@ class PasswordResetService {
         AppUserRepository users,
         PasswordResetCodeRepository resetCodes,
         PasswordEncoder passwordEncoder,
+        PasswordEmailService passwordEmailService,
         @Value("${portal.password-reset.debug:false}") boolean debugCodeEnabled,
         @Value("${portal.password-reset.expiration-minutes:15}") long expirationMinutes
     ) {
         this.users = users;
         this.resetCodes = resetCodes;
         this.passwordEncoder = passwordEncoder;
+        this.passwordEmailService = passwordEmailService;
         this.debugCodeEnabled = debugCodeEnabled;
         this.expirationMinutes = expirationMinutes;
     }
@@ -51,7 +57,7 @@ class PasswordResetService {
     PasswordResetResponse requestResetForResident(Long residentId) {
         AppUser user = users.findByResidentId(residentId)
             .filter(candidate -> candidate.active)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Morador ativo não possui usuário de acesso."));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Morador ativo nao possui usuario de acesso."));
         return createResetForUser(user, true);
     }
 
@@ -78,6 +84,7 @@ class PasswordResetService {
         }
 
         user.passwordHash = passwordEncoder.encode(request.password());
+        user.mustChangePassword = false;
         users.save(user);
         resetCode.usedAt = LocalDateTime.now();
         resetCodes.save(resetCode);
@@ -94,21 +101,25 @@ class PasswordResetService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A nova senha precisa ser diferente da senha atual.");
         }
         user.passwordHash = passwordEncoder.encode(request.newPassword());
+        user.mustChangePassword = false;
         users.save(user);
         return new PasswordResetResponse(CHANGE_CONFIRMED_MESSAGE, null);
     }
 
-    private PasswordResetResponse createResetForUser(AppUser user, boolean includeCodeInResponse) {
-        String code = nextCode();
-        PasswordResetCode resetCode = new PasswordResetCode();
-        resetCode.userId = user.id;
-        resetCode.codeHash = passwordEncoder.encode(code);
-        resetCode.expiresAt = LocalDateTime.now().plusMinutes(expirationMinutes);
-        resetCodes.save(resetCode);
+    private PasswordResetResponse createResetForUser(AppUser user, boolean includePasswordInResponse) {
+        String temporaryPassword = nextTemporaryPassword();
+        boolean mayReturnPassword = includePasswordInResponse || debugCodeEnabled;
+        boolean sentByEmail = passwordEmailService.sendTemporaryPassword(user, temporaryPassword);
+        if (!sentByEmail && !mayReturnPassword) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, EMAIL_NOT_CONFIGURED_MESSAGE);
+        }
 
-        // Until an email/SMS provider is configured, this keeps admin-assisted resets possible.
-        String debugCode = includeCodeInResponse ? code : null;
-        return new PasswordResetResponse(RESET_SENT_MESSAGE, debugCode);
+        user.passwordHash = passwordEncoder.encode(temporaryPassword);
+        user.mustChangePassword = true;
+        users.save(user);
+
+        String debugCode = mayReturnPassword ? temporaryPassword : null;
+        return new PasswordResetResponse(sentByEmail ? RESET_SENT_MESSAGE : RESET_DEBUG_MESSAGE, debugCode);
     }
 
     private boolean usable(PasswordResetCode resetCode) {
@@ -123,8 +134,12 @@ class PasswordResetService {
         }
     }
 
-    private String nextCode() {
-        return String.format("%06d", random.nextInt(1_000_000));
+    private String nextTemporaryPassword() {
+        StringBuilder password = new StringBuilder();
+        for (int i = 0; i < 10; i++) {
+            password.append(TEMP_PASSWORD_CHARS.charAt(random.nextInt(TEMP_PASSWORD_CHARS.length())));
+        }
+        return password.toString();
     }
 
     private String onlyDigits(String value) {
@@ -136,6 +151,6 @@ class PasswordResetService {
     }
 
     private ResponseStatusException invalidCode() {
-        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "Código inválido ou expirado.");
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "Codigo invalido ou expirado.");
     }
 }

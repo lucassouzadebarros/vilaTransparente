@@ -30,6 +30,9 @@ public class AppUser {
     public boolean active = true;
 
     @Column(nullable = false)
+    public boolean mustChangePassword = false;
+
+    @Column(nullable = false)
     public LocalDateTime createdAt = LocalDateTime.now();
 
     public AppUser() {

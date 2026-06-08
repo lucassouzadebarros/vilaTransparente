@@ -7,6 +7,7 @@ type AuthContextValue = {
   session: Session | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  markPasswordChanged: () => Promise<void>;
   isAdmin: boolean;
 };
 
@@ -58,6 +59,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
     async logout() {
       setSession(null);
       await AsyncStorage.removeItem('portal-vila-session');
+    },
+    async markPasswordChanged() {
+      if (!session) {
+        return;
+      }
+      const next = { ...session, mustChangePassword: false };
+      await AsyncStorage.setItem('portal-vila-session', JSON.stringify(next));
+      setSession(next);
     }
   }), [session]);
 

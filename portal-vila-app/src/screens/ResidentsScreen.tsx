@@ -117,7 +117,7 @@ export function ResidentsScreen() {
   function confirmPasswordReset(item: Resident) {
     Alert.alert(
       'Redefinir senha',
-      `Enviar um código de redefinição para ${item.name}?`,
+      `Enviar uma senha temporária para ${item.name}?`,
       [
         { text: 'Cancelar', style: 'cancel' },
         { text: 'Enviar', onPress: () => sendPasswordReset(item) }
@@ -134,7 +134,7 @@ export function ResidentsScreen() {
     try {
       const response = await api.requestResidentPasswordReset(item.id);
       const text = response.debugCode
-        ? `${response.message} Código de teste: ${response.debugCode}`
+        ? `${response.message} Senha temporária de teste: ${response.debugCode}`
         : response.message;
       setMessage({ residentId: item.id, type: 'success', text });
       Alert.alert('Redefinição de senha', text);
@@ -248,7 +248,7 @@ export function ResidentsScreen() {
                 onPress={() => startEdit(item)}
               />
               <Button
-                title={resettingPasswordId === item.id ? 'Enviando...' : 'Enviar redefinição de senha'}
+                title={resettingPasswordId === item.id ? 'Enviando...' : 'Enviar senha temporária'}
                 icon={KeyRound}
                 variant="ghost"
                 onPress={() => confirmPasswordReset(item)}

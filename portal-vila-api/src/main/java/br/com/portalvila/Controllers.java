@@ -67,7 +67,7 @@ class AuthController {
             .filter(u -> u.active)
             .filter(u -> passwordEncoder.matches(request.password(), u.passwordHash))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciais inválidas."));
-        return new LoginResponse(jwtService.issue(user), user.name, user.email, user.role, user.residentId);
+        return new LoginResponse(jwtService.issue(user), user.name, user.email, user.role, user.residentId, user.mustChangePassword);
     }
 
     @PostMapping("/password-reset/request")

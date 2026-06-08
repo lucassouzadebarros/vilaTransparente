@@ -6,6 +6,7 @@ export type Session = {
   email: string;
   role: Role;
   residentId?: number | null;
+  mustChangePassword?: boolean;
 };
 
 export type PasswordResetResponse = {

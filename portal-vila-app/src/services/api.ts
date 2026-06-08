@@ -29,7 +29,31 @@ const publicBaseURL = baseURL.replace(/\/api\/?$/, '');
 
 export const apiClient = axios.create({ baseURL, timeout: 20000 });
 
+const publicRequestPaths = new Set([
+  '/auth/login',
+  '/auth/register-resident',
+  '/auth/password-reset/request',
+  '/auth/password-reset/confirm',
+  '/residents/registration-houses'
+]);
+
+function isPublicRequest(url?: string) {
+  if (!url) {
+    return false;
+  }
+  try {
+    const path = url.startsWith('http') ? new URL(url).pathname.replace(/^\/api/, '') : url.split('?')[0];
+    return publicRequestPaths.has(path);
+  } catch {
+    return false;
+  }
+}
+
 apiClient.interceptors.request.use(async (config) => {
+  if (isPublicRequest(config.url)) {
+    delete config.headers.Authorization;
+    return config;
+  }
   const raw = await AsyncStorage.getItem('portal-vila-session');
   if (raw) {
     try {

@@ -12,7 +12,7 @@ import java.util.List;
 record LoginRequest(@NotBlank String email, @NotBlank String password) {
 }
 
-record LoginResponse(String token, String name, String email, String role, Long residentId) {
+record LoginResponse(String token, String name, String email, String role, Long residentId, boolean mustChangePassword) {
 }
 
 record PasswordResetRequest(@NotBlank String email) {
