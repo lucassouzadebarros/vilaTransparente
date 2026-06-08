@@ -20,7 +20,7 @@ class DataSeeder implements CommandLineRunner {
 
     DataSeeder(
         @Value("${portal.seed.enabled:true}") boolean enabled,
-        @Value("${portal.admin.email:admin@vila.com}") String adminEmail,
+        @Value("${portal.admin.email:ubaldinajacare207@gmail.com}") String adminEmail,
         @Value("${portal.admin.password:123456}") String adminPassword,
         HouseRepository houses,
         AppUserRepository users,

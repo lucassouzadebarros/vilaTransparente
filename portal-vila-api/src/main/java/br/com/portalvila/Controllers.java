@@ -23,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
@@ -594,6 +595,100 @@ class DocumentController {
             .contentType(type)
             .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
             .body(resource);
+    }
+}
+
+@RestController
+@CrossOrigin
+@RequestMapping("/api/problem-reports")
+class ProblemReportController {
+    private final ProblemReportRepository reports;
+    private final ResidentRepository residents;
+    private final CurrentUserService currentUser;
+
+    ProblemReportController(ProblemReportRepository reports, ResidentRepository residents, CurrentUserService currentUser) {
+        this.reports = reports;
+        this.residents = residents;
+        this.currentUser = currentUser;
+    }
+
+    @GetMapping
+    List<ProblemReport> list(@RequestParam(required = false) String status) {
+        if (status != null && !status.isBlank()) {
+            return reports.findByStatusOrderByCreatedAtDesc(status);
+        }
+        return reports.findAllByOrderByCreatedAtDesc();
+    }
+
+    @PostMapping
+    ProblemReport create(@RequestBody ProblemReport incoming) {
+        validate(incoming);
+        AppUser user = currentUser.current();
+        ProblemReport report = new ProblemReport();
+        report.title = incoming.title.trim();
+        report.location = incoming.location.trim();
+        report.category = incoming.category == null || incoming.category.isBlank() ? "Outro" : incoming.category.trim();
+        report.priority = normalizePriority(incoming.priority);
+        report.status = "ABERTO";
+        report.description = incoming.description.trim();
+        report.attachmentName = incoming.attachmentName == null || incoming.attachmentName.isBlank() ? null : incoming.attachmentName.trim();
+        report.createdBy = user.id;
+        if (user.residentId != null) {
+            Resident resident = residents.findById(user.residentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Morador nÃ£o encontrado."));
+            report.residentId = resident.id;
+            report.houseId = resident.houseId;
+        }
+        report.createdAt = LocalDateTime.now();
+        report.updatedAt = LocalDateTime.now();
+        return reports.save(report);
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    ProblemReport update(@PathVariable Long id, @RequestBody ProblemReport incoming) {
+        ProblemReport report = reports.findById(id).orElseThrow();
+        validate(incoming);
+        report.title = incoming.title.trim();
+        report.location = incoming.location.trim();
+        report.category = incoming.category == null || incoming.category.isBlank() ? "Outro" : incoming.category.trim();
+        report.priority = normalizePriority(incoming.priority);
+        report.status = normalizeStatus(incoming.status);
+        report.description = incoming.description.trim();
+        report.attachmentName = incoming.attachmentName == null || incoming.attachmentName.isBlank() ? null : incoming.attachmentName.trim();
+        report.updatedAt = LocalDateTime.now();
+        return reports.save(report);
+    }
+
+    private void validate(ProblemReport report) {
+        if (report == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dados do relato obrigatÃ³rios.");
+        }
+        if (report.title == null || report.title.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TÃ­tulo do problema obrigatÃ³rio.");
+        }
+        if (report.location == null || report.location.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Local obrigatÃ³rio.");
+        }
+        if (report.description == null || report.description.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "DescriÃ§Ã£o obrigatÃ³ria.");
+        }
+    }
+
+    private String normalizePriority(String value) {
+        String normalized = value == null ? "" : value.trim().toUpperCase();
+        return switch (normalized) {
+            case "BAIXA", "MEDIA", "ALTA", "URGENTE" -> normalized;
+            default -> "MEDIA";
+        };
+    }
+
+    private String normalizeStatus(String value) {
+        String normalized = value == null ? "" : value.trim().toUpperCase();
+        return switch (normalized) {
+            case "ABERTO", "EM_ANALISE", "RESOLVIDO", "CANCELADO" -> normalized;
+            default -> "ABERTO";
+        };
     }
 }
 

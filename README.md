@@ -9,7 +9,7 @@ Sistema criado a partir do PDF `portal_da_vila_react_native_pix_asaas_pagamento_
 
 ## Credenciais seed
 
-- Admin: `admin@vila.com` / `123456`
+- Admin: `ubaldinajacare207@gmail.com` / `123456`
 - Morador: `morador@vila.com` / `123456`
 
 ## Execucao rapida

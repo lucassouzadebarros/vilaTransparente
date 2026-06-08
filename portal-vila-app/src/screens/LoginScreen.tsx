@@ -371,7 +371,7 @@ export function LoginScreen() {
                 <Text style={styles.supportTitle}>Suporte e acesso administrativo</Text>
               </View>
               <View style={styles.supportActionsModern}>
-                <LoginGhostButton title="Preencher admin" icon={ShieldCheck} onPress={() => { setEmail('admin@vila.com'); setPassword('123456'); setErrorMessage(''); }} compact />
+                <LoginGhostButton title="Preencher admin" icon={ShieldCheck} onPress={() => { setEmail('ubaldinajacare207@gmail.com'); setPassword('123456'); setErrorMessage(''); }} compact />
                 <LoginGhostButton title="Limpar sessão" icon={Trash2} onPress={clearSession} compact />
               </View>
             </Card>

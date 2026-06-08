@@ -62,3 +62,8 @@ interface BudgetRepository extends JpaRepository<Budget, Long> {
 interface PortalDocumentRepository extends JpaRepository<PortalDocument, Long> {
     List<PortalDocument> findByRelatedTypeAndRelatedIdOrderByCreatedAtDesc(String relatedType, Long relatedId);
 }
+
+interface ProblemReportRepository extends JpaRepository<ProblemReport, Long> {
+    List<ProblemReport> findAllByOrderByCreatedAtDesc();
+    List<ProblemReport> findByStatusOrderByCreatedAtDesc(String status);
+}

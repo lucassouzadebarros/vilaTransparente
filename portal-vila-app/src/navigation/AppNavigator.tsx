@@ -16,6 +16,7 @@ import { FinishServiceScreen } from '../screens/FinishServiceScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { MoreScreen } from '../screens/MoreScreen';
 import { PixPaymentScreen } from '../screens/PixPaymentScreen';
+import { ProblemReportsScreen } from '../screens/ProblemReportsScreen';
 import { ReleaseHouseScreen } from '../screens/ReleaseHouseScreen';
 import { ReportProblemScreen } from '../screens/ReportProblemScreen';
 import { ReportsScreen } from '../screens/ReportsScreen';
@@ -37,6 +38,7 @@ function MoreStackNavigator() {
   return (
     <MoreStack.Navigator screenOptions={{ headerShown: false }}>
       <MoreStack.Screen name="MoreMenu" component={MoreScreen} />
+      <MoreStack.Screen name="ProblemReports" component={ProblemReportsScreen} />
       <MoreStack.Screen name="ReportProblem" component={ReportProblemScreen} />
     </MoreStack.Navigator>
   );

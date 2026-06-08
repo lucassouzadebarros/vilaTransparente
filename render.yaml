@@ -12,7 +12,7 @@ services:
       - key: PORTAL_SEED_ENABLED
         value: "true"
       - key: PORTAL_ADMIN_EMAIL
-        value: admin@vila.com
+        value: ubaldinajacare207@gmail.com
       - key: PORTAL_ADMIN_PASSWORD
         sync: false
       - key: JWT_SECRET

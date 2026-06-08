@@ -84,7 +84,7 @@ Eventos recomendados:
 Entre no front e use:
 
 ```text
-Email: admin@vila.com
+Email: ubaldinajacare207@gmail.com
 Senha: valor definido em PORTAL_ADMIN_PASSWORD
 ```
 

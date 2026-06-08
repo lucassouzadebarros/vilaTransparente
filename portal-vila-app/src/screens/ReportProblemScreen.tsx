@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
+import { useState } from 'react';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import {
   ArrowLeft,
@@ -29,8 +28,9 @@ import {
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { SoftBackdrop } from '../components/SoftBackdrop';
-import { useAuth } from '../context/AuthContext';
+import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
+import { ProblemReport } from '../types';
 
 const locations = ['Portão', 'Interfone', 'Corredor', 'Garagem', 'Área comum', 'Outro'];
 
@@ -53,7 +53,6 @@ const priorities = [
 
 export function ReportProblemScreen() {
   const navigation = useNavigation<any>();
-  const { session } = useAuth();
   const { width } = useWindowDimensions();
   const compact = Math.min(width, 430) < 560;
   const [title, setTitle] = useState('');
@@ -63,22 +62,9 @@ export function ReportProblemScreen() {
   const [description, setDescription] = useState('');
   const [photoName, setPhotoName] = useState('');
   const [photoPreview, setPhotoPreview] = useState('');
-
-  const reportText = useMemo(
-    () =>
-      buildReport({
-        title,
-        location,
-        category,
-        priority,
-        description,
-        photoName,
-        sessionName: session?.name,
-        sessionEmail: session?.email
-      }),
-    [category, description, location, photoName, priority, session?.email, session?.name, title]
-  );
-  const canSubmit = Boolean(title.trim() && location.trim() && description.trim());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const canSubmit = Boolean(title.trim() && location.trim() && description.trim() && !saving);
 
   function selectLocation() {
     const currentIndex = locations.indexOf(location);
@@ -109,24 +95,33 @@ export function ReportProblemScreen() {
     input.click();
   }
 
-  async function copyReport() {
-    await Clipboard.setStringAsync(reportText);
-    Alert.alert('Relatar problema', 'Relato copiado. Você pode enviar pelo WhatsApp, e-mail ou outro canal.');
-  }
-
   async function submitReport() {
+    if (saving) {
+      return;
+    }
     if (!canSubmit) {
       Alert.alert('Relatar problema', 'Informe o título, selecione o local e descreva o problema.');
       return;
     }
-
-    const url = `mailto:?subject=${encodeURIComponent(`[Portal da Vila] ${title.trim()}`)}&body=${encodeURIComponent(reportText)}`;
-    const supported = await Linking.canOpenURL(url);
-    if (supported) {
-      await Linking.openURL(url);
-      return;
+    setSaving(true);
+    setError('');
+    try {
+      await api.createProblemReport({
+        title: title.trim(),
+        location: location.trim(),
+        category,
+        priority: toProblemPriority(priority),
+        status: 'ABERTO',
+        description: description.trim(),
+        attachmentName: photoName || null
+      });
+      Alert.alert('Relatar problema', 'Relato cadastrado para acompanhamento no aplicativo.');
+      navigation.navigate('ProblemReports', { refreshKey: Date.now() });
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Não consegui cadastrar o relato.'));
+    } finally {
+      setSaving(false);
     }
-    await copyReport();
   }
 
   function returnToMenu() {
@@ -134,7 +129,7 @@ export function ReportProblemScreen() {
       navigation.goBack();
       return;
     }
-    navigation.navigate('Mais');
+    navigation.navigate('ProblemReports');
   }
 
   return (
@@ -165,6 +160,13 @@ export function ReportProblemScreen() {
             />
           </View>
         </FormField>
+
+        {error ? (
+          <View style={styles.errorBanner}>
+            <CircleAlert color={colors.red} size={compact ? 20 : 26} />
+            <Text style={[styles.errorText, compact ? styles.errorTextCompact : null]}>{error}</Text>
+          </View>
+        ) : null}
 
         <FormField label="Local" compact={compact}>
           <Pressable accessibilityRole="button" onPress={selectLocation} style={[styles.inputFrame, compact ? styles.inputFrameCompact : null]}>
@@ -256,7 +258,7 @@ export function ReportProblemScreen() {
 
         <View style={styles.successBanner}>
           <ShieldCheck color={colors.teal} size={28} />
-          <Text style={[styles.successText, compact ? styles.successTextCompact : null]}>Seu relato será enviado para análise da administração.</Text>
+          <Text style={[styles.successText, compact ? styles.successTextCompact : null]}>Seu relato será salvo no aplicativo para análise e acompanhamento.</Text>
         </View>
 
         <View style={[styles.footerActions, compact ? styles.footerActionsCompact : null]}>
@@ -265,7 +267,7 @@ export function ReportProblemScreen() {
           </Pressable>
           <Pressable accessibilityRole="button" onPress={submitReport} style={[styles.submitButton, compact ? styles.footerButtonCompact : null, !canSubmit ? styles.submitButtonDisabled : null]}>
             <Send color={colors.surface} size={compact ? 19 : 25} />
-            <Text style={[styles.submitButtonText, compact ? styles.footerButtonTextCompact : null]}>Enviar relato</Text>
+            <Text style={[styles.submitButtonText, compact ? styles.footerButtonTextCompact : null]}>{saving ? 'Salvando...' : 'Enviar relato'}</Text>
           </Pressable>
         </View>
       </View>
@@ -329,39 +331,17 @@ function SelectableChip({
   );
 }
 
-function buildReport({
-  title,
-  location,
-  category,
-  priority,
-  description,
-  photoName,
-  sessionName,
-  sessionEmail
-}: {
-  title: string;
-  location: string;
-  category: string;
-  priority: string;
-  description: string;
-  photoName: string;
-  sessionName?: string;
-  sessionEmail?: string;
-}) {
-  return [
-    'Relato - Portal da Vila',
-    '',
-    `Título: ${title.trim() || '-'}`,
-    `Local: ${location || '-'}`,
-    `Categoria: ${category}`,
-    `Prioridade: ${priority}`,
-    `Descrição: ${description.trim() || '-'}`,
-    `Anexo: ${photoName || '-'}`,
-    '',
-    `Usuário logado: ${sessionName || '-'}`,
-    `E-mail da sessão: ${sessionEmail || '-'}`,
-    `Data/Hora: ${new Date().toLocaleString('pt-BR')}`
-  ].join('\n');
+function toProblemPriority(value: string): ProblemReport['priority'] {
+  if (value === 'Baixa') {
+    return 'BAIXA';
+  }
+  if (value === 'Alta') {
+    return 'ALTA';
+  }
+  if (value === 'Urgente') {
+    return 'URGENTE';
+  }
+  return 'MEDIA';
 }
 
 const styles = StyleSheet.create({
@@ -786,6 +766,29 @@ const styles = StyleSheet.create({
   successTextCompact: {
     fontSize: 13,
     lineHeight: 18
+  },
+  errorBanner: {
+    minHeight: 58,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.red,
+    backgroundColor: colors.redSoft,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10
+  },
+  errorText: {
+    flex: 1,
+    color: colors.red,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '800'
+  },
+  errorTextCompact: {
+    fontSize: 12,
+    lineHeight: 16
   },
   footerActions: {
     flexDirection: 'row',

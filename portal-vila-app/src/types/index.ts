@@ -115,6 +115,22 @@ export type Budget = {
   notes?: string;
 };
 
+export type ProblemReport = {
+  id?: number;
+  title: string;
+  location: string;
+  category: string;
+  priority: 'BAIXA' | 'MEDIA' | 'ALTA' | 'URGENTE';
+  status: 'ABERTO' | 'EM_ANALISE' | 'RESOLVIDO' | 'CANCELADO';
+  description: string;
+  attachmentName?: string | null;
+  residentId?: number | null;
+  houseId?: number | null;
+  createdBy?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type PortalDocument = {
   id?: number;
   name: string;

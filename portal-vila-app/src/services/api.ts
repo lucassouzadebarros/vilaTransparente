@@ -8,6 +8,7 @@ import {
   PasswordResetResponse,
   PixCharge,
   PortalDocument,
+  ProblemReport,
   RegistrationHouseOption,
   Resident,
   ResidentRegistration,
@@ -160,6 +161,9 @@ export const api = {
   updateBudget: (id: number, budget: Budget) => requestData<Budget>(apiClient.put(`/budgets/${id}`, budget)),
   approveBudget: (id: number) => requestData<Budget>(apiClient.post(`/budgets/${id}/approve`)),
   rejectBudget: (id: number) => requestData<Budget>(apiClient.post(`/budgets/${id}/reject`)),
+  problemReports: (status?: string) => requestData<ProblemReport[]>(apiClient.get('/problem-reports', { params: status ? { status } : {} })),
+  createProblemReport: (report: ProblemReport) => requestData<ProblemReport>(apiClient.post('/problem-reports', report)),
+  updateProblemReport: (id: number, report: ProblemReport) => requestData<ProblemReport>(apiClient.put(`/problem-reports/${id}`, report)),
   documents: (relatedType?: string, relatedId?: number) => requestData<PortalDocument[]>(
     apiClient.get('/documents', { params: relatedType && relatedId ? { relatedType, relatedId } : {} })
   ),

@@ -91,7 +91,7 @@ const menuItems: MenuItem[] = [
     title: 'Relatar problema',
     description: 'Informe um problema ou envie um feedback.',
     icon: AlertTriangle,
-    route: 'ReportProblem',
+    route: 'ProblemReports',
     danger: true
   },
   {

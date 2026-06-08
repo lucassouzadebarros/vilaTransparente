@@ -33,7 +33,7 @@ portal:
   seed:
     enabled: ${PORTAL_SEED_ENABLED:true}
   admin:
-    email: ${PORTAL_ADMIN_EMAIL:admin@vila.com}
+    email: ${PORTAL_ADMIN_EMAIL:ubaldinajacare207@gmail.com}
     password: ${PORTAL_ADMIN_PASSWORD:123456}
   jwt:
     secret: ${JWT_SECRET:portal-vila-dev-secret-with-32-chars-minimum}
