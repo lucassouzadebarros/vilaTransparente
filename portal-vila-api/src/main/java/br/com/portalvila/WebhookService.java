@@ -10,12 +10,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.util.List;
+import java.util.Objects;
 
 @Service
 class WebhookService {
     private final ObjectMapper objectMapper;
     private final WebhookEventRepository events;
     private final PixChargeRepository pixCharges;
+    private final DirectReceiptRepository directReceipts;
     private final ContributionRepository contributions;
     private final HouseRepository houses;
     private final ResidentRepository residents;
@@ -28,6 +32,7 @@ class WebhookService {
         ObjectMapper objectMapper,
         WebhookEventRepository events,
         PixChargeRepository pixCharges,
+        DirectReceiptRepository directReceipts,
         ContributionRepository contributions,
         HouseRepository houses,
         ResidentRepository residents,
@@ -39,6 +44,7 @@ class WebhookService {
         this.objectMapper = objectMapper;
         this.events = events;
         this.pixCharges = pixCharges;
+        this.directReceipts = directReceipts;
         this.contributions = contributions;
         this.houses = houses;
         this.residents = residents;
@@ -104,8 +110,9 @@ class WebhookService {
         if (charge == null) {
             charge = createLocalChargeFromPayment(gatewayPaymentId, payment);
             if (charge == null) {
-                return false;
+                return upsertDirectReceipt(eventType, gatewayPaymentId, payment);
             }
+            markDirectReceiptLinked(gatewayPaymentId);
         }
         Contribution contribution = contributions.findById(charge.contributionId).orElseThrow();
 
@@ -212,6 +219,56 @@ class WebhookService {
         return pixCharges.save(charge);
     }
 
+    private boolean upsertDirectReceipt(String eventType, String gatewayPaymentId, JsonNode payment) {
+        if (!isDirectReceiptCandidate(payment)) {
+            return false;
+        }
+        DirectReceipt receipt = directReceipts.findByGatewayAndGatewayPaymentId("ASAAS", gatewayPaymentId).orElse(null);
+        boolean created = false;
+        if (receipt == null) {
+            receipt = new DirectReceipt();
+            receipt.gateway = "ASAAS";
+            receipt.gatewayPaymentId = gatewayPaymentId;
+            receipt.createdAt = LocalDateTime.now();
+            created = true;
+        }
+
+        String previousStatus = receipt.status;
+        BigDecimal previousAmount = receipt.amount;
+        LocalDateTime previousReceivedAt = receipt.receivedAt;
+        String previousReceiptUrl = receipt.receiptUrl;
+        String previousDescription = receipt.description;
+
+        LocalDateTime receivedAt = directReceiptDate(payment);
+        String description = directReceiptDescription(payment);
+        receipt.externalReference = text(payment, "externalReference");
+        receipt.category = "RECEBIMENTO_DIRETO";
+        receipt.description = description;
+        receipt.amount = decimal(payment, "value", BigDecimal.ZERO);
+        receipt.receivedAt = receivedAt;
+        receipt.referenceMonth = YearMonth.from(receivedAt).toString();
+        receipt.status = directReceiptStatus(eventType, payment);
+        receipt.receiptUrl = text(payment, "transactionReceiptUrl");
+        receipt.payloadJson = write(payment);
+        receipt.updatedAt = LocalDateTime.now();
+        directReceipts.save(receipt);
+
+        return created
+            || !Objects.equals(previousStatus, receipt.status)
+            || !Objects.equals(previousAmount, receipt.amount)
+            || !Objects.equals(previousReceivedAt, receipt.receivedAt)
+            || !Objects.equals(previousReceiptUrl, receipt.receiptUrl)
+            || !Objects.equals(previousDescription, receipt.description);
+    }
+
+    private void markDirectReceiptLinked(String gatewayPaymentId) {
+        directReceipts.findByGatewayAndGatewayPaymentId("ASAAS", gatewayPaymentId).ifPresent(receipt -> {
+            receipt.status = "LINKED";
+            receipt.updatedAt = LocalDateTime.now();
+            directReceipts.save(receipt);
+        });
+    }
+
     private Resident residentFromPayment(JsonNode payment) {
         House house = houseFromExternalReference(text(payment, "externalReference"));
         if (house != null) {
@@ -292,6 +349,47 @@ class WebhookService {
         contribution.updatedAt = LocalDateTime.now();
         pixCharges.save(charge);
         contributions.save(contribution);
+    }
+
+    private boolean isDirectReceiptCandidate(JsonNode payment) {
+        String billingType = text(payment, "billingType");
+        return billingType == null || billingType.isBlank() || "PIX".equalsIgnoreCase(billingType);
+    }
+
+    private String directReceiptStatus(String eventType, JsonNode payment) {
+        if ("PAYMENT_RECEIVED".equals(eventType) || "PAYMENT_CONFIRMED".equals(eventType)) {
+            return "PAID";
+        }
+        if ("PAYMENT_DELETED".equals(eventType)) {
+            return "CANCELLED";
+        }
+        return normalizeGatewayStatus(text(payment, "status"));
+    }
+
+    private LocalDateTime directReceiptDate(JsonNode payment) {
+        for (String field : List.of("confirmedDate", "clientPaymentDate", "paymentDate", "creditDate", "dateCreated", "dueDate")) {
+            String value = text(payment, field);
+            if (value != null && !value.isBlank()) {
+                return parseGatewayDate(value);
+            }
+        }
+        return LocalDateTime.now();
+    }
+
+    private LocalDateTime parseGatewayDate(String value) {
+        String date = value.length() >= 10 ? value.substring(0, 10) : value;
+        return LocalDate.parse(date).atStartOfDay();
+    }
+
+    private String directReceiptDescription(JsonNode payment) {
+        String description = text(payment, "description");
+        if (description == null || description.isBlank()) {
+            return "Recebimento direto via Asaas";
+        }
+        if (description.toLowerCase().contains("caixinha da vila")) {
+            return "Recebimento direto via Asaas";
+        }
+        return "Recebimento direto - " + description;
     }
 
     private String normalizeGatewayStatus(String status) {

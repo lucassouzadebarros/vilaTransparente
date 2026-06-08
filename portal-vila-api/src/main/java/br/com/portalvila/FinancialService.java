@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 class FinancialService {
     private final ContributionRepository contributions;
     private final ExpenseRepository expenses;
+    private final DirectReceiptRepository directReceipts;
     private final HouseRepository houses;
     private final ResidentRepository residents;
     private final SettingsRepository settingsRepository;
@@ -26,6 +27,7 @@ class FinancialService {
     FinancialService(
         ContributionRepository contributions,
         ExpenseRepository expenses,
+        DirectReceiptRepository directReceipts,
         HouseRepository houses,
         ResidentRepository residents,
         SettingsRepository settingsRepository,
@@ -33,6 +35,7 @@ class FinancialService {
     ) {
         this.contributions = contributions;
         this.expenses = expenses;
+        this.directReceipts = directReceipts;
         this.houses = houses;
         this.residents = residents;
         this.settingsRepository = settingsRepository;
@@ -52,10 +55,17 @@ class FinancialService {
     private DashboardResponse dashboard(String month, Long residentId, boolean includeAllContributionMovements) {
         boolean transparencyEnabled = includeAllContributionMovements || hasPaidContribution(residentId);
         List<Contribution> monthContributions = contributions.findByReferenceMonthOrderByHouseIdAsc(month);
+        List<DirectReceipt> monthDirectReceipts = transparencyEnabled
+            ? directReceipts.findByReferenceMonthAndStatusOrderByReceivedAtDesc(month, "PAID")
+            : List.of();
+        List<DirectReceipt> allDirectReceipts = transparencyEnabled
+            ? directReceipts.findByStatusOrderByReceivedAtDesc("PAID")
+            : List.of();
         BigDecimal collected = transparencyEnabled ? monthContributions.stream()
             .filter(c -> "PAID".equals(c.status))
             .map(this::paidValue)
-            .reduce(BigDecimal.ZERO, BigDecimal::add) : BigDecimal.ZERO;
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .add(sumDirectReceipts(monthDirectReceipts)) : BigDecimal.ZERO;
         BigDecimal pending = transparencyEnabled ? monthContributions.stream()
             .filter(c -> "PENDING".equals(c.status))
             .map(c -> c.amount)
@@ -67,7 +77,8 @@ class FinancialService {
         BigDecimal allPaid = transparencyEnabled ? contributions.findAll().stream()
             .filter(c -> "PAID".equals(c.status))
             .map(this::paidValue)
-            .reduce(BigDecimal.ZERO, BigDecimal::add) : BigDecimal.ZERO;
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .add(sumDirectReceipts(allDirectReceipts)) : BigDecimal.ZERO;
         BigDecimal allExpenses = transparencyEnabled ? expenses.findAll().stream()
             .map(e -> e.amount)
             .reduce(BigDecimal.ZERO, BigDecimal::add) : BigDecimal.ZERO;
@@ -89,6 +100,13 @@ class FinancialService {
                 e.description,
                 e.amount.negate(),
                 "PAID"
+            )));
+            allDirectReceipts.forEach(receipt -> movements.add(new MovementResponse(
+                receipt.receivedAt.toLocalDate(),
+                "RECEBIMENTO_DIRETO",
+                receipt.description,
+                receipt.amount,
+                receipt.status
             )));
         }
         movements.sort(Comparator.comparing(MovementResponse::date).reversed());
@@ -207,5 +225,11 @@ class FinancialService {
         return contribution.paidAmount == null || contribution.paidAmount.signum() == 0
             ? contribution.amount
             : contribution.paidAmount;
+    }
+
+    private BigDecimal sumDirectReceipts(List<DirectReceipt> receipts) {
+        return receipts.stream()
+            .map(receipt -> receipt.amount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }

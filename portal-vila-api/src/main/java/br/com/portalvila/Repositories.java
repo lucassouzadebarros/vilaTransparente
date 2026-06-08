@@ -50,6 +50,12 @@ interface ExpenseRepository extends JpaRepository<Expense, Long> {
     List<Expense> findByServiceOrderId(Long serviceOrderId);
 }
 
+interface DirectReceiptRepository extends JpaRepository<DirectReceipt, Long> {
+    Optional<DirectReceipt> findByGatewayAndGatewayPaymentId(String gateway, String gatewayPaymentId);
+    List<DirectReceipt> findByStatusOrderByReceivedAtDesc(String status);
+    List<DirectReceipt> findByReferenceMonthAndStatusOrderByReceivedAtDesc(String referenceMonth, String status);
+}
+
 interface ServiceOrderRepository extends JpaRepository<ServiceOrder, Long> {
     List<ServiceOrder> findByStatusOrderByCreatedAtDesc(String status);
 }

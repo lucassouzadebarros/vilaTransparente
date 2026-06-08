@@ -6,7 +6,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Badge } from '../components/ui';
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { api } from '../services/api';
-import { Contribution, Dashboard, PixCharge } from '../types';
+import { Contribution, Dashboard, Movement, PixCharge } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { colors, spacing } from '../theme';
 import { currentMonth } from '../utils/month';
@@ -31,7 +31,7 @@ export function CashBoxScreen() {
       const [dash, list, pixList] = await Promise.all([
         api.dashboard(month),
         api.contributions(month),
-        isAdmin ? api.pixCharges(month) : api.syncMyPixCharges()
+        api.pixCharges(month)
       ]);
       setDashboard(dash);
       setContributions(list);
@@ -90,7 +90,16 @@ export function CashBoxScreen() {
     }, [isAdmin, month])
   );
 
+  const hasPaidContribution = contributions.some((contribution) => contribution?.status === 'PAID');
+  const hasVisibleFinancialData = (dashboard?.movements?.length ?? 0) > 0
+    || Number(dashboard?.collected ?? 0) > 0
+    || Number(dashboard?.totalCollected ?? 0) > 0;
+  const transparencyUnlocked = isAdmin || dashboard?.transparencyEnabled === true || hasPaidContribution || hasVisibleFinancialData;
   const visibleContributions = isAdmin ? contributions.slice(0, 5) : [];
+  const directReceiptMovements = (dashboard?.movements ?? []).filter((movement) =>
+    movement.type === 'RECEBIMENTO_DIRETO' && Number(movement.amount) > 0
+  );
+  const directReceiptTotal = directReceiptMovements.reduce((total, movement) => total + Number(movement.amount ?? 0), 0);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -105,7 +114,7 @@ export function CashBoxScreen() {
         </Pressable>
       </View>
 
-      {!isAdmin && dashboard?.transparencyEnabled === false ? (
+      {!transparencyUnlocked ? (
         <View style={styles.lockedCard}>
           <Lock color={colors.ink} size={24} />
           <View style={styles.lockedCopy}>
@@ -128,6 +137,9 @@ export function CashBoxScreen() {
             <View style={styles.divider} />
             <SummaryRow icon={WalletCards} label="Arrecadado total" value={formatCurrency(dashboard?.totalCollected ?? dashboard?.collected ?? 0)} />
             <SummaryRow icon={CalendarDays} label={`Arrecadado no mês (${monthLabel(month)})`} value={formatCurrency(dashboard?.collected ?? 0)} />
+            {directReceiptTotal > 0 ? (
+              <SummaryRow icon={WalletCards} label="Recebimentos diretos" value={formatCurrency(directReceiptTotal)} />
+            ) : null}
             <SummaryRow icon={ReceiptText} label="Despesas acumuladas" value={formatCurrency(dashboard?.expenses ?? 0)} />
           </View>
 
@@ -143,6 +155,10 @@ export function CashBoxScreen() {
           </View>
         </>
       )}
+
+      {directReceiptMovements.slice(0, 4).map((movement, index) => (
+        <DirectReceiptCard key={`${movement.date}-${movement.amount}-${index}`} movement={movement} />
+      ))}
 
       {visibleContributions.map((item) => (
         <ContributionCard
@@ -184,6 +200,27 @@ function SummaryRow({ icon: Icon, label, value }: { icon: LucideIcon; label: str
         <Text style={styles.summaryLabel}>{label}</Text>
       </View>
       <Text style={styles.summaryValue}>{value}</Text>
+    </View>
+  );
+}
+
+function DirectReceiptCard({ movement }: { movement: Movement }) {
+  return (
+    <View style={styles.chargeCard}>
+      <View style={styles.chargeTop}>
+        <View style={styles.directIcon}>
+          <WalletCards color={colors.green} size={25} />
+        </View>
+        <View style={styles.chargeCopy}>
+          <Text style={styles.chargeTitle}>Recebimento direto</Text>
+          <Text style={styles.chargeName}>{movement.description}</Text>
+          <Text style={styles.chargeDescription}>Sem casa vinculada - {formatDate(movement.date)}</Text>
+        </View>
+        <View style={styles.chargeRight}>
+          <Badge status={movement.status} />
+          <Text style={styles.directValue}>{formatCurrency(movement.amount)}</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -452,6 +489,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0
   },
+  directIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 9,
+    backgroundColor: colors.greenSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
   chargeCopy: {
     flex: 1,
     minWidth: 0,
@@ -481,6 +527,12 @@ const styles = StyleSheet.create({
   },
   chargeValue: {
     color: colors.ink,
+    fontSize: 17,
+    lineHeight: 21,
+    fontWeight: '900'
+  },
+  directValue: {
+    color: colors.green,
     fontSize: 17,
     lineHeight: 21,
     fontWeight: '900'
