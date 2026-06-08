@@ -57,7 +57,7 @@ export function HomeScreen() {
       const [nextDashboard, nextContributions, nextCharges, nextServices] = await Promise.all([
         api.dashboard(month),
         api.contributions(month),
-        isAdmin ? api.pixCharges(month) : api.syncMyPixCharges(),
+        api.pixCharges(month),
         api.services()
       ]);
       setDashboard(nextDashboard);
@@ -95,6 +95,12 @@ export function HomeScreen() {
   const firstName = session?.name?.split(' ')[0] ?? 'João';
   const greetingName = isAdmin ? firstName : myContribution?.houseLabel ?? firstName;
 
+  const hasPaidContribution = contributions.some((contribution) => contribution?.status === 'PAID');
+  const hasVisibleFinancialData = (dashboard?.movements?.length ?? 0) > 0
+    || Number(dashboard?.collected ?? 0) > 0
+    || Number(dashboard?.totalCollected ?? 0) > 0;
+  const transparencyUnlocked = isAdmin || dashboard?.transparencyEnabled === true || hasPaidContribution || hasVisibleFinancialData;
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <SoftBackdrop compact />
@@ -103,7 +109,7 @@ export function HomeScreen() {
         <View style={styles.topSpacer} />
         <Text style={styles.screenTitle}>Início</Text>
         <Pressable accessibilityLabel="Atualizar início" style={styles.headerIcon} onPress={load} disabled={refreshing}>
-          {isAdmin ? <RefreshCw color={refreshing ? colors.muted : colors.ink} size={20} /> : <Bell color={colors.ink} size={22} />}
+          {isAdmin ? <RefreshCw color={refreshing ? colors.muted : colors.ink} size={18} /> : <Bell color={colors.ink} size={21} />}
         </Pressable>
       </View>
 
@@ -136,7 +142,7 @@ export function HomeScreen() {
             month={month}
             navigation={navigation}
           />
-          {dashboard?.transparencyEnabled ? (
+          {transparencyUnlocked ? (
             <TransparencyOpenCard dashboard={dashboard} navigation={navigation} />
           ) : (
             <TransparencyLockedCard />
@@ -165,7 +171,7 @@ export function HomeScreen() {
         )}
       </LocalCard>
 
-      {isAdmin || dashboard?.transparencyEnabled ? (
+      {transparencyUnlocked ? (
         <>
           <SectionTitle icon={Clock3} title="Últimos lançamentos" />
           <LocalCard style={styles.launchCard}>
@@ -215,7 +221,7 @@ function MonthlyCard({ contribution, charge, month, navigation }) {
   return (
     <LocalCard style={styles.monthlyCard}>
       <View style={styles.monthlyIcon}>
-        <CalendarCheck color={colors.teal} size={30} />
+        <CalendarCheck color={colors.teal} size={28} />
       </View>
       <View style={styles.monthlyCopy}>
         <View style={styles.cardHeaderRow}>
@@ -308,7 +314,7 @@ function MetricCard({ icon: Icon, tone, label, value, caption }) {
   return (
     <View style={styles.metricCard}>
       <View style={[styles.metricIcon, { backgroundColor }]}>
-        <Icon color={color} size={21} />
+        <Icon color={color} size={19} />
       </View>
       <Text style={styles.metricLabel}>{label}</Text>
       <Text style={styles.metricValue}>{value}</Text>
@@ -321,7 +327,7 @@ function SectionTitle({ icon: Icon, title }) {
   return (
     <View style={styles.sectionHeading}>
       <View style={styles.sectionHeadingIcon}>
-        <Icon color={colors.surface} size={19} />
+        <Icon color={colors.surface} size={18} />
       </View>
       <Text style={styles.sectionTitle}>{title}</Text>
     </View>
@@ -344,7 +350,7 @@ function ShortcutRow({ item, last, onPress }) {
   return (
     <Pressable onPress={onPress} style={[styles.shortcutRow, last ? styles.lastRow : null]}>
       <View style={styles.serviceIconCircle}>
-        <Wrench color={colors.blue} size={21} />
+        <Wrench color={colors.blue} size={19} />
       </View>
       <View style={styles.shortcutText}>
         <Text style={styles.shortcutTitle}>{item.title}</Text>
@@ -360,7 +366,7 @@ function MovementRow({ movement, last }) {
   return (
     <View style={[styles.movementRow, last ? styles.lastRow : null]}>
       <View style={[styles.movementIcon, isExpense ? styles.movementExpenseIcon : styles.movementIncomeIcon]}>
-        {isExpense ? <ArrowUp color={colors.red} size={20} /> : <ArrowDown color={colors.green} size={20} />}
+        {isExpense ? <ArrowUp color={colors.red} size={18} /> : <ArrowDown color={colors.green} size={18} />}
       </View>
       <View style={styles.movementText}>
         <Text style={styles.movementDescription}>{movement.description}</Text>
@@ -420,44 +426,45 @@ const styles = StyleSheet.create({
   },
   content: {
     width: '100%',
-    maxWidth: 430,
+    maxWidth: 375,
     alignSelf: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: 8,
+    paddingHorizontal: 13,
+    paddingTop: 6,
     paddingBottom: 106,
-    gap: spacing.md,
+    gap: 12,
     position: 'relative'
   },
   topBar: {
-    minHeight: 58,
+    minHeight: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     zIndex: 1
   },
   topSpacer: {
-    width: 44
+    width: 40
   },
   headerIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center'
   },
   screenTitle: {
     color: colors.ink,
-    fontSize: 24,
+    fontSize: 23,
+    lineHeight: 28,
     fontWeight: '900',
     letterSpacing: 0,
     textAlign: 'center'
   },
   greetingPlain: {
     alignSelf: 'flex-start',
-    minHeight: 40,
+    minHeight: 36,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs
+    gap: 4
   },
   userArea: {
     alignSelf: 'flex-start',
@@ -496,7 +503,8 @@ const styles = StyleSheet.create({
   greetingText: {
     color: colors.ink,
     fontWeight: '900',
-    fontSize: 24
+    fontSize: 23,
+    lineHeight: 29
   },
   greetingName: {
     color: colors.blue
@@ -506,23 +514,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: spacing.lg,
+    padding: 14,
     shadowColor: '#163052',
-    shadowOpacity: 0.07,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 2,
     zIndex: 1
   },
   monthlyCard: {
-    minHeight: 160,
+    minHeight: 126,
     flexDirection: 'row',
-    gap: spacing.lg,
+    gap: 14,
     alignItems: 'flex-start'
   },
   monthlyIcon: {
-    width: 78,
-    height: 78,
+    width: 58,
+    height: 58,
     borderRadius: 999,
     backgroundColor: '#E3F7ED',
     alignItems: 'center',
@@ -532,68 +540,69 @@ const styles = StyleSheet.create({
   monthlyCopy: {
     flex: 1,
     minWidth: 0,
-    gap: spacing.sm
+    gap: 7
   },
   cardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: spacing.md
+    gap: 8
   },
   cardTitle: {
     color: colors.ink,
-    fontSize: 20,
-    lineHeight: 24,
+    fontSize: 18,
+    lineHeight: 22,
     fontWeight: '900'
   },
   cardMonth: {
     color: colors.muted,
-    fontSize: 16,
-    lineHeight: 20,
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: '800',
     marginTop: 2
   },
   cardSubtitle: {
     color: colors.muted,
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: '600'
   },
   confirmRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs
+    gap: 5
   },
   contributionValue: {
     color: colors.ink,
-    fontSize: 34,
-    lineHeight: 40,
+    fontSize: 31,
+    lineHeight: 36,
     fontWeight: '900'
   },
   primaryAction: {
-    minHeight: 44,
+    minHeight: 39,
     borderRadius: 8,
     backgroundColor: colors.blue,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md
+    gap: 7,
+    paddingHorizontal: 12
   },
   primaryActionText: {
     color: colors.surface,
-    fontSize: 15,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: '900'
   },
   disabledAction: {
     opacity: 0.5
   },
   statusPill: {
-    minHeight: 30,
-    borderRadius: 10,
+    minHeight: 28,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.md
+    paddingHorizontal: 12
   },
   statusPaid: {
     backgroundColor: colors.greenSoft
@@ -605,7 +614,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.redSoft
   },
   statusText: {
-    fontSize: 12,
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: '900'
   },
   statusTextPaid: {
@@ -618,68 +628,68 @@ const styles = StyleSheet.create({
     color: colors.red
   },
   transparencyCard: {
-    gap: spacing.md
+    gap: 12
   },
   balanceOpenValue: {
     color: colors.green,
-    fontSize: 36,
-    lineHeight: 42,
+    fontSize: 32,
+    lineHeight: 37,
     fontWeight: '900'
   },
   metricGrid: {
     flexDirection: 'row',
-    gap: spacing.sm
+    gap: 8
   },
   metricCard: {
     flex: 1,
-    minHeight: 124,
+    minHeight: 102,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
-    gap: spacing.xs,
+    paddingHorizontal: 5,
+    gap: 4,
     backgroundColor: colors.surface
   },
   metricIcon: {
-    width: 54,
-    height: 54,
+    width: 46,
+    height: 46,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.xs
+    marginBottom: 3
   },
   metricLabel: {
     color: colors.ink,
-    fontSize: 13,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: '900',
     textAlign: 'center'
   },
   metricValue: {
     color: colors.ink,
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: '900',
     textAlign: 'center'
   },
   metricCaption: {
     color: colors.muted,
-    fontSize: 12,
-    lineHeight: 15,
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: '800',
     textAlign: 'center'
   },
   lockedBody: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.lg,
-    marginTop: spacing.sm
+    gap: 14,
+    marginTop: 6
   },
   lockCircle: {
-    width: 74,
-    height: 74,
+    width: 58,
+    height: 58,
     borderRadius: 999,
     backgroundColor: colors.blueSoft,
     alignItems: 'center',
@@ -689,22 +699,22 @@ const styles = StyleSheet.create({
   lockedCopy: {
     flex: 1,
     minWidth: 0,
-    gap: spacing.sm
+    gap: 6
   },
   lockedTitle: {
     color: colors.ink,
-    fontSize: 17,
-    lineHeight: 22,
+    fontSize: 15,
+    lineHeight: 20,
     fontWeight: '900'
   },
   lockedText: {
     color: colors.muted,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 12,
+    lineHeight: 17,
     fontWeight: '700'
   },
   disabledInfo: {
-    minHeight: 48,
+    minHeight: 40,
     borderRadius: 8,
     backgroundColor: '#E8ECF2',
     alignItems: 'center',
@@ -713,20 +723,20 @@ const styles = StyleSheet.create({
   },
   disabledInfoText: {
     color: colors.muted,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '900',
     textAlign: 'center'
   },
   sectionHeading: {
-    minHeight: 40,
+    minHeight: 34,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 8,
     zIndex: 1
   },
   sectionHeadingIcon: {
-    width: 34,
-    height: 34,
+    width: 32,
+    height: 32,
     borderRadius: 8,
     backgroundColor: colors.blue,
     alignItems: 'center',
@@ -734,8 +744,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: colors.ink,
-    fontSize: 21,
-    lineHeight: 25,
+    fontSize: 20,
+    lineHeight: 24,
     fontWeight: '900'
   },
   listCard: {
@@ -744,11 +754,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden'
   },
   shortcutRow: {
-    minHeight: 74,
+    minHeight: 66,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
+    gap: 12,
+    paddingHorizontal: 14,
     borderBottomWidth: 1,
     borderBottomColor: colors.border
   },
@@ -756,9 +766,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0
   },
   serviceIconCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 10,
     backgroundColor: colors.blueSoft,
     alignItems: 'center',
     justifyContent: 'center',
@@ -770,28 +780,28 @@ const styles = StyleSheet.create({
   },
   shortcutTitle: {
     color: colors.ink,
-    fontSize: 15,
-    lineHeight: 19,
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: '900'
   },
   shortcutStatus: {
     color: colors.blue,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: '900',
     marginTop: 2
   },
   emptyRow: {
-    minHeight: 72,
+    minHeight: 66,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg
+    gap: 12,
+    paddingHorizontal: 14
   },
   emptyIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 9,
     backgroundColor: '#EEF1F5',
     alignItems: 'center',
     justifyContent: 'center'
@@ -800,7 +810,8 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.muted,
     fontWeight: '900',
-    fontSize: 15
+    fontSize: 13,
+    lineHeight: 18
   },
   launchCard: {
     padding: 0,
@@ -808,17 +819,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden'
   },
   movementRow: {
-    minHeight: 70,
+    minHeight: 62,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
+    gap: 12,
+    paddingHorizontal: 14,
     borderBottomWidth: 1,
     borderBottomColor: colors.border
   },
   movementIcon: {
-    width: 46,
-    height: 46,
+    width: 42,
+    height: 42,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
@@ -836,18 +847,20 @@ const styles = StyleSheet.create({
   },
   movementDescription: {
     color: colors.ink,
-    fontSize: 15,
-    lineHeight: 19,
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: '900'
   },
   movementDate: {
     color: colors.muted,
-    fontSize: 13,
+    fontSize: 12,
+    lineHeight: 16,
     marginTop: 2,
     fontWeight: '700'
   },
   movementValue: {
-    fontSize: 15,
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: '900'
   },
   incomeValue: {
@@ -862,14 +875,14 @@ const styles = StyleSheet.create({
     padding: spacing.lg
   },
   adminBalanceCard: {
-    minHeight: 132,
+    minHeight: 112,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.lg
+    gap: 14
   },
   adminIcon: {
-    width: 76,
-    height: 76,
+    width: 58,
+    height: 58,
     borderRadius: 999,
     backgroundColor: colors.blueSoft,
     alignItems: 'center',
@@ -881,13 +894,14 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     color: colors.muted,
-    fontSize: 15,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: '700'
   },
   balanceValue: {
     color: colors.ink,
-    fontSize: 36,
-    lineHeight: 42,
+    fontSize: 32,
+    lineHeight: 37,
     fontWeight: '900'
   }
 });
