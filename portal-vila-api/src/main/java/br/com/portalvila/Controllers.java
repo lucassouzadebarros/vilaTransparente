@@ -353,6 +353,12 @@ class WebhookController {
     List<WebhookEvent> eventLog() {
         return events.findTop100ByOrderByCreatedAtDesc();
     }
+
+    @PostMapping("/admin/direct-receipts/reprocess")
+    @PreAuthorize("hasRole('ADMIN')")
+    DirectReceiptReprocessResponse reprocessDirectReceipts() {
+        return webhookService.reprocessDirectReceipts();
+    }
 }
 
 @RestController

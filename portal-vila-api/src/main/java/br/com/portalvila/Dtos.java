@@ -139,6 +139,9 @@ record FinishServiceRequest(
 record WebhookResult(boolean processed, boolean duplicate, String message) {
 }
 
+record DirectReceiptReprocessResponse(int checked, int updated, int unchanged, int skippedNoPayload, int failed) {
+}
+
 record SettingsResponse(
     Long id,
     String villageName,

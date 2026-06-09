@@ -102,6 +102,43 @@ class WebhookService {
         }
     }
 
+    @Transactional
+    public DirectReceiptReprocessResponse reprocessDirectReceipts() {
+        int checked = 0;
+        int updated = 0;
+        int unchanged = 0;
+        int skippedNoPayload = 0;
+        int failed = 0;
+
+        for (DirectReceipt receipt : directReceipts.findAll()) {
+            checked++;
+            if (receipt.payloadJson == null || receipt.payloadJson.isBlank()) {
+                skippedNoPayload++;
+                continue;
+            }
+            try {
+                JsonNode root = objectMapper.readTree(receipt.payloadJson);
+                JsonNode payment = root.has("payment") ? root.path("payment") : root;
+                String description = directReceiptDescription(payment);
+                if (Objects.equals(receipt.description, description)) {
+                    unchanged++;
+                    continue;
+                }
+                receipt.description = description;
+                receipt.updatedAt = LocalDateTime.now();
+                directReceipts.save(receipt);
+                updated++;
+            } catch (RuntimeException | JsonProcessingException ex) {
+                failed++;
+            }
+        }
+
+        if (updated > 0) {
+            dashboardEvents.publishDashboardChanged();
+        }
+        return new DirectReceiptReprocessResponse(checked, updated, unchanged, skippedNoPayload, failed);
+    }
+
     private boolean applyPaymentEvent(String eventType, String gatewayPaymentId, JsonNode payment) {
         if (gatewayPaymentId == null || gatewayPaymentId.isBlank()) {
             return false;

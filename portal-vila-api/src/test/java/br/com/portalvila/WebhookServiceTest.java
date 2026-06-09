@@ -9,6 +9,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -178,5 +179,38 @@ class WebhookServiceTest {
         assertThat(receipt.status).isEqualTo("PAID");
         assertThat(receipt.description).isEqualTo("Recebimento direto - Maria Souza");
         assertThat(receipt.amount).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    void reprocessDirectReceiptsUpdatesOldGenericDescriptionFromStoredPayload() {
+        DirectReceipt receipt = new DirectReceipt();
+        receipt.gateway = "ASAAS";
+        receipt.gatewayPaymentId = "pay_direct_old_123";
+        receipt.category = "RECEBIMENTO_DIRETO";
+        receipt.description = "Recebimento direto - CobranÃ§a gerada automaticamente a partir de Pix recebido.";
+        receipt.amount = BigDecimal.valueOf(100);
+        receipt.referenceMonth = "2026-06";
+        receipt.receivedAt = LocalDateTime.of(2026, 6, 8, 0, 0);
+        receipt.status = "PAID";
+        receipt.payloadJson = """
+            {
+              "id": "pay_direct_old_123",
+              "customerName": "Joao Direto",
+              "billingType": "PIX",
+              "status": "RECEIVED",
+              "value": 100.00,
+              "description": "CobranÃ§a gerada automaticamente a partir de Pix recebido.",
+              "confirmedDate": "2026-06-08"
+            }
+            """;
+        receipt = directReceipts.save(receipt);
+
+        DirectReceiptReprocessResponse response = webhookService.reprocessDirectReceipts();
+
+        DirectReceipt updated = directReceipts.findById(receipt.id).orElseThrow();
+        assertThat(response.checked()).isEqualTo(1);
+        assertThat(response.updated()).isEqualTo(1);
+        assertThat(response.failed()).isZero();
+        assertThat(updated.description).isEqualTo("Recebimento direto - Joao Direto");
     }
 }
