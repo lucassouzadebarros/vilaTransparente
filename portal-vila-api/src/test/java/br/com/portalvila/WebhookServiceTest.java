@@ -39,9 +39,13 @@ class WebhookServiceTest {
     @Autowired
     WebhookEventRepository webhookEvents;
 
+    @Autowired
+    DirectReceiptRepository directReceipts;
+
     @BeforeEach
     void cleanDatabase() {
         webhookEvents.deleteAll();
+        directReceipts.deleteAll();
         pixCharges.deleteAll();
         contributions.deleteAll();
         residents.deleteAll();
@@ -142,5 +146,37 @@ class WebhookServiceTest {
         assertThat(charge.value).isEqualByComparingTo("10.00");
         assertThat(charge.dueDate).isEqualTo(LocalDate.of(2026, 7, 10));
         assertThat(charge.invoiceUrl).isEqualTo("https://asaas.test/invoice");
+    }
+
+    @Test
+    void directPixReceiptUsesPayerNameWhenAvailable() throws Exception {
+        Settings settings = new Settings();
+        settings.webhookSecret = "test-webhook-token";
+        settingsRepository.save(settings);
+
+        String payload = """
+            {
+              "id": "evt_direct_123",
+              "event": "PAYMENT_RECEIVED",
+              "dateCreated": "2026-06-08 15:20:00",
+              "payment": {
+                "id": "pay_direct_123",
+                "customerName": "Maria Souza",
+                "billingType": "PIX",
+                "status": "RECEIVED",
+                "value": 100.00,
+                "description": "Cobrança gerada automaticamente a partir de Pix recebido.",
+                "confirmedDate": "2026-06-08"
+              }
+            }
+            """;
+
+        WebhookResult result = webhookService.processAsaas("test-webhook-token", objectMapper.readTree(payload));
+
+        DirectReceipt receipt = directReceipts.findByGatewayAndGatewayPaymentId("ASAAS", "pay_direct_123").orElseThrow();
+        assertThat(result.processed()).isTrue();
+        assertThat(receipt.status).isEqualTo("PAID");
+        assertThat(receipt.description).isEqualTo("Recebimento direto - Maria Souza");
+        assertThat(receipt.amount).isEqualByComparingTo("100.00");
     }
 }

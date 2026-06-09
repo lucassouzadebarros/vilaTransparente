@@ -382,6 +382,10 @@ class WebhookService {
     }
 
     private String directReceiptDescription(JsonNode payment) {
+        String payerName = directReceiptPayerName(payment);
+        if (payerName != null && !payerName.isBlank()) {
+            return "Recebimento direto - " + payerName;
+        }
         String description = text(payment, "description");
         if (description == null || description.isBlank()) {
             return "Recebimento direto via Asaas";
@@ -390,6 +394,29 @@ class WebhookService {
             return "Recebimento direto via Asaas";
         }
         return "Recebimento direto - " + description;
+    }
+
+    private String directReceiptPayerName(JsonNode payment) {
+        for (String field : List.of("customerName", "payerName", "holderName")) {
+            String value = text(payment, field);
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        JsonNode payer = payment == null ? null : payment.get("payer");
+        String payerName = text(payer, "name");
+        if (payerName != null && !payerName.isBlank()) {
+            return payerName.trim();
+        }
+        JsonNode customer = payment == null ? null : payment.get("customer");
+        if (customer != null && customer.isObject()) {
+            String customerName = text(customer, "name");
+            if (customerName != null && !customerName.isBlank()) {
+                return customerName.trim();
+            }
+        }
+        String customerId = text(payment, "customer");
+        return gatewayClient.findCustomerName(customerId).orElse(null);
     }
 
     private String normalizeGatewayStatus(String status) {

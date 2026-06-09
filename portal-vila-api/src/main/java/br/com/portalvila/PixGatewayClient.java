@@ -26,6 +26,7 @@ interface PixGatewayClient {
     GatewayCharge createPixCharge(CreatePixChargeRequest request);
     Optional<GatewayCharge> findPaymentByExternalReference(String externalReference);
     List<GatewayCharge> listPixPaymentsByCustomerAndDueDateRange(String customerId, LocalDate start, LocalDate end);
+    Optional<String> findCustomerName(String customerId);
     PixQrCode getPixQrCode(String gatewayPaymentId);
     GatewayPayment getPayment(String gatewayPaymentId);
     void cancelPayment(String gatewayPaymentId);
@@ -155,6 +156,27 @@ class AsaasPixGatewayClient implements PixGatewayClient {
             return id == null ? null : String.valueOf(id);
         }
         return null;
+    }
+
+    @Override
+    public Optional<String> findCustomerName(String customerId) {
+        if (apiKey == null || apiKey.isBlank() || customerId == null || customerId.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = webClient.get()
+                .uri("/customers/{id}", customerId)
+                .retrieve()
+                .bodyToMono(Map.class)
+                .block(Duration.ofSeconds(10));
+            Object name = response == null ? null : response.get("name");
+            return name == null || String.valueOf(name).isBlank()
+                ? Optional.empty()
+                : Optional.of(String.valueOf(name));
+        } catch (RuntimeException ignored) {
+            return Optional.empty();
+        }
     }
 
     private Map<String, Object> customerPayload(Resident resident, String cpfCnpj) {
