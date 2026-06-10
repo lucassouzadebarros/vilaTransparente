@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -14,6 +15,8 @@ import java.util.stream.Collectors;
 
 @Service
 class PixService {
+    private static final DateTimeFormatter EXTRA_REFERENCE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+
     private final PixGatewayClient gatewayClient;
     private final FinancialService financialService;
     private final HouseRepository houses;
@@ -53,7 +56,7 @@ class PixService {
             if (!"ACTIVE".equals(resident.status)) {
                 continue;
             }
-            createChargeForResident(month, amount, settings, resident);
+            createMonthlyChargeForResident(month, amount, settings, resident);
         }
         dashboardEvents.publishDashboardChanged();
         return listCharges(month);
@@ -74,7 +77,7 @@ class PixService {
                 org.springframework.http.HttpStatus.BAD_REQUEST,
                 house.label + " não possui morador ativo cadastrado."
             ));
-        PixChargeResponse response = createChargeForResident(month, amount, settings, resident);
+        PixChargeResponse response = createHouseChargeForResident(month, amount, settings, resident);
         dashboardEvents.publishDashboardChanged();
         return response;
     }
@@ -140,8 +143,14 @@ class PixService {
                 continue;
             }
             String month = YearMonth.from(dueDate).toString();
-            Contribution contribution = contributions.findByHouseIdAndReferenceMonth(house.id, month).orElse(null);
-            if (contribution != null && pixCharges.findByContributionId(contribution.id).isPresent()) {
+            String externalReference = gatewayCharge.externalReference() == null || gatewayCharge.externalReference().isBlank()
+                ? externalReference(month, house)
+                : gatewayCharge.externalReference();
+            boolean additionalCharge = isAdditionalExternalReference(externalReference);
+            Contribution contribution = additionalCharge
+                ? null
+                : contributions.findFirstByHouseIdAndReferenceMonthOrderByCreatedAtAsc(house.id, month).orElse(null);
+            if (!additionalCharge && contribution != null && pixCharges.findByContributionId(contribution.id).isPresent()) {
                 continue;
             }
             BigDecimal amount = gatewayCharge.value() == null ? settings.monthlyAmount : gatewayCharge.value();
@@ -154,9 +163,6 @@ class PixService {
                 contribution.status = "PENDING";
                 contribution = contributions.save(contribution);
             }
-            String externalReference = gatewayCharge.externalReference() == null || gatewayCharge.externalReference().isBlank()
-                ? externalReference(month, house)
-                : gatewayCharge.externalReference();
             persistGatewayCharge(settings, contribution, externalReference, amount, dueDate, gatewayCharge);
             changed = true;
         }
@@ -240,22 +246,43 @@ class PixService {
         );
     }
 
-    private PixChargeResponse createChargeForResident(String month, BigDecimal amount, Settings settings, Resident resident) {
+    private PixChargeResponse createMonthlyChargeForResident(String month, BigDecimal amount, Settings settings, Resident resident) {
+        return createChargeForResident(month, amount, settings, resident, false);
+    }
+
+    private PixChargeResponse createHouseChargeForResident(String month, BigDecimal amount, Settings settings, Resident resident) {
+        return createChargeForResident(month, amount, settings, resident, true);
+    }
+
+    private PixChargeResponse createChargeForResident(
+        String month,
+        BigDecimal amount,
+        Settings settings,
+        Resident resident,
+        boolean allowAdditionalCharge
+    ) {
         YearMonth reference = YearMonth.parse(month);
         House house = houses.findById(resident.houseId).orElseThrow();
-        Contribution contribution = contributions.findByHouseIdAndReferenceMonth(house.id, month).orElseGet(() -> {
-            Contribution created = new Contribution();
-            created.houseId = resident.houseId;
-            created.residentId = resident.id;
-            created.referenceMonth = month;
-            created.amount = amount;
-            created.status = "PENDING";
-            return contributions.save(created);
-        });
-        PixCharge existing = pixCharges.findByContributionId(contribution.id).orElse(null);
-        if (existing != null) {
-            return toResponse(existing, contribution);
+        List<Contribution> monthContributions = contributions.findByHouseIdAndReferenceMonthOrderByCreatedAtAsc(house.id, month);
+
+        Contribution contributionWithoutCharge = null;
+        boolean hasChargeForMonth = false;
+        for (Contribution candidate : monthContributions) {
+            PixCharge existing = pixCharges.findByContributionId(candidate.id).orElse(null);
+            if (existing != null) {
+                hasChargeForMonth = true;
+                if (!allowAdditionalCharge) {
+                    return toResponse(existing, candidate);
+                }
+            } else if (contributionWithoutCharge == null) {
+                contributionWithoutCharge = candidate;
+            }
         }
+
+        boolean additionalCharge = allowAdditionalCharge && hasChargeForMonth;
+        Contribution contribution = additionalCharge
+            ? createContribution(month, amount, resident)
+            : contributionWithoutCharge == null ? createContribution(month, amount, resident) : contributionWithoutCharge;
 
         contribution.residentId = resident.id;
         contribution.amount = amount;
@@ -267,9 +294,20 @@ class PixService {
         resident.gatewayCustomerId = customer.id();
         residents.save(resident);
 
-        String externalReference = externalReference(month, house);
+        String externalReference = additionalCharge
+            ? additionalExternalReference(month, house)
+            : externalReference(month, house);
         LocalDate dueDate = reference.atDay(Math.min(settings.paymentDueDay, reference.lengthOfMonth()));
-        GatewayCharge gatewayCharge = gatewayClient.findPaymentByExternalReference(externalReference)
+        CreatePixChargeRequest request = new CreatePixChargeRequest(
+            customer.id(),
+            externalReference,
+            "Caixinha da Vila - " + house.label + " - " + month + (additionalCharge ? " (complementar)" : ""),
+            amount,
+            dueDate
+        );
+        GatewayCharge gatewayCharge = additionalCharge
+            ? gatewayClient.createPixCharge(request)
+            : gatewayClient.findPaymentByExternalReference(externalReference)
             .orElseGet(() -> gatewayClient.createPixCharge(new CreatePixChargeRequest(
                 customer.id(),
                 externalReference,
@@ -278,6 +316,16 @@ class PixService {
                 dueDate
             )));
         return persistGatewayCharge(settings, contribution, externalReference, amount, dueDate, gatewayCharge);
+    }
+
+    private Contribution createContribution(String month, BigDecimal amount, Resident resident) {
+        Contribution created = new Contribution();
+        created.houseId = resident.houseId;
+        created.residentId = resident.id;
+        created.referenceMonth = month;
+        created.amount = amount;
+        created.status = "PENDING";
+        return contributions.save(created);
     }
 
     private PixChargeResponse persistGatewayCharge(
@@ -342,15 +390,20 @@ class PixService {
             if (house == null) {
                 continue;
             }
-            String externalReference = externalReference(month, house);
-            Contribution contribution = contributions.findByHouseIdAndReferenceMonth(house.id, month).orElse(null);
-            if (contribution != null && pixCharges.findByContributionId(contribution.id).isPresent()) {
-                continue;
-            }
-            GatewayCharge gatewayCharge = gatewayClient.findPaymentByExternalReference(externalReference)
+            String standardExternalReference = externalReference(month, house);
+            Contribution contribution = contributions.findFirstByHouseIdAndReferenceMonthOrderByCreatedAtAsc(house.id, month).orElse(null);
+            boolean contributionAlreadyHasCharge = contribution != null && pixCharges.findByContributionId(contribution.id).isPresent();
+            GatewayCharge gatewayCharge = gatewayClient.findPaymentByExternalReference(standardExternalReference)
+                .filter(charge -> pixCharges.findByGatewayAndGatewayPaymentId(settings.gatewayProvider, charge.id()).isEmpty())
                 .orElseGet(() -> findResidentGatewayCharge(resident, start, end).orElse(null));
             if (gatewayCharge == null || pixCharges.findByGatewayAndGatewayPaymentId(settings.gatewayProvider, gatewayCharge.id()).isPresent()) {
                 continue;
+            }
+            String externalReference = gatewayCharge.externalReference() == null || gatewayCharge.externalReference().isBlank()
+                ? standardExternalReference
+                : gatewayCharge.externalReference();
+            if (contributionAlreadyHasCharge || isAdditionalExternalReference(externalReference)) {
+                contribution = null;
             }
             BigDecimal amount = gatewayCharge.value() == null
                 ? contribution == null ? settings.monthlyAmount : contribution.amount
@@ -384,6 +437,14 @@ class PixService {
     private String externalReference(String month, House house) {
         String houseNumber = String.format("%02d", house.number);
         return "VILA-" + month + "-HOUSE-" + houseNumber;
+    }
+
+    private String additionalExternalReference(String month, House house) {
+        return externalReference(month, house) + "-EXTRA-" + LocalDateTime.now().format(EXTRA_REFERENCE_TIMESTAMP);
+    }
+
+    private boolean isAdditionalExternalReference(String externalReference) {
+        return externalReference != null && externalReference.contains("-EXTRA-");
     }
 
     private String normalizeGatewayStatus(String status) {

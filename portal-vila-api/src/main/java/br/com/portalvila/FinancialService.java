@@ -157,7 +157,7 @@ class FinancialService {
             if (!"ACTIVE".equals(resident.status)) {
                 continue;
             }
-            contributions.findByHouseIdAndReferenceMonth(resident.houseId, month).orElseGet(() -> {
+            contributions.findFirstByHouseIdAndReferenceMonthOrderByCreatedAtAsc(resident.houseId, month).orElseGet(() -> {
                 Contribution contribution = new Contribution();
                 contribution.houseId = resident.houseId;
                 contribution.residentId = resident.id;

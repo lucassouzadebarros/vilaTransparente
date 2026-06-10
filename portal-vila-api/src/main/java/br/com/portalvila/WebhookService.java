@@ -209,27 +209,33 @@ class WebhookService {
         if (house == null) {
             return null;
         }
-        String detectedMonth = monthFromExternalReference(text(payment, "externalReference"));
+        String externalReference = text(payment, "externalReference");
+        String detectedMonth = monthFromExternalReference(externalReference);
         if (detectedMonth == null) {
             detectedMonth = java.time.YearMonth.from(dueDate).toString();
         }
         final String month = detectedMonth;
-        if (contributions.findByHouseIdAndReferenceMonth(house.id, month)
-            .flatMap(contribution -> pixCharges.findByContributionId(contribution.id))
-            .isPresent()) {
+        boolean additionalCharge = isAdditionalExternalReference(externalReference);
+        Contribution existingContribution = contributions.findFirstByHouseIdAndReferenceMonthOrderByCreatedAtAsc(house.id, month).orElse(null);
+        boolean existingContributionHasCharge = existingContribution != null
+            && pixCharges.findByContributionId(existingContribution.id).isPresent();
+        if (!additionalCharge && existingContributionHasCharge) {
             return null;
         }
 
         BigDecimal value = decimal(payment, "value", BigDecimal.ZERO);
-        Contribution contribution = contributions.findByHouseIdAndReferenceMonth(house.id, month).orElseGet(() -> {
+        Contribution contribution = additionalCharge || existingContribution == null
+            ? null
+            : existingContribution;
+        if (contribution == null) {
             Contribution created = new Contribution();
             created.houseId = house.id;
             created.residentId = resident.id;
             created.referenceMonth = month;
             created.amount = value;
             created.status = "PENDING";
-            return contributions.save(created);
-        });
+            contribution = contributions.save(created);
+        }
         contribution.residentId = resident.id;
         contribution.amount = value;
         contribution.updatedAt = LocalDateTime.now();
@@ -328,7 +334,15 @@ class WebhookService {
             return null;
         }
         try {
-            Integer number = Integer.parseInt(externalReference.substring(index + marker.length()));
+            String suffix = externalReference.substring(index + marker.length());
+            int end = 0;
+            while (end < suffix.length() && Character.isDigit(suffix.charAt(end))) {
+                end++;
+            }
+            if (end == 0) {
+                return null;
+            }
+            Integer number = Integer.parseInt(suffix.substring(0, end));
             return houses.findByNumber(number).orElse(null);
         } catch (NumberFormatException ex) {
             return null;
@@ -348,6 +362,10 @@ class WebhookService {
         return externalReference == null || externalReference.isBlank()
             ? "ASAAS-" + gatewayPaymentId
             : externalReference;
+    }
+
+    private boolean isAdditionalExternalReference(String externalReference) {
+        return externalReference != null && externalReference.contains("-EXTRA-");
     }
 
     private PixQrCode tryQrCode(String gatewayPaymentId) {

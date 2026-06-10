@@ -10,6 +10,7 @@ import org.springframework.test.context.ActiveProfiles;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -137,7 +138,7 @@ class WebhookServiceTest {
 
         WebhookResult result = webhookService.processAsaas("test-webhook-token", objectMapper.readTree(payload));
 
-        Contribution contribution = contributions.findByHouseIdAndReferenceMonth(house.id, "2026-07").orElseThrow();
+        Contribution contribution = contributions.findFirstByHouseIdAndReferenceMonthOrderByCreatedAtAsc(house.id, "2026-07").orElseThrow();
         PixCharge charge = pixCharges.findByGatewayAndGatewayPaymentId("ASAAS", "pay_july_123").orElseThrow();
 
         assertThat(result.processed()).isTrue();
@@ -147,6 +148,68 @@ class WebhookServiceTest {
         assertThat(charge.value).isEqualByComparingTo("10.00");
         assertThat(charge.dueDate).isEqualTo(LocalDate.of(2026, 7, 10));
         assertThat(charge.invoiceUrl).isEqualTo("https://asaas.test/invoice");
+    }
+
+    @Test
+    void paymentCreatedWithExtraReferenceCreatesAdditionalLocalChargeForSameHouseAndMonth() throws Exception {
+        Settings settings = new Settings();
+        settings.webhookSecret = "test-webhook-token";
+        settingsRepository.save(settings);
+
+        House house = houses.save(new House(10, "Casa 10"));
+        Resident resident = new Resident(house.id, "Lorrane", "lorrane-extra@test.dev", null, "***.222.***-**");
+        resident.gatewayCustomerId = "cus_extra_123";
+        resident = residents.save(resident);
+
+        Contribution original = new Contribution();
+        original.houseId = house.id;
+        original.residentId = resident.id;
+        original.referenceMonth = "2026-07";
+        original.amount = BigDecimal.valueOf(10);
+        original.status = "PENDING";
+        original = contributions.save(original);
+
+        PixCharge originalCharge = new PixCharge();
+        originalCharge.contributionId = original.id;
+        originalCharge.gateway = "ASAAS";
+        originalCharge.gatewayPaymentId = "pay_original_july";
+        originalCharge.externalReference = "VILA-2026-07-HOUSE-10";
+        originalCharge.value = BigDecimal.valueOf(10);
+        originalCharge.dueDate = LocalDate.of(2026, 7, 10);
+        originalCharge.status = "PENDING";
+        originalCharge = pixCharges.save(originalCharge);
+
+        original.pixChargeId = originalCharge.id;
+        contributions.save(original);
+
+        String payload = """
+            {
+              "id": "evt_extra_created_123",
+              "event": "PAYMENT_CREATED",
+              "dateCreated": "2026-07-01 09:00:00",
+              "payment": {
+                "id": "pay_extra_july_123",
+                "customer": "cus_extra_123",
+                "billingType": "PIX",
+                "status": "PENDING",
+                "value": 20.00,
+                "dueDate": "2026-07-10",
+                "externalReference": "VILA-2026-07-HOUSE-10-EXTRA-20260701120000000",
+                "invoiceUrl": "https://asaas.test/invoice-extra"
+              }
+            }
+            """;
+
+        WebhookResult result = webhookService.processAsaas("test-webhook-token", objectMapper.readTree(payload));
+
+        PixCharge extraCharge = pixCharges.findByGatewayAndGatewayPaymentId("ASAAS", "pay_extra_july_123").orElseThrow();
+        List<Contribution> houseContributions = contributions.findByHouseIdAndReferenceMonthOrderByCreatedAtAsc(house.id, "2026-07");
+
+        assertThat(result.processed()).isTrue();
+        assertThat(houseContributions).hasSize(2);
+        assertThat(extraCharge.contributionId).isNotEqualTo(original.id);
+        assertThat(extraCharge.externalReference).contains("-EXTRA-");
+        assertThat(extraCharge.value).isEqualByComparingTo("20.00");
     }
 
     @Test

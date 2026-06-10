@@ -29,7 +29,8 @@ interface SettingsRepository extends JpaRepository<Settings, Long> {
 }
 
 interface ContributionRepository extends JpaRepository<Contribution, Long> {
-    Optional<Contribution> findByHouseIdAndReferenceMonth(Long houseId, String referenceMonth);
+    Optional<Contribution> findFirstByHouseIdAndReferenceMonthOrderByCreatedAtAsc(Long houseId, String referenceMonth);
+    List<Contribution> findByHouseIdAndReferenceMonthOrderByCreatedAtAsc(Long houseId, String referenceMonth);
     List<Contribution> findByReferenceMonthOrderByHouseIdAsc(String referenceMonth);
     List<Contribution> findByReferenceMonthAndResidentIdOrderByHouseIdAsc(String referenceMonth, Long residentId);
     List<Contribution> findByResidentIdOrderByReferenceMonthDesc(Long residentId);

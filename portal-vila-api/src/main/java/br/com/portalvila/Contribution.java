@@ -5,10 +5,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(
-    name = "contributions",
-    uniqueConstraints = @UniqueConstraint(name = "uk_contributions_house_month", columnNames = {"house_id", "reference_month"})
-)
+@Table(name = "contributions")
 public class Contribution {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

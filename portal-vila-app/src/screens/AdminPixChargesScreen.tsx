@@ -146,7 +146,7 @@ export function AdminPixChargesScreen() {
           />
           <ModeButton
             title="Casa específica"
-            subtitle="Use quando uma casa entrou depois."
+            subtitle="Permite cobrança complementar no mês."
             icon={Home}
             selected={mode === 'house'}
             onPress={() => setMode('house')}
@@ -184,7 +184,7 @@ export function AdminPixChargesScreen() {
             )}
             {selectedResident ? (
               <Text style={styles.selectedHint}>
-                Gerando para Casa {String(selectedResident.houseId).padStart(2, '0')} - {selectedResident.name}.
+                Gerando uma cobrança para Casa {String(selectedResident.houseId).padStart(2, '0')} - {selectedResident.name}.
               </Text>
             ) : null}
           </View>
