@@ -336,6 +336,11 @@ class PixService {
         LocalDate dueDate,
         GatewayCharge gatewayCharge
     ) {
+        PixCharge existingCharge = pixCharges.findByGatewayAndGatewayPaymentId(settings.gatewayProvider, gatewayCharge.id()).orElse(null);
+        if (existingCharge != null) {
+            return reuseExistingGatewayCharge(contribution, existingCharge);
+        }
+
         PixQrCode qrCode = safeQrCode(gatewayCharge.id());
         PixCharge charge = new PixCharge();
         charge.contributionId = contribution.id;
@@ -368,6 +373,30 @@ class PixService {
         contribution.updatedAt = LocalDateTime.now();
         contributions.save(contribution);
         return toResponse(charge, contribution);
+    }
+
+    private PixChargeResponse reuseExistingGatewayCharge(Contribution duplicateContribution, PixCharge existingCharge) {
+        Contribution existingContribution = contributions.findById(existingCharge.contributionId).orElse(null);
+        if (existingContribution == null) {
+            duplicateContribution.pixChargeId = existingCharge.id;
+            duplicateContribution.updatedAt = LocalDateTime.now();
+            existingCharge.contributionId = duplicateContribution.id;
+            existingCharge.updatedAt = LocalDateTime.now();
+            pixCharges.save(existingCharge);
+            existingContribution = contributions.save(duplicateContribution);
+        } else if (!existingContribution.id.equals(duplicateContribution.id) && canDiscardDuplicateContribution(duplicateContribution)) {
+            contributions.delete(duplicateContribution);
+        }
+        return toResponse(existingCharge, existingContribution);
+    }
+
+    private boolean canDiscardDuplicateContribution(Contribution contribution) {
+        BigDecimal paidAmount = contribution.paidAmount == null ? BigDecimal.ZERO : contribution.paidAmount;
+        return contribution.pixChargeId == null
+            && !contribution.manualPayment
+            && contribution.paymentDate == null
+            && paidAmount.signum() == 0
+            && ("PENDING".equals(contribution.status) || contribution.status == null);
     }
 
     private PixQrCode safeQrCode(String gatewayPaymentId) {
