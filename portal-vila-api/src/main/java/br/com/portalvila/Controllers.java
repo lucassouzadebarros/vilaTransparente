@@ -308,13 +308,13 @@ class PixController {
     @PostMapping("/admin/pix/monthly-charges")
     @PreAuthorize("hasRole('ADMIN')")
     List<PixChargeResponse> generateCharges(@Valid @RequestBody MonthlyChargeRequest request) {
-        return pixService.generateMonthlyCharges(request.month(), request.amount());
+        return pixService.generateMonthlyCharges(request.month(), request.amount(), request.dueDate());
     }
 
     @PostMapping("/admin/pix/house-charge")
     @PreAuthorize("hasRole('ADMIN')")
     PixChargeResponse generateHouseCharge(@Valid @RequestBody HouseMonthlyChargeRequest request) {
-        return pixService.generateHouseCharge(request.month(), request.amount(), request.houseId());
+        return pixService.generateHouseCharge(request.month(), request.amount(), request.houseId(), request.dueDate());
     }
 
     @PostMapping("/admin/pix/charges/{id}/refresh-qrcode")

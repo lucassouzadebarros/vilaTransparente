@@ -36,9 +36,10 @@ export function AdminPixChargesScreen() {
   const selectedResident = activeResidents.find((resident) => resident.houseId === selectedHouseId);
   const amountValue = parseAmount(amount);
   const month = monthFromBillingDate(billingDate);
+  const dueDate = dueDateFromBillingDate(billingDate);
   const billingDateError = billingDateFieldError(billingDate);
   const amountError = amountFieldError(amount);
-  const canGenerate = !busy && !billingDateError && !amountError && Number.isFinite(amountValue) && amountValue > 0 && (mode === 'all' || Boolean(selectedHouseId));
+  const canGenerate = !busy && Boolean(dueDate) && !billingDateError && !amountError && Number.isFinite(amountValue) && amountValue > 0 && (mode === 'all' || Boolean(selectedHouseId));
 
   const totals = useMemo(() => ({
     paid: charges.filter((charge) => charge.status === 'PAID').length,
@@ -71,11 +72,11 @@ export function AdminPixChargesScreen() {
     setBusy(true);
     try {
       if (mode === 'house') {
-        const generated = await api.generatePixChargeForHouse(month, amountValue, selectedHouseId as number);
+        const generated = await api.generatePixChargeForHouse(month, amountValue, selectedHouseId as number, dueDate as string);
         await load();
-        Alert.alert('Pix', `Cobrança da ${generated.houseLabel} pronta.`);
+        Alert.alert('Pix', `Cobrança da ${generated.houseLabel} pronta para ${billingDate}.`);
       } else {
-        const generated = await api.generatePixCharges(month, amountValue);
+        const generated = await api.generatePixCharges(month, amountValue, dueDate as string);
         setCharges(generated);
         Alert.alert('Pix', generated.length ? 'Cobranças do mês geradas.' : 'Nenhuma cobrança foi gerada. Cadastre pelo menos um morador ativo antes de gerar Pix.');
       }
@@ -141,7 +142,7 @@ export function AdminPixChargesScreen() {
           keyboardType="numeric"
           placeholder="10/06/2026"
           errorText={billingDateError}
-          helpText="Use dia/mês/ano. O sistema gera a cobrança pelo mês informado nessa data."
+          helpText="Use dia/mês ou dia/mês/ano. A cobrança vence na data informada."
         />
         <Field
           label="Valor"
@@ -291,10 +292,24 @@ function formatDateInput(value: string) {
 
 function monthFromBillingDate(value: string) {
   const digits = value.replace(/\D/g, '');
+  if (digits.length === 4) {
+    return `${currentBillingYear()}-${digits.slice(2, 4)}`;
+  }
   if (digits.length !== 8) {
     return currentMonth();
   }
   return `${digits.slice(4, 8)}-${digits.slice(2, 4)}`;
+}
+
+function dueDateFromBillingDate(value: string) {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length === 4) {
+    return `${currentBillingYear()}-${digits.slice(2, 4)}-${digits.slice(0, 2)}`;
+  }
+  if (digits.length !== 8) {
+    return '';
+  }
+  return `${digits.slice(4, 8)}-${digits.slice(2, 4)}-${digits.slice(0, 2)}`;
 }
 
 function billingDateFieldError(value: string) {
@@ -302,15 +317,19 @@ function billingDateFieldError(value: string) {
   if (!digits) {
     return 'Informe a data de vencimento.';
   }
-  if (digits.length !== 8) {
-    return 'Informe a data completa no formato dia/mês/ano.';
+  if (!(digits.length === 4 || digits.length === 8)) {
+    return 'Informe a data no formato dia/mês ou dia/mês/ano.';
   }
   const day = Number(digits.slice(0, 2));
   const month = Number(digits.slice(2, 4));
-  const year = Number(digits.slice(4, 8));
+  const year = digits.length === 8 ? Number(digits.slice(4, 8)) : currentBillingYear();
   const date = new Date(year, month - 1, day);
   const valid = date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
   return valid ? '' : 'Informe uma data válida.';
+}
+
+function currentBillingYear() {
+  return Number(currentMonth().slice(0, 4));
 }
 
 const styles = StyleSheet.create({

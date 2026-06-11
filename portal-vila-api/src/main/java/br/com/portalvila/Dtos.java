@@ -87,14 +87,16 @@ record ContributionResponse(
 
 record MonthlyChargeRequest(
     @NotBlank String month,
-    @Positive BigDecimal amount
+    @Positive BigDecimal amount,
+    LocalDate dueDate
 ) {
 }
 
 record HouseMonthlyChargeRequest(
     @NotBlank String month,
     @Positive BigDecimal amount,
-    @NotNull Long houseId
+    @NotNull Long houseId,
+    LocalDate dueDate
 ) {
 }
 

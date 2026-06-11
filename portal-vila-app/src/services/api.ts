@@ -137,9 +137,10 @@ export const api = {
   allPixCharges: () => requestData<PixCharge[]>(apiClient.get('/pix/charges/all')),
   syncMyPixCharges: () => requestData<PixCharge[]>(apiClient.post('/pix/charges/sync')),
   pixCharge: (id: number) => requestData<PixCharge>(apiClient.get(`/pix/charges/${id}`)),
-  generatePixCharges: (month: string, amount: number) => requestData<PixCharge[]>(apiClient.post('/admin/pix/monthly-charges', { month, amount })),
-  generatePixChargeForHouse: (month: string, amount: number, houseId: number) =>
-    requestData<PixCharge>(apiClient.post('/admin/pix/house-charge', { month, amount, houseId })),
+  generatePixCharges: (month: string, amount: number, dueDate?: string) =>
+    requestData<PixCharge[]>(apiClient.post('/admin/pix/monthly-charges', { month, amount, dueDate })),
+  generatePixChargeForHouse: (month: string, amount: number, houseId: number, dueDate?: string) =>
+    requestData<PixCharge>(apiClient.post('/admin/pix/house-charge', { month, amount, houseId, dueDate })),
   reconcilePixCharges: (month: string) => requestData<PixCharge[]>(apiClient.post('/admin/pix/reconcile', null, { params: { month } })),
   refreshQrCode: (id: number) => requestData<PixCharge>(apiClient.post(`/admin/pix/charges/${id}/refresh-qrcode`)),
   cancelCharge: (id: number, reason: string) => requestData<PixCharge>(apiClient.post(`/admin/pix/charges/${id}/cancel`, { reason })),

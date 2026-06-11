@@ -52,16 +52,22 @@ class PixService {
 
     @Transactional
     public List<PixChargeResponse> generateMonthlyCharges(String month, BigDecimal requestedAmount) {
+        return generateMonthlyCharges(month, requestedAmount, null);
+    }
+
+    @Transactional
+    public List<PixChargeResponse> generateMonthlyCharges(String month, BigDecimal requestedAmount, LocalDate requestedDueDate) {
         month = validatedMonth(month);
-        financialService.generateMonthlyContributions(month, requestedAmount);
         Settings settings = settingsRepository.findAll().stream().findFirst().orElseGet(Settings::new);
         BigDecimal amount = validatedAmount(requestedAmount == null ? settings.monthlyAmount : requestedAmount);
+        LocalDate dueDate = validatedDueDate(month, requestedDueDate, settings);
+        financialService.generateMonthlyContributions(month, amount);
 
         for (Resident resident : residents.findAllByOrderByHouseIdAsc()) {
             if (!"ACTIVE".equals(resident.status)) {
                 continue;
             }
-            createMonthlyChargeForResident(month, amount, settings, resident);
+            createMonthlyChargeForResident(month, amount, settings, resident, dueDate);
         }
         dashboardEvents.publishDashboardChanged();
         return listCharges(month);
@@ -69,9 +75,15 @@ class PixService {
 
     @Transactional
     public PixChargeResponse generateHouseCharge(String month, BigDecimal requestedAmount, Long houseId) {
+        return generateHouseCharge(month, requestedAmount, houseId, null);
+    }
+
+    @Transactional
+    public PixChargeResponse generateHouseCharge(String month, BigDecimal requestedAmount, Long houseId, LocalDate requestedDueDate) {
         month = validatedMonth(month);
         Settings settings = settingsRepository.findAll().stream().findFirst().orElseGet(Settings::new);
         BigDecimal amount = validatedAmount(requestedAmount == null ? settings.monthlyAmount : requestedAmount);
+        LocalDate dueDate = validatedDueDate(month, requestedDueDate, settings);
         House house = houses.findById(houseId)
             .filter(candidate -> candidate.active)
             .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
@@ -83,7 +95,7 @@ class PixService {
                 org.springframework.http.HttpStatus.BAD_REQUEST,
                 house.label + " não possui morador ativo cadastrado."
             ));
-        PixChargeResponse response = createHouseChargeForResident(month, amount, settings, resident);
+        PixChargeResponse response = createHouseChargeForResident(month, amount, settings, resident, dueDate);
         dashboardEvents.publishDashboardChanged();
         return response;
     }
@@ -252,12 +264,12 @@ class PixService {
         );
     }
 
-    private PixChargeResponse createMonthlyChargeForResident(String month, BigDecimal amount, Settings settings, Resident resident) {
-        return createChargeForResident(month, amount, settings, resident, false);
+    private PixChargeResponse createMonthlyChargeForResident(String month, BigDecimal amount, Settings settings, Resident resident, LocalDate dueDate) {
+        return createChargeForResident(month, amount, settings, resident, false, dueDate);
     }
 
-    private PixChargeResponse createHouseChargeForResident(String month, BigDecimal amount, Settings settings, Resident resident) {
-        return createChargeForResident(month, amount, settings, resident, true);
+    private PixChargeResponse createHouseChargeForResident(String month, BigDecimal amount, Settings settings, Resident resident, LocalDate dueDate) {
+        return createChargeForResident(month, amount, settings, resident, true, dueDate);
     }
 
     private PixChargeResponse createChargeForResident(
@@ -265,9 +277,9 @@ class PixService {
         BigDecimal amount,
         Settings settings,
         Resident resident,
-        boolean allowAdditionalCharge
+        boolean allowAdditionalCharge,
+        LocalDate dueDate
     ) {
-        YearMonth reference = YearMonth.parse(month);
         House house = houses.findById(resident.houseId).orElseThrow();
         String standardExternalReference = externalReference(month, house);
         PixCharge chargeForStandardReference = pixCharges
@@ -316,7 +328,6 @@ class PixService {
         String externalReference = additionalCharge
             ? additionalExternalReference(month, house)
             : standardExternalReference;
-        LocalDate dueDate = reference.atDay(Math.min(settings.paymentDueDay, reference.lengthOfMonth()));
         CreatePixChargeRequest request = new CreatePixChargeRequest(
             customer.id(),
             externalReference,
@@ -569,6 +580,18 @@ class PixService {
             throw badRequest("Informe um valor de cobranca maior que zero.");
         }
         return amount;
+    }
+
+    private LocalDate validatedDueDate(String month, LocalDate requestedDueDate, Settings settings) {
+        YearMonth reference = YearMonth.parse(month);
+        int configuredDueDay = settings.paymentDueDay == null ? 10 : settings.paymentDueDay;
+        LocalDate dueDate = requestedDueDate == null
+            ? reference.atDay(Math.min(configuredDueDay, reference.lengthOfMonth()))
+            : requestedDueDate;
+        if (!YearMonth.from(dueDate).equals(reference)) {
+            throw badRequest("A data de vencimento precisa pertencer ao mes da cobranca.");
+        }
+        return dueDate;
     }
 
     private ResponseStatusException badRequest(String message) {

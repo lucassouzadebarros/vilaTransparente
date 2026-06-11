@@ -168,6 +168,45 @@ class PixServiceTest {
     }
 
     @Test
+    void houseSpecificChargeUsesRequestedDueDate() {
+        Settings settings = new Settings();
+        settings.gatewayProvider = "ASAAS";
+        settings.paymentDueDay = 10;
+        settings.monthlyAmount = BigDecimal.valueOf(100);
+        settingsRepository.save(settings);
+
+        House house = houses.save(new House(9, "Casa 09"));
+        Resident resident = new Resident(house.id, "Douglas", "douglas-due-date@test.dev", "21999990000", "***.111.***-**");
+        resident.status = "ACTIVE";
+        resident.gatewayCustomerId = "cus_009";
+        residents.save(resident);
+
+        when(gatewayClient.createOrUpdateCustomer(any())).thenReturn(new GatewayCustomer("cus_009"));
+        when(gatewayClient.findPaymentByExternalReference(any())).thenReturn(Optional.empty());
+        when(gatewayClient.createPixCharge(any())).thenAnswer(invocation -> {
+            CreatePixChargeRequest request = invocation.getArgument(0);
+            return new GatewayCharge(
+                "pay_house_09_due_20",
+                "PENDING",
+                "https://asaas.test/invoice-due-20",
+                request.value(),
+                request.dueDate(),
+                request.externalReference()
+            );
+        });
+
+        PixChargeResponse response = pixService.generateHouseCharge(
+            "2026-06",
+            BigDecimal.valueOf(100),
+            house.id,
+            LocalDate.of(2026, 6, 20)
+        );
+
+        assertThat(response.dueDate()).isEqualTo(LocalDate.of(2026, 6, 20));
+        assertThat(response.externalReference()).isEqualTo("VILA-2026-06-HOUSE-09");
+    }
+
+    @Test
     void rejectsDistantFuturePixChargeMonth() {
         Settings settings = new Settings();
         settings.gatewayProvider = "ASAAS";
