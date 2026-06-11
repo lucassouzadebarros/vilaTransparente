@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { CheckCircle2, Home, Plus, RefreshCw, RotateCw, Users } from 'lucide-react-native';
 import { PixChargeCard } from '../components/pix/PixChargeCard';
 import { Badge, Button, Card, Field, Label, Money, Row, Screen, Value } from '../components/ui';
+import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { PixCharge, Resident } from '../types';
 import { colors, spacing } from '../theme';
@@ -22,6 +23,7 @@ function parseAmount(value: string) {
 
 export function AdminPixChargesScreen() {
   const navigation = useNavigation<any>();
+  const { isAdmin } = useAuth();
   const [billingDate, setBillingDate] = useState(formatBillingDate(currentMonth()));
   const [amount, setAmount] = useState('R$ 100,00');
   const [mode, setMode] = useState<GenerationMode>('all');
@@ -47,6 +49,9 @@ export function AdminPixChargesScreen() {
   }), [charges]);
 
   async function load() {
+    if (!isAdmin) {
+      return;
+    }
     const [nextCharges, nextResidents] = await Promise.all([
       api.pixCharges(month),
       api.residents()
@@ -112,8 +117,19 @@ export function AdminPixChargesScreen() {
   }
 
   useEffect(() => {
-    load();
-  }, [month]);
+    load().catch((error) => Alert.alert('Pix', actionErrorMessage(error)));
+  }, [isAdmin, month]);
+
+  if (!isAdmin) {
+    return (
+      <Screen title="Cobranças Pix" subtitle="Acesso administrativo">
+        <Card>
+          <Text style={styles.sectionTitle}>Entre com a conta administradora</Text>
+          <Text style={styles.muted}>Somente o administrador pode gerar ou reconciliar cobranças Pix.</Text>
+        </Card>
+      </Screen>
+    );
+  }
 
   return (
     <Screen title="Admin Pix" subtitle="Cobranças do mês" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>

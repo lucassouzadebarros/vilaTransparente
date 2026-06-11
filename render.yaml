@@ -18,7 +18,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRATION_MINUTES
-        value: "480"
+        value: "10080"
       - key: MAIL_HOST
         sync: false
       - key: MAIL_PORT

@@ -50,7 +50,8 @@ class SecurityConfig {
                     "/api/auth/password-reset/request",
                     "/api/auth/password-reset/confirm",
                     "/api/webhooks/asaas",
-                    "/actuator/health"
+                    "/actuator/health",
+                    "/error"
                 ).permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/events/dashboard").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/residents/registration-houses").permitAll()
@@ -82,6 +83,9 @@ class SecurityConfig {
     }
 
     private static void writeError(HttpServletResponse response, HttpStatus status, String message) throws IOException {
+        if (response.isCommitted()) {
+            return;
+        }
         response.setStatus(status.value());
         response.setContentType("application/json;charset=UTF-8");
         response.getWriter().write("{\"error\":\"" + message + "\"}");
