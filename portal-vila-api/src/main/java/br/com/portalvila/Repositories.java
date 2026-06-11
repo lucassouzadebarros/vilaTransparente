@@ -38,6 +38,7 @@ interface ContributionRepository extends JpaRepository<Contribution, Long> {
 
 interface PixChargeRepository extends JpaRepository<PixCharge, Long> {
     Optional<PixCharge> findByGatewayAndGatewayPaymentId(String gateway, String gatewayPaymentId);
+    Optional<PixCharge> findFirstByGatewayAndExternalReferenceOrderByCreatedAtAsc(String gateway, String externalReference);
     Optional<PixCharge> findByContributionId(Long contributionId);
 }
 

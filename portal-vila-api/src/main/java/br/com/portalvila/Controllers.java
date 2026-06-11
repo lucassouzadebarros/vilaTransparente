@@ -1,6 +1,8 @@
 package br.com.portalvila;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
@@ -194,8 +196,11 @@ class DashboardEventController {
     }
 
     @GetMapping("/dashboard")
-    SseEmitter dashboard() {
-        return events.subscribe();
+    ResponseEntity<SseEmitter> dashboard(HttpServletRequest request) {
+        if (request.getDispatcherType() != DispatcherType.REQUEST) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(events.subscribe());
     }
 }
 

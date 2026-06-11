@@ -2,6 +2,7 @@ package br.com.portalvila;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -25,6 +26,7 @@ class PixService {
     private final PixChargeRepository pixCharges;
     private final SettingsRepository settingsRepository;
     private final DashboardEventService dashboardEvents;
+    private final GatewayPaymentLockService paymentLocks;
 
     PixService(
         PixGatewayClient gatewayClient,
@@ -34,7 +36,8 @@ class PixService {
         ContributionRepository contributions,
         PixChargeRepository pixCharges,
         SettingsRepository settingsRepository,
-        DashboardEventService dashboardEvents
+        DashboardEventService dashboardEvents,
+        GatewayPaymentLockService paymentLocks
     ) {
         this.gatewayClient = gatewayClient;
         this.financialService = financialService;
@@ -44,13 +47,15 @@ class PixService {
         this.pixCharges = pixCharges;
         this.settingsRepository = settingsRepository;
         this.dashboardEvents = dashboardEvents;
+        this.paymentLocks = paymentLocks;
     }
 
     @Transactional
     public List<PixChargeResponse> generateMonthlyCharges(String month, BigDecimal requestedAmount) {
+        month = validatedMonth(month);
         financialService.generateMonthlyContributions(month, requestedAmount);
         Settings settings = settingsRepository.findAll().stream().findFirst().orElseGet(Settings::new);
-        BigDecimal amount = requestedAmount == null ? settings.monthlyAmount : requestedAmount;
+        BigDecimal amount = validatedAmount(requestedAmount == null ? settings.monthlyAmount : requestedAmount);
 
         for (Resident resident : residents.findAllByOrderByHouseIdAsc()) {
             if (!"ACTIVE".equals(resident.status)) {
@@ -64,8 +69,9 @@ class PixService {
 
     @Transactional
     public PixChargeResponse generateHouseCharge(String month, BigDecimal requestedAmount, Long houseId) {
+        month = validatedMonth(month);
         Settings settings = settingsRepository.findAll().stream().findFirst().orElseGet(Settings::new);
-        BigDecimal amount = requestedAmount == null ? settings.monthlyAmount : requestedAmount;
+        BigDecimal amount = validatedAmount(requestedAmount == null ? settings.monthlyAmount : requestedAmount);
         House house = houses.findById(houseId)
             .filter(candidate -> candidate.active)
             .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
@@ -263,10 +269,19 @@ class PixService {
     ) {
         YearMonth reference = YearMonth.parse(month);
         House house = houses.findById(resident.houseId).orElseThrow();
+        String standardExternalReference = externalReference(month, house);
+        PixCharge chargeForStandardReference = pixCharges
+            .findFirstByGatewayAndExternalReferenceOrderByCreatedAtAsc(settings.gatewayProvider, standardExternalReference)
+            .orElse(null);
+        Contribution contributionForStandardReference = chargeForStandardReference == null
+            ? null
+            : contributions.findById(chargeForStandardReference.contributionId)
+                .map(contribution -> alignContributionWithGatewayCharge(contribution, chargeForStandardReference, month, amount, resident))
+                .orElse(null);
         List<Contribution> monthContributions = contributions.findByHouseIdAndReferenceMonthOrderByCreatedAtAsc(house.id, month);
 
         Contribution contributionWithoutCharge = null;
-        boolean hasChargeForMonth = false;
+        boolean hasChargeForMonth = chargeForStandardReference != null;
         for (Contribution candidate : monthContributions) {
             PixCharge existing = pixCharges.findByContributionId(candidate.id).orElse(null);
             if (existing != null) {
@@ -277,6 +292,10 @@ class PixService {
             } else if (contributionWithoutCharge == null) {
                 contributionWithoutCharge = candidate;
             }
+        }
+
+        if (!allowAdditionalCharge && chargeForStandardReference != null && contributionForStandardReference != null) {
+            return toResponse(chargeForStandardReference, contributionForStandardReference);
         }
 
         boolean additionalCharge = allowAdditionalCharge && hasChargeForMonth;
@@ -296,7 +315,7 @@ class PixService {
 
         String externalReference = additionalCharge
             ? additionalExternalReference(month, house)
-            : externalReference(month, house);
+            : standardExternalReference;
         LocalDate dueDate = reference.atDay(Math.min(settings.paymentDueDay, reference.lengthOfMonth()));
         CreatePixChargeRequest request = new CreatePixChargeRequest(
             customer.id(),
@@ -308,6 +327,7 @@ class PixService {
         GatewayCharge gatewayCharge = additionalCharge
             ? gatewayClient.createPixCharge(request)
             : gatewayClient.findPaymentByExternalReference(externalReference)
+            .filter(charge -> externalReference.equals(charge.externalReference()))
             .orElseGet(() -> gatewayClient.createPixCharge(new CreatePixChargeRequest(
                 customer.id(),
                 externalReference,
@@ -329,6 +349,17 @@ class PixService {
     }
 
     private PixChargeResponse persistGatewayCharge(
+        Settings settings,
+        Contribution contribution,
+        String externalReference,
+        BigDecimal amount,
+        LocalDate dueDate,
+        GatewayCharge gatewayCharge
+    ) {
+        return paymentLocks.withLock(gatewayCharge.id(), () -> persistGatewayChargeLocked(settings, contribution, externalReference, amount, dueDate, gatewayCharge));
+    }
+
+    private PixChargeResponse persistGatewayChargeLocked(
         Settings settings,
         Contribution contribution,
         String externalReference,
@@ -388,6 +419,56 @@ class PixService {
             contributions.delete(duplicateContribution);
         }
         return toResponse(existingCharge, existingContribution);
+    }
+
+    private Contribution alignContributionWithGatewayCharge(
+        Contribution contribution,
+        PixCharge charge,
+        String month,
+        BigDecimal requestedAmount,
+        Resident resident
+    ) {
+        boolean changed = false;
+        if (!month.equals(contribution.referenceMonth)) {
+            contribution.referenceMonth = month;
+            changed = true;
+        }
+        if (!resident.id.equals(contribution.residentId)) {
+            contribution.residentId = resident.id;
+            changed = true;
+        }
+        if (!charge.id.equals(contribution.pixChargeId)) {
+            contribution.pixChargeId = charge.id;
+            changed = true;
+        }
+        BigDecimal chargeValue = charge.value == null ? requestedAmount : charge.value;
+        if (chargeValue != null && contribution.amount.compareTo(chargeValue) != 0) {
+            contribution.amount = chargeValue;
+            changed = true;
+        }
+        if ("PAID".equals(charge.status)) {
+            if (!"PAID".equals(contribution.status)) {
+                contribution.status = "PAID";
+                changed = true;
+            }
+            if (contribution.paidAmount == null || contribution.paidAmount.signum() == 0) {
+                contribution.paidAmount = chargeValue;
+                changed = true;
+            }
+            if (contribution.paymentDate == null) {
+                contribution.paymentDate = charge.paidAt == null ? LocalDateTime.now() : charge.paidAt;
+                changed = true;
+            }
+            if (contribution.paymentMethod == null || contribution.paymentMethod.isBlank()) {
+                contribution.paymentMethod = "PIX_ASAAS";
+                changed = true;
+            }
+        }
+        if (changed) {
+            contribution.updatedAt = LocalDateTime.now();
+            return contributions.save(contribution);
+        }
+        return contribution;
     }
 
     private boolean canDiscardDuplicateContribution(Contribution contribution) {
@@ -466,6 +547,32 @@ class PixService {
     private String externalReference(String month, House house) {
         String houseNumber = String.format("%02d", house.number);
         return "VILA-" + month + "-HOUSE-" + houseNumber;
+    }
+
+    private String validatedMonth(String month) {
+        try {
+            YearMonth reference = YearMonth.parse(month);
+            YearMonth now = YearMonth.now();
+            if (reference.isBefore(YearMonth.of(2020, 1)) || reference.isAfter(now.plusMonths(18))) {
+                throw badRequest("Informe um mes de cobranca dentro do periodo permitido.");
+            }
+            return reference.toString();
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw badRequest("Informe o mes da cobranca no formato AAAA-MM.");
+        }
+    }
+
+    private BigDecimal validatedAmount(BigDecimal amount) {
+        if (amount == null || amount.signum() <= 0) {
+            throw badRequest("Informe um valor de cobranca maior que zero.");
+        }
+        return amount;
+    }
+
+    private ResponseStatusException badRequest(String message) {
+        return new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, message);
     }
 
     private String additionalExternalReference(String month, House house) {
