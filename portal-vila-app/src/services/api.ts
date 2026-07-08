@@ -148,6 +148,7 @@ export const api = {
   webhookEvents: () => requestData<WebhookEvent[]>(apiClient.get('/admin/webhook-events')),
   expenses: () => requestData<Expense[]>(apiClient.get('/expenses')),
   createExpense: (expense: Expense) => requestData<Expense>(apiClient.post('/expenses', expense)),
+  updateExpense: (id: number, expense: Expense) => requestData<Expense>(apiClient.put(`/expenses/${id}`, expense)),
   services: (status?: string) => requestData<ServiceOrder[]>(apiClient.get('/services', { params: status ? { status } : {} })),
   service: (id: number) => requestData<ServiceOrder>(apiClient.get(`/services/${id}`)),
   createService: (service: ServiceOrder) => requestData<ServiceOrder>(apiClient.post('/services', service)),

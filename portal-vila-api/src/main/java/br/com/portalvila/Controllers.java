@@ -393,6 +393,25 @@ class ExpenseController {
         dashboardEvents.publishDashboardChanged();
         return saved;
     }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    Expense update(@PathVariable Long id, @RequestBody Expense incoming) {
+        Expense expense = expenses.findById(id).orElseThrow();
+        expense.description = incoming.description;
+        expense.category = incoming.category;
+        expense.amount = incoming.amount;
+        expense.expenseDate = incoming.expenseDate == null ? expense.expenseDate : incoming.expenseDate;
+        expense.supplier = incoming.supplier;
+        expense.paymentMethod = incoming.paymentMethod;
+        expense.notes = incoming.notes;
+        expense.documentId = incoming.documentId;
+        expense.serviceOrderId = incoming.serviceOrderId;
+        expense.budgetId = incoming.budgetId;
+        Expense saved = expenses.save(expense);
+        dashboardEvents.publishDashboardChanged();
+        return saved;
+    }
 }
 
 @RestController

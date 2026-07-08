@@ -80,6 +80,9 @@ export type Expense = {
   supplier?: string;
   paymentMethod?: string;
   notes?: string;
+  documentId?: number;
+  serviceOrderId?: number;
+  budgetId?: number;
 };
 
 export type ServiceOrder = {
