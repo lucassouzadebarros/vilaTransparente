@@ -106,6 +106,8 @@ class FinancialServiceTest {
         assertThat(october.totalCollected()).isEqualByComparingTo("400");
         assertThat(october.movements()).extracting(MovementResponse::date)
             .containsExactly(LocalDate.of(2026, 9, 17), LocalDate.of(2026, 8, 7));
+        assertThat(october.movements()).extracting(MovementResponse::description)
+            .containsOnly("Contribuição - Casa 05");
         assertThat(financialService.dashboardForResident("2026-10", resident.id).movements()).hasSize(2);
     }
 

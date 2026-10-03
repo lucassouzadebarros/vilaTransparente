@@ -86,13 +86,18 @@ class FinancialService {
 
         List<MovementResponse> movements = new ArrayList<>();
         if (transparencyEnabled) {
+            Map<Long, String> houseLabels = houses.findAll().stream()
+                .filter(h -> h.label != null)
+                .collect(Collectors.toMap(h -> h.id, h -> h.label));
             // Movements cover every month, like direct receipts and expenses, so the list always matches the totals.
             allContributions.stream()
                 .filter(c -> "PAID".equals(c.status))
                 .forEach(c -> movements.add(new MovementResponse(
                     c.paymentDate == null ? YearMonth.parse(c.referenceMonth).atDay(1) : c.paymentDate.toLocalDate(),
                     c.manualPayment ? "PAGAMENTO_MANUAL" : "PIX_ASAAS",
-                includeAllContributionMovements ? "Contribuição casa " + c.houseId : "Mensalidade recebida",
+                    includeAllContributionMovements
+                        ? "Contribuição - " + houseLabels.getOrDefault(c.houseId, "casa " + c.houseId)
+                        : "Mensalidade recebida",
                     paidValue(c),
                     c.status
                 )));

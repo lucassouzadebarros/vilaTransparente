@@ -100,6 +100,9 @@ export function CashBoxScreen() {
     movement.type === 'RECEBIMENTO_DIRETO' && Number(movement.amount) > 0
   );
   const directReceiptTotal = directReceiptMovements.reduce((total, movement) => total + Number(movement.amount ?? 0), 0);
+  const housePaymentMovements = (dashboard?.movements ?? []).filter((movement) =>
+    (movement.type === 'PIX_ASAAS' || movement.type === 'PAGAMENTO_MANUAL') && Number(movement.amount) > 0
+  );
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -160,6 +163,10 @@ export function CashBoxScreen() {
         <DirectReceiptCard key={`${movement.date}-${movement.amount}-${index}`} movement={movement} />
       ))}
 
+      {housePaymentMovements.slice(0, 4).map((movement, index) => (
+        <HousePaymentCard key={`${movement.date}-${movement.amount}-${index}`} movement={movement} />
+      ))}
+
       {visibleContributions.map((item) => (
         <ContributionCard
           key={item.id}
@@ -215,6 +222,27 @@ function DirectReceiptCard({ movement }: { movement: Movement }) {
           <Text style={styles.chargeTitle}>Recebimento direto</Text>
           <Text style={styles.chargeName}>{movement.description}</Text>
           <Text style={styles.chargeDescription}>Sem casa vinculada - {formatDate(movement.date)}</Text>
+        </View>
+        <View style={styles.chargeRight}>
+          <Badge status={movement.status} />
+          <Text style={styles.directValue}>{formatCurrency(movement.amount)}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function HousePaymentCard({ movement }: { movement: Movement }) {
+  return (
+    <View style={styles.chargeCard}>
+      <View style={styles.chargeTop}>
+        <View style={styles.houseIcon}>
+          <Home color={colors.blue} size={25} />
+        </View>
+        <View style={styles.chargeCopy}>
+          <Text style={styles.chargeTitle}>Pagamento recebido</Text>
+          <Text style={styles.chargeName}>{movement.description}</Text>
+          <Text style={styles.chargeDescription}>{formatDate(movement.date)}</Text>
         </View>
         <View style={styles.chargeRight}>
           <Badge status={movement.status} />
