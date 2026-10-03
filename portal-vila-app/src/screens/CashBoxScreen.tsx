@@ -9,6 +9,7 @@ import { api } from '../services/api';
 import { Contribution, Dashboard, Movement, PixCharge } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { colors, spacing } from '../theme';
+import { reloadIfNewVersion } from '../utils/appVersion';
 import { currentMonth } from '../utils/month';
 
 export function CashBoxScreen() {
@@ -40,6 +41,13 @@ export function CashBoxScreen() {
       loadInFlight.current = false;
       setLoading(false);
     }
+  }
+
+  async function refreshFromButton() {
+    if (await reloadIfNewVersion()) {
+      return;
+    }
+    await load();
   }
 
   useFocusEffect(
@@ -100,9 +108,13 @@ export function CashBoxScreen() {
     movement.type === 'RECEBIMENTO_DIRETO' && Number(movement.amount) > 0
   );
   const directReceiptTotal = directReceiptMovements.reduce((total, movement) => total + Number(movement.amount ?? 0), 0);
-  const housePaymentMovements = (dashboard?.movements ?? []).filter((movement) =>
-    (movement.type === 'PIX_ASAAS' || movement.type === 'PAGAMENTO_MANUAL') && Number(movement.amount) > 0
-  );
+  // One list for every received payment, newest first, so direct receipts and house payments interleave by date.
+  const receivedMovements = (dashboard?.movements ?? [])
+    .filter((movement) =>
+      (movement.type === 'RECEBIMENTO_DIRETO' || movement.type === 'PIX_ASAAS' || movement.type === 'PAGAMENTO_MANUAL')
+      && Number(movement.amount) > 0
+    )
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -112,7 +124,7 @@ export function CashBoxScreen() {
           <Text style={styles.title}>Caixa</Text>
           <Text style={styles.subtitle}>Resumo financeiro</Text>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Atualizar caixa" onPress={load} style={styles.refreshButton}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Atualizar caixa" onPress={() => { refreshFromButton().catch(() => undefined); }} style={styles.refreshButton}>
           <RefreshCw color={loading ? colors.muted : colors.blue} size={24} />
         </Pressable>
       </View>
@@ -159,12 +171,10 @@ export function CashBoxScreen() {
         </>
       )}
 
-      {directReceiptMovements.slice(0, 4).map((movement, index) => (
-        <DirectReceiptCard key={`${movement.date}-${movement.amount}-${index}`} movement={movement} />
-      ))}
-
-      {housePaymentMovements.slice(0, 4).map((movement, index) => (
-        <HousePaymentCard key={`${movement.date}-${movement.amount}-${index}`} movement={movement} />
+      {receivedMovements.slice(0, 8).map((movement, index) => (
+        movement.type === 'RECEBIMENTO_DIRETO'
+          ? <DirectReceiptCard key={`${movement.date}-${movement.amount}-${index}`} movement={movement} />
+          : <HousePaymentCard key={`${movement.date}-${movement.amount}-${index}`} movement={movement} />
       ))}
 
       {visibleContributions.map((item) => (
