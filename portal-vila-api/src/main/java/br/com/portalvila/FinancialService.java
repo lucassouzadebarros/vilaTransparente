@@ -74,7 +74,8 @@ class FinancialService {
             .filter(c -> "OVERDUE".equals(c.status))
             .map(c -> c.amount)
             .reduce(BigDecimal.ZERO, BigDecimal::add) : BigDecimal.ZERO;
-        BigDecimal allPaid = transparencyEnabled ? contributions.findAll().stream()
+        List<Contribution> allContributions = transparencyEnabled ? contributions.findAll() : List.of();
+        BigDecimal allPaid = transparencyEnabled ? allContributions.stream()
             .filter(c -> "PAID".equals(c.status))
             .map(this::paidValue)
             .reduce(BigDecimal.ZERO, BigDecimal::add)
@@ -85,7 +86,8 @@ class FinancialService {
 
         List<MovementResponse> movements = new ArrayList<>();
         if (transparencyEnabled) {
-            monthContributions.stream()
+            // Movements cover every month, like direct receipts and expenses, so the list always matches the totals.
+            allContributions.stream()
                 .filter(c -> "PAID".equals(c.status))
                 .forEach(c -> movements.add(new MovementResponse(
                     c.paymentDate == null ? YearMonth.parse(c.referenceMonth).atDay(1) : c.paymentDate.toLocalDate(),

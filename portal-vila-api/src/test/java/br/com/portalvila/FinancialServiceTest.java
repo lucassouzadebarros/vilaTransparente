@@ -76,6 +76,40 @@ class FinancialServiceTest {
     }
 
     @Test
+    void movementsIncludePaidContributionsFromEveryMonth() {
+        House house = houses.save(new House(5, "Casa 05"));
+        Resident resident = residents.save(new Resident(house.id, "Lucas", "lucas-movements@test.dev", null, "***.111.***-**"));
+
+        Contribution september = new Contribution();
+        september.houseId = house.id;
+        september.residentId = resident.id;
+        september.referenceMonth = "2026-09";
+        september.amount = BigDecimal.valueOf(200);
+        september.paidAmount = BigDecimal.valueOf(200);
+        september.status = "PAID";
+        september.paymentDate = java.time.LocalDateTime.of(2026, 9, 17, 0, 0);
+        contributions.save(september);
+
+        Contribution august = new Contribution();
+        august.houseId = house.id;
+        august.residentId = resident.id;
+        august.referenceMonth = "2026-08";
+        august.amount = BigDecimal.valueOf(200);
+        august.paidAmount = BigDecimal.valueOf(200);
+        august.status = "PAID";
+        august.paymentDate = java.time.LocalDateTime.of(2026, 8, 7, 0, 0);
+        contributions.save(august);
+
+        DashboardResponse october = financialService.dashboard("2026-10");
+
+        assertThat(october.collected()).isEqualByComparingTo("0");
+        assertThat(october.totalCollected()).isEqualByComparingTo("400");
+        assertThat(october.movements()).extracting(MovementResponse::date)
+            .containsExactly(LocalDate.of(2026, 9, 17), LocalDate.of(2026, 8, 7));
+        assertThat(financialService.dashboardForResident("2026-10", resident.id).movements()).hasSize(2);
+    }
+
+    @Test
     void residentOnlySeesAccumulatedBalanceAfterFirstPaidContribution() {
         House houseOne = houses.save(new House(3, "Casa 03"));
         House houseTwo = houses.save(new House(4, "Casa 04"));
