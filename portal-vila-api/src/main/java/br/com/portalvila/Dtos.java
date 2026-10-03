@@ -144,6 +144,44 @@ record WebhookResult(boolean processed, boolean duplicate, String message) {
 record DirectReceiptReprocessResponse(int checked, int updated, int unchanged, int skippedNoPayload, int failed) {
 }
 
+record AsaasSyncItem(String paymentId, String action, String remoteStatus, BigDecimal value, LocalDate date, String description, String note) {
+}
+
+record AsaasStatementTotal(String type, int count, BigDecimal total) {
+}
+
+record AsaasStatementEntry(LocalDate date, String type, BigDecimal value, String description, String paymentId) {
+}
+
+record AsaasSyncReport(
+    boolean applied,
+    LocalDate from,
+    LocalDate to,
+    int paymentsFetched,
+    int chargesCreated,
+    int chargesUpdated,
+    int directReceiptsCreated,
+    int directReceiptsUpdated,
+    int unchanged,
+    int ignored,
+    int conflicts,
+    int skipped,
+    int failed,
+    BigDecimal localBalanceBefore,
+    BigDecimal localBalanceAfter,
+    BigDecimal asaasBalance,
+    BigDecimal difference,
+    BigDecimal statementCredits,
+    BigDecimal statementFees,
+    BigDecimal statementOtherDebits,
+    List<AsaasSyncItem> items,
+    List<AsaasStatementTotal> statementByType,
+    List<AsaasStatementEntry> debits,
+    List<AsaasStatementEntry> creditsWithoutLocalRecord,
+    List<String> warnings
+) {
+}
+
 record SettingsResponse(
     Long id,
     String villageName,

@@ -142,19 +142,34 @@ class WebhookService {
         return new DirectReceiptReprocessResponse(checked, updated, unchanged, skippedNoPayload, failed);
     }
 
+    /**
+     * Applies a payment read straight from the Asaas API (history sync) using the same rules as a webhook,
+     * without recording a webhook event. Only a received payment may become a direct receipt, so pending or
+     * cancelled charges that this portal never tracked do not create noise.
+     */
+    boolean applySyncedPayment(String eventType, JsonNode payment) {
+        String gatewayPaymentId = text(payment, "id");
+        if (gatewayPaymentId == null || gatewayPaymentId.isBlank()) {
+            return false;
+        }
+        boolean allowDirectReceipt = "PAYMENT_RECEIVED".equals(eventType);
+        return paymentLocks.withLock(gatewayPaymentId,
+            () -> applyPaymentEventLocked(eventType, gatewayPaymentId, payment, allowDirectReceipt));
+    }
+
     private boolean applyPaymentEvent(String eventType, String gatewayPaymentId, JsonNode payment) {
         if (gatewayPaymentId == null || gatewayPaymentId.isBlank()) {
             return false;
         }
-        return paymentLocks.withLock(gatewayPaymentId, () -> applyPaymentEventLocked(eventType, gatewayPaymentId, payment));
+        return paymentLocks.withLock(gatewayPaymentId, () -> applyPaymentEventLocked(eventType, gatewayPaymentId, payment, true));
     }
 
-    private boolean applyPaymentEventLocked(String eventType, String gatewayPaymentId, JsonNode payment) {
+    private boolean applyPaymentEventLocked(String eventType, String gatewayPaymentId, JsonNode payment, boolean allowDirectReceipt) {
         PixCharge charge = pixCharges.findByGatewayAndGatewayPaymentId("ASAAS", gatewayPaymentId).orElse(null);
         if (charge == null) {
             charge = createLocalChargeFromPayment(gatewayPaymentId, payment);
             if (charge == null) {
-                return upsertDirectReceipt(eventType, gatewayPaymentId, payment);
+                return allowDirectReceipt && upsertDirectReceipt(eventType, gatewayPaymentId, payment);
             }
             markDirectReceiptLinked(gatewayPaymentId);
         }
@@ -166,12 +181,13 @@ class WebhookService {
                 applyNormalizedStatus(charge, contribution, status, payment);
             }
             case "PAYMENT_RECEIVED", "PAYMENT_CONFIRMED" -> {
+                LocalDateTime paidMoment = paidMoment(payment);
                 charge.status = "PAID";
-                charge.paidAt = LocalDateTime.now();
+                charge.paidAt = charge.paidAt == null ? paidMoment : charge.paidAt;
                 charge.receiptUrl = text(payment, "transactionReceiptUrl");
                 contribution.status = "PAID";
                 contribution.paidAmount = decimal(payment, "value", charge.value);
-                contribution.paymentDate = LocalDateTime.now();
+                contribution.paymentDate = contribution.paymentDate == null ? paidMoment : contribution.paymentDate;
                 contribution.paymentMethod = "PIX_ASAAS";
             }
             case "PAYMENT_OVERDUE" -> {
@@ -385,12 +401,13 @@ class WebhookService {
 
     private void applyNormalizedStatus(PixCharge charge, Contribution contribution, String status, JsonNode payment) {
         if ("PAID".equals(status)) {
+            LocalDateTime paidMoment = paidMoment(payment);
             charge.status = "PAID";
-            charge.paidAt = charge.paidAt == null ? LocalDateTime.now() : charge.paidAt;
+            charge.paidAt = charge.paidAt == null ? paidMoment : charge.paidAt;
             charge.receiptUrl = text(payment, "transactionReceiptUrl");
             contribution.status = "PAID";
             contribution.paidAmount = decimal(payment, "value", charge.value);
-            contribution.paymentDate = contribution.paymentDate == null ? LocalDateTime.now() : contribution.paymentDate;
+            contribution.paymentDate = contribution.paymentDate == null ? paidMoment : contribution.paymentDate;
             contribution.paymentMethod = "PIX_ASAAS";
         } else if ("OVERDUE".equals(status)) {
             charge.status = "OVERDUE";
@@ -426,6 +443,21 @@ class WebhookService {
             return "CANCELLED";
         }
         return normalizeGatewayStatus(text(payment, "status"));
+    }
+
+    /** Real payment date reported by Asaas; falls back to now when the payload carries none (live webhooks). */
+    private LocalDateTime paidMoment(JsonNode payment) {
+        for (String field : List.of("confirmedDate", "clientPaymentDate", "paymentDate", "creditDate")) {
+            String value = text(payment, field);
+            if (value != null && !value.isBlank()) {
+                try {
+                    return parseGatewayDate(value);
+                } catch (RuntimeException ignored) {
+                    // unparseable date: try the next field
+                }
+            }
+        }
+        return LocalDateTime.now();
     }
 
     private LocalDateTime directReceiptDate(JsonNode payment) {

@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
@@ -30,6 +31,10 @@ interface PixGatewayClient {
     PixQrCode getPixQrCode(String gatewayPaymentId);
     GatewayPayment getPayment(String gatewayPaymentId);
     void cancelPayment(String gatewayPaymentId);
+    List<JsonNode> listPixPaymentsCreatedBetween(LocalDate start, LocalDate end);
+    List<JsonNode> listPixPaymentsReceivedBetween(LocalDate start, LocalDate end);
+    BigDecimal getBalance();
+    List<GatewayTransaction> listFinancialTransactions(LocalDate start, LocalDate end);
 }
 
 record GatewayCustomer(String id) {
@@ -53,8 +58,14 @@ record PixQrCode(String encodedImage, String payload, String expirationDate) {
 record GatewayPayment(String id, String status, BigDecimal value, String receiptUrl) {
 }
 
+record GatewayTransaction(String id, LocalDate date, String type, BigDecimal value, BigDecimal balance, String description, String paymentId) {
+}
+
 @Service
 class AsaasPixGatewayClient implements PixGatewayClient {
+    private static final int PAGE_SIZE = 50;
+    private static final int MAX_PAGES = 200;
+
     private final WebClient webClient;
     private final String apiKey;
     private final ObjectMapper objectMapper;
@@ -380,6 +391,102 @@ class AsaasPixGatewayClient implements PixGatewayClient {
                 .retrieve()
                 .bodyToMono(Void.class)
                 .block(Duration.ofSeconds(15));
+        } catch (WebClientResponseException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
+        }
+    }
+
+    @Override
+    public List<JsonNode> listPixPaymentsCreatedBetween(LocalDate start, LocalDate end) {
+        Map<String, String> filters = new HashMap<>();
+        filters.put("billingType", "PIX");
+        filters.put("dateCreated[ge]", start.format(DateTimeFormatter.ISO_DATE));
+        filters.put("dateCreated[le]", end.format(DateTimeFormatter.ISO_DATE));
+        return fetchAllPages("/payments", filters);
+    }
+
+    @Override
+    public List<JsonNode> listPixPaymentsReceivedBetween(LocalDate start, LocalDate end) {
+        Map<String, String> filters = new HashMap<>();
+        filters.put("billingType", "PIX");
+        filters.put("paymentDate[ge]", start.format(DateTimeFormatter.ISO_DATE));
+        filters.put("paymentDate[le]", end.format(DateTimeFormatter.ISO_DATE));
+        return fetchAllPages("/payments", filters);
+    }
+
+    @Override
+    public BigDecimal getBalance() {
+        requireApiKey();
+        try {
+            JsonNode response = webClient.get()
+                .uri("/finance/balance")
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .block(Duration.ofSeconds(15));
+            JsonNode balance = response == null ? null : response.get("balance");
+            if (balance == null || balance.isNull()) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: resposta de saldo sem o campo balance.");
+            }
+            return balance.decimalValue();
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (WebClientResponseException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
+        }
+    }
+
+    @Override
+    public List<GatewayTransaction> listFinancialTransactions(LocalDate start, LocalDate end) {
+        Map<String, String> filters = new HashMap<>();
+        filters.put("startDate", start.format(DateTimeFormatter.ISO_DATE));
+        filters.put("finishDate", end.format(DateTimeFormatter.ISO_DATE));
+        filters.put("order", "asc");
+        return fetchAllPages("/financialTransactions", filters).stream()
+            .map(item -> new GatewayTransaction(
+                item.path("id").asText(null),
+                item.hasNonNull("date") ? LocalDate.parse(item.get("date").asText().substring(0, 10)) : null,
+                item.path("type").asText(""),
+                item.hasNonNull("value") ? item.get("value").decimalValue() : BigDecimal.ZERO,
+                item.hasNonNull("balance") ? item.get("balance").decimalValue() : null,
+                item.path("description").asText(""),
+                item.path("paymentId").asText(null)
+            ))
+            .toList();
+    }
+
+    private List<JsonNode> fetchAllPages(String path, Map<String, String> filters) {
+        requireApiKey();
+        List<JsonNode> all = new ArrayList<>();
+        try {
+            int offset = 0;
+            for (int page = 0; page < MAX_PAGES; page++) {
+                int currentOffset = offset;
+                JsonNode response = webClient.get()
+                    .uri(builder -> {
+                        builder.path(path);
+                        filters.forEach(builder::queryParam);
+                        return builder.queryParam("offset", currentOffset).queryParam("limit", PAGE_SIZE).build();
+                    })
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .block(Duration.ofSeconds(30));
+                JsonNode data = response == null ? null : response.get("data");
+                if (data == null || !data.isArray()) {
+                    return all;
+                }
+                data.forEach(all::add);
+                if (!response.path("hasMore").asBoolean(false)) {
+                    return all;
+                }
+                offset += PAGE_SIZE;
+            }
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: listagem excedeu o limite de páginas; reduza o período.");
+        } catch (ResponseStatusException ex) {
+            throw ex;
         } catch (WebClientResponseException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
         } catch (RuntimeException ex) {

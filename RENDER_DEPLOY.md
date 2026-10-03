@@ -79,6 +79,20 @@ Eventos recomendados:
 - `PAYMENT_REFUNDED`
 - `PAYMENT_DELETED`
 
+## 5.1 Recuperar dados depois de ficar fora do ar
+
+O Asaas so guarda webhooks nao entregues por 14 dias; passado isso, o portal fica sem esses pagamentos.
+Para sincronizar o historico pela API do Asaas:
+
+1. No Asaas, confira se a chave de API ainda esta ativa (chaves sem uso por 3 meses sao desabilitadas) e
+   reabilite a fila de webhooks. Se criar chave nova, atualize `ASAAS_API_KEY` no Render.
+2. Rode a simulacao (nao grava nada): `portal-vila-api\scripts\sync-asaas.ps1`
+3. Se o relatorio estiver correto, aplique: `portal-vila-api\scripts\sync-asaas.ps1 -Apply`
+
+Endpoint usado: `POST /api/admin/asaas/sync?from=AAAA-MM-DD&to=AAAA-MM-DD&apply=false` (somente admin).
+O relatorio compara o saldo do portal com o saldo do Asaas e lista saidas e entradas do extrato sem registro.
+O saldo do Asaas ja desconta taxas e saidas; despesas pagas fora do portal precisam ser lancadas como despesa.
+
 ## 6. Primeiro acesso
 
 Entre no front e use:

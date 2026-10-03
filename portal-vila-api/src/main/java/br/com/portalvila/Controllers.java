@@ -368,6 +368,28 @@ class WebhookController {
 
 @RestController
 @CrossOrigin
+@RequestMapping("/api/admin/asaas")
+@PreAuthorize("hasRole('ADMIN')")
+class AsaasSyncController {
+    private final AsaasSyncService syncService;
+
+    AsaasSyncController(AsaasSyncService syncService) {
+        this.syncService = syncService;
+    }
+
+    /** Dry run by default: nothing is saved unless apply=true. */
+    @PostMapping("/sync")
+    AsaasSyncReport sync(
+        @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate from,
+        @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate to,
+        @RequestParam(defaultValue = "false") boolean apply
+    ) {
+        return syncService.sync(from, to, apply);
+    }
+}
+
+@RestController
+@CrossOrigin
 @RequestMapping("/api/expenses")
 class ExpenseController {
     private final ExpenseRepository expenses;
