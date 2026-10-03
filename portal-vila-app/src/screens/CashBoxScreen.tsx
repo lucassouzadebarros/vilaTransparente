@@ -12,6 +12,8 @@ import { colors, spacing } from '../theme';
 import { reloadIfNewVersion } from '../utils/appVersion';
 import { currentMonth } from '../utils/month';
 
+const RECEIVED_PREVIEW_COUNT = 8;
+
 export function CashBoxScreen() {
   const navigation = useNavigation<any>();
   const { isAdmin } = useAuth();
@@ -20,6 +22,7 @@ export function CashBoxScreen() {
   const [charges, setCharges] = useState<PixCharge[]>([]);
   const [month] = useState(currentMonth());
   const [loading, setLoading] = useState(false);
+  const [showAllReceived, setShowAllReceived] = useState(false);
   const loadInFlight = useRef(false);
 
   async function load() {
@@ -171,11 +174,19 @@ export function CashBoxScreen() {
         </>
       )}
 
-      {receivedMovements.slice(0, 8).map((movement, index) => (
+      {(showAllReceived ? receivedMovements : receivedMovements.slice(0, RECEIVED_PREVIEW_COUNT)).map((movement, index) => (
         movement.type === 'RECEBIMENTO_DIRETO'
           ? <DirectReceiptCard key={`${movement.date}-${movement.amount}-${index}`} movement={movement} />
           : <HousePaymentCard key={`${movement.date}-${movement.amount}-${index}`} movement={movement} />
       ))}
+
+      {receivedMovements.length > RECEIVED_PREVIEW_COUNT ? (
+        <Pressable accessibilityRole="button" style={styles.secondaryAction} onPress={() => setShowAllReceived((value) => !value)}>
+          <Text style={styles.secondaryActionText}>
+            {showAllReceived ? 'Ver menos' : `Ver todas as entradas (${receivedMovements.length})`}
+          </Text>
+        </Pressable>
+      ) : null}
 
       {visibleContributions.map((item) => (
         <ContributionCard
