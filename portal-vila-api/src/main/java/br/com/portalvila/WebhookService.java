@@ -27,6 +27,7 @@ class WebhookService {
     private final SettingsRepository settingsRepository;
     private final DashboardEventService dashboardEvents;
     private final GatewayPaymentLockService paymentLocks;
+    private final ExcludedGatewayPaymentRepository excludedPayments;
     private final String configuredToken;
 
     WebhookService(
@@ -41,6 +42,7 @@ class WebhookService {
         SettingsRepository settingsRepository,
         DashboardEventService dashboardEvents,
         GatewayPaymentLockService paymentLocks,
+        ExcludedGatewayPaymentRepository excludedPayments,
         @Value("${portal.asaas.webhook-token:}") String configuredToken
     ) {
         this.objectMapper = objectMapper;
@@ -54,6 +56,7 @@ class WebhookService {
         this.settingsRepository = settingsRepository;
         this.dashboardEvents = dashboardEvents;
         this.paymentLocks = paymentLocks;
+        this.excludedPayments = excludedPayments;
         this.configuredToken = configuredToken;
     }
 
@@ -165,6 +168,9 @@ class WebhookService {
     }
 
     private boolean applyPaymentEventLocked(String eventType, String gatewayPaymentId, JsonNode payment, boolean allowDirectReceipt) {
+        if (excludedPayments.existsByGatewayAndGatewayPaymentId("ASAAS", gatewayPaymentId)) {
+            return false;
+        }
         PixCharge charge = pixCharges.findByGatewayAndGatewayPaymentId("ASAAS", gatewayPaymentId).orElse(null);
         if (charge == null) {
             charge = createLocalChargeFromPayment(gatewayPaymentId, payment);

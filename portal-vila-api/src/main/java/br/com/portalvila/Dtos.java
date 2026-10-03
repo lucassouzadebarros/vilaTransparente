@@ -144,6 +144,20 @@ record WebhookResult(boolean processed, boolean duplicate, String message) {
 record DirectReceiptReprocessResponse(int checked, int updated, int unchanged, int skippedNoPayload, int failed) {
 }
 
+record ExcludePaymentsRequest(@jakarta.validation.constraints.NotEmpty List<String> paymentIds, String reason) {
+}
+
+record ExcludedPaymentItem(String paymentId, String action, BigDecimal amount, String note) {
+}
+
+record ExcludePaymentsReport(
+    boolean applied,
+    List<ExcludedPaymentItem> items,
+    BigDecimal balanceBefore,
+    BigDecimal balanceAfter
+) {
+}
+
 record AsaasSyncItem(String paymentId, String action, String remoteStatus, BigDecimal value, LocalDate date, String description, String note) {
 }
 

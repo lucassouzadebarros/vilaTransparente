@@ -372,9 +372,20 @@ class WebhookController {
 @PreAuthorize("hasRole('ADMIN')")
 class AsaasSyncController {
     private final AsaasSyncService syncService;
+    private final PaymentExclusionService exclusionService;
 
-    AsaasSyncController(AsaasSyncService syncService) {
+    AsaasSyncController(AsaasSyncService syncService, PaymentExclusionService exclusionService) {
         this.syncService = syncService;
+        this.exclusionService = exclusionService;
+    }
+
+    /** Dry run by default. Removes the payments from the portal and keeps them out of future syncs and webhooks. */
+    @PostMapping("/exclude-payments")
+    ExcludePaymentsReport excludePayments(
+        @RequestParam(defaultValue = "false") boolean apply,
+        @Valid @RequestBody ExcludePaymentsRequest request
+    ) {
+        return exclusionService.exclude(request.paymentIds(), request.reason(), apply);
     }
 
     /** Dry run by default: nothing is saved unless apply=true. */
@@ -414,6 +425,16 @@ class ExpenseController {
         Expense saved = expenses.save(expense);
         dashboardEvents.publishDashboardChanged();
         return saved;
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    void delete(@PathVariable Long id) {
+        if (!expenses.existsById(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Despesa não encontrada.");
+        }
+        expenses.deleteById(id);
+        dashboardEvents.publishDashboardChanged();
     }
 
     @PutMapping("/{id}")

@@ -71,6 +71,10 @@ interface PortalDocumentRepository extends JpaRepository<PortalDocument, Long> {
     List<PortalDocument> findByRelatedTypeAndRelatedIdOrderByCreatedAtDesc(String relatedType, Long relatedId);
 }
 
+interface ExcludedGatewayPaymentRepository extends JpaRepository<ExcludedGatewayPayment, Long> {
+    boolean existsByGatewayAndGatewayPaymentId(String gateway, String gatewayPaymentId);
+}
+
 interface ProblemReportRepository extends JpaRepository<ProblemReport, Long> {
     List<ProblemReport> findAllByOrderByCreatedAtDesc();
     List<ProblemReport> findByStatusOrderByCreatedAtDesc(String status);

@@ -38,6 +38,7 @@ class AsaasSyncService {
     private final PixChargeRepository pixCharges;
     private final ContributionRepository contributions;
     private final DirectReceiptRepository directReceipts;
+    private final ExcludedGatewayPaymentRepository excludedPayments;
     private final DashboardEventService dashboardEvents;
     private final TransactionTemplate transaction;
     private final ReentrantLock running = new ReentrantLock();
@@ -49,6 +50,7 @@ class AsaasSyncService {
         PixChargeRepository pixCharges,
         ContributionRepository contributions,
         DirectReceiptRepository directReceipts,
+        ExcludedGatewayPaymentRepository excludedPayments,
         DashboardEventService dashboardEvents,
         PlatformTransactionManager transactionManager
     ) {
@@ -58,6 +60,7 @@ class AsaasSyncService {
         this.pixCharges = pixCharges;
         this.contributions = contributions;
         this.directReceipts = directReceipts;
+        this.excludedPayments = excludedPayments;
         this.dashboardEvents = dashboardEvents;
         this.transaction = new TransactionTemplate(transactionManager);
     }
@@ -288,8 +291,10 @@ class AsaasSyncService {
             .orElse("NONE");
     }
 
+    /** A credit is accounted for when the portal has it, or when the admin deliberately excluded it. */
     private boolean hasLocalRecord(String paymentId) {
-        return paymentId != null && !paymentId.isBlank() && !"NONE".equals(stateOf(paymentId));
+        return paymentId != null && !paymentId.isBlank()
+            && (excludedPayments.existsByGatewayAndGatewayPaymentId(GATEWAY, paymentId) || !"NONE".equals(stateOf(paymentId)));
     }
 
     private void addItem(List<AsaasSyncItem> items, JsonNode payment, String action, String note) {
