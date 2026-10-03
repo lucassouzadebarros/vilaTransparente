@@ -40,7 +40,7 @@ export function ExpensesScreen() {
 
   const load = useCallback(async () => {
     const [expenseList, documentList] = await Promise.all([api.expenses(), api.documents()]);
-    setItems(expenseList);
+    setItems(sortNewestFirst(expenseList));
     setDocuments(documentList);
   }, []);
 
@@ -369,6 +369,13 @@ function parseCurrencyInput(value: string) {
 
 function formatCurrency(value?: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value ?? 0);
+}
+
+// The API returns expenses in insertion order; show the most recent first (same order as the Caixa).
+function sortNewestFirst(list: Expense[]) {
+  return [...list].sort(
+    (a, b) => String(b.expenseDate).localeCompare(String(a.expenseDate)) || Number(b.id ?? 0) - Number(a.id ?? 0)
+  );
 }
 
 function formatDate(value?: string) {
