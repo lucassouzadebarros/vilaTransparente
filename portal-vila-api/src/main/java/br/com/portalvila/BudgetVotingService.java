@@ -32,7 +32,6 @@ class BudgetVotingService {
     private final BudgetVoteRepository votes;
     private final ResidentRepository residents;
     private final HouseRepository houses;
-    private final ServiceOrderRepository services;
     private final DashboardEventService dashboardEvents;
 
     BudgetVotingService(
@@ -40,14 +39,12 @@ class BudgetVotingService {
         BudgetVoteRepository votes,
         ResidentRepository residents,
         HouseRepository houses,
-        ServiceOrderRepository services,
         DashboardEventService dashboardEvents
     ) {
         this.budgets = budgets;
         this.votes = votes;
         this.residents = residents;
         this.houses = houses;
-        this.services = services;
         this.dashboardEvents = dashboardEvents;
     }
 
@@ -137,21 +134,6 @@ class BudgetVotingService {
         budget.votingClosedAt = now;
         budget.updatedAt = now;
         budgets.save(budget);
-
-        // A budget created inside a service fills that service, unless the admin already picked another one.
-        if ("APROVADO".equals(status) && budget.serviceId != null) {
-            services.findById(budget.serviceId).ifPresent(service -> {
-                if (service.approvedBudgetId == null) {
-                    service.approvedBudgetId = budget.id;
-                    service.expectedValue = budget.amount;
-                    if ("PLANEJADO".equals(service.status)) {
-                        service.status = "APROVADO";
-                    }
-                    service.updatedAt = now;
-                    services.save(service);
-                }
-            });
-        }
         dashboardEvents.publishDashboardChanged();
     }
 

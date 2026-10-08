@@ -160,9 +160,7 @@ export const api = {
   budgets: () => requestData<Budget[]>(apiClient.get('/budgets')),
   serviceBudgets: (serviceId: number) => requestData<Budget[]>(apiClient.get(`/services/${serviceId}/budgets`)),
   budget: (id: number) => requestData<Budget>(apiClient.get(`/budgets/${id}`)),
-  createBudget: (serviceId: number | null | undefined, budget: Budget) => requestData<Budget>(
-    serviceId ? apiClient.post(`/services/${serviceId}/budgets`, budget) : apiClient.post('/budgets', budget)
-  ),
+  createBudget: (budget: Budget) => requestData<Budget>(apiClient.post('/budgets', budget)),
   updateBudget: (id: number, budget: Budget) => requestData<Budget>(apiClient.put(`/budgets/${id}`, budget)),
   budgetVotings: () => requestData<BudgetVoting[]>(apiClient.get('/budgets/votes')),
   budgetVoting: (id: number) => requestData<BudgetVoting>(apiClient.get(`/budgets/${id}/votes`)),

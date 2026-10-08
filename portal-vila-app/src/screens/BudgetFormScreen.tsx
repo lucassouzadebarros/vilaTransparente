@@ -1,13 +1,13 @@
-import { ReactNode, useCallback, useMemo, useState } from 'react';
+import { ReactNode, useCallback, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { ArrowLeft, CalendarDays, CheckCircle2, ExternalLink, FileText, Flag, Link2, Save, Trash2, Upload, UserRound, X } from 'lucide-react-native';
+import { ArrowLeft, CalendarDays, CheckCircle2, ExternalLink, FileText, Flag, Save, Trash2, Upload, UserRound, X } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
-import { Badge, Card, Label, Money } from '../components/ui';
+import { Card, Label } from '../components/ui';
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
-import { Budget, PortalDocument, ServiceOrder } from '../types';
+import { Budget, PortalDocument } from '../types';
 
 const statusOptions: Array<Budget['status']> = ['EM_ANALISE', 'APROVADO', 'REJEITADO', 'CANCELADO'];
 
@@ -63,13 +63,9 @@ export function BudgetFormScreen() {
   const formMode = route.params?.formMode as 'create' | 'edit' | undefined;
   const routeBudgetId = positiveId(route.params?.budgetId ?? route.params?.budget?.id);
   const editingBudgetId = formMode === 'create' ? null : routeBudgetId;
-  const routeServiceId = positiveId(route.params?.serviceId);
-  const returnToServiceId = positiveId(route.params?.returnToServiceId);
   const formKey = route.params?.formKey ?? route.key;
 
-  const [services, setServices] = useState<ServiceOrder[]>([]);
   const [budgetId, setBudgetId] = useState<number | null>(null);
-  const [serviceId, setServiceId] = useState<number | null>(null);
   const [title, setTitle] = useState('');
   const [supplier, setSupplier] = useState('');
   const [supplierDocument, setSupplierDocument] = useState('');
@@ -89,14 +85,12 @@ export function BudgetFormScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const selectedService = useMemo(() => services.find((service) => service.id === serviceId), [services, serviceId]);
   const amountValue = parseAmount(amount);
   const isEditing = Boolean(budgetId);
   const canSave = Boolean(title.trim() && supplier.trim() && amountValue > 0 && !saving && !loading);
 
-  function resetForm(nextServiceId: number | null) {
+  function resetForm() {
     setBudgetId(null);
-    setServiceId(nextServiceId);
     setTitle('');
     setSupplier('');
     setSupplierDocument('');
@@ -117,7 +111,6 @@ export function BudgetFormScreen() {
   function fillForm(budget: Budget, documents: PortalDocument[]) {
     const document = documents.find((item) => item.type === 'ORCAMENTO') ?? documents[0] ?? null;
     setBudgetId(budget.id ?? null);
-    setServiceId(budget.serviceId ?? null);
     setTitle(budget.title ?? '');
     setSupplier(budget.supplier ?? '');
     setSupplierDocument(budget.supplierDocument ?? '');
@@ -142,12 +135,6 @@ export function BudgetFormScreen() {
         setLoading(true);
         setError('');
         try {
-          const nextServices = await api.services();
-          if (!active) {
-            return;
-          }
-          setServices(nextServices);
-
           if (editingBudgetId) {
             const [nextBudget, nextDocuments] = await Promise.all([
               api.budget(editingBudgetId),
@@ -158,14 +145,10 @@ export function BudgetFormScreen() {
             }
             return;
           }
-
-          const nextServiceId = routeServiceId && nextServices.some((service) => service.id === routeServiceId)
-            ? routeServiceId
-            : null;
-          resetForm(nextServiceId);
+          resetForm();
         } catch (err) {
           if (active) {
-            resetForm(routeServiceId);
+            resetForm();
             setError(apiErrorMessage(err, 'Não consegui carregar o formulário de orçamento.'));
           }
         } finally {
@@ -178,7 +161,7 @@ export function BudgetFormScreen() {
       return () => {
         active = false;
       };
-    }, [editingBudgetId, routeServiceId, formKey])
+    }, [editingBudgetId, formKey])
   );
 
   function showError(message: string) {
@@ -187,7 +170,6 @@ export function BudgetFormScreen() {
   }
 
   async function save() {
-    const serviceIdToSave = selectedService?.id ?? null;
     if (!title.trim()) {
       showError('Informe o título do orçamento.');
       return;
@@ -205,7 +187,6 @@ export function BudgetFormScreen() {
     try {
       const payload: Budget = {
         id: budgetId ?? undefined,
-        serviceId: serviceIdToSave,
         title: title.trim(),
         supplier: supplier.trim(),
         supplierDocument: supplierDocument.trim() || undefined,
@@ -221,7 +202,7 @@ export function BudgetFormScreen() {
 
       let saved = budgetId
         ? await api.updateBudget(budgetId, payload)
-        : await api.createBudget(serviceIdToSave, payload);
+        : await api.createBudget(payload);
 
       if (saved.id && documentFile) {
         const document = await api.uploadDocument(documentFile, {
@@ -245,9 +226,7 @@ export function BudgetFormScreen() {
       }
 
       Alert.alert('Orçamento', isEditing ? 'Orçamento atualizado.' : 'Orçamento salvo.');
-      if (returnToServiceId) {
-        navigation.navigate('ServiceDetails', { id: returnToServiceId, refreshKey: Date.now() });
-      } else if (saved.id) {
+      if (saved.id) {
         navigation.navigate('BudgetDetails', { id: saved.id, refreshKey: Date.now() });
       } else {
         navigation.navigate('Budgets', { refreshKey: Date.now() });
@@ -327,33 +306,6 @@ export function BudgetFormScreen() {
               ? 'Aprovar ou recusar é decidido pela votação das casas. Mudar título, fornecedor ou valor zera os votos já dados.'
               : 'Aprovar ou recusar é decidido pela votação das casas.'}
         </Text>
-      </FormSection>
-
-      <FormSection icon={Link2} title="Serviço vinculado">
-        <BudgetChoice
-          selected={serviceId === null}
-          title="Sem serviço vinculado"
-          subtitle="Orçamento avulso"
-          onPress={() => setServiceId(null)}
-        />
-        {services.map((service) => {
-          const selected = service.id === serviceId;
-          return (
-            <BudgetChoice
-              key={service.id}
-              selected={selected}
-              title={service.title}
-              subtitle={`Serviço #${service.id} - ${service.status.replace('_', ' ')}`}
-              onPress={() => setServiceId(service.id ?? null)}
-              right={
-                <View style={styles.budgetRight}>
-                  {selected ? <Badge status="SELECIONADO" /> : null}
-                  <Money value={service.finalValue ?? service.expectedValue ?? 0} />
-                </View>
-              }
-            />
-          );
-        })}
       </FormSection>
 
       <FormSection icon={UserRound} title="Fornecedor">
@@ -452,33 +404,6 @@ function StatusChoice({ label, selected, onPress }: { label: string; selected: b
     <Pressable accessibilityRole="button" onPress={onPress} style={[styles.statusChoice, selected ? styles.statusChoiceSelected : null]}>
       {selected ? <CheckCircle2 color={colors.surface} size={15} /> : null}
       <Text style={[styles.statusChoiceText, selected ? styles.statusChoiceTextSelected : null]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function BudgetChoice({
-  title,
-  subtitle,
-  selected,
-  onPress,
-  right
-}: {
-  title: string;
-  subtitle: string;
-  selected: boolean;
-  onPress: () => void;
-  right?: ReactNode;
-}) {
-  return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.budgetChoice, selected ? styles.budgetChoiceSelected : null]}>
-      <View style={styles.documentMiniIcon}>
-        <FileText color={colors.blue} size={20} />
-      </View>
-      <View style={styles.budgetCopy}>
-        <Text style={styles.budgetTitle}>{title}</Text>
-        <Text style={styles.budgetSubtitle}>{subtitle}</Text>
-      </View>
-      {right ?? (selected ? <View style={styles.selectedPill}><CheckCircle2 color={colors.blue} size={14} /><Text style={styles.selectedText}>SELECIONADO</Text></View> : null)}
     </Pressable>
   );
 }
@@ -648,65 +573,6 @@ const styles = StyleSheet.create({
   },
   statusChoiceTextSelected: {
     color: colors.surface
-  },
-  budgetChoice: {
-    minHeight: 62,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingVertical: 10,
-    paddingHorizontal: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md
-  },
-  budgetChoiceSelected: {
-    borderColor: colors.blue,
-    backgroundColor: '#F4F8FF'
-  },
-  documentMiniIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: colors.blueSoft,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  budgetCopy: {
-    flex: 1,
-    gap: 3
-  },
-  budgetTitle: {
-    color: colors.ink,
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: '900'
-  },
-  budgetSubtitle: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '600'
-  },
-  selectedPill: {
-    minHeight: 28,
-    borderRadius: 8,
-    backgroundColor: colors.blueSoft,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm
-  },
-  selectedText: {
-    color: colors.blue,
-    fontSize: 10,
-    fontWeight: '900'
-  },
-  budgetRight: {
-    alignItems: 'flex-end',
-    gap: spacing.xs
   },
   field: {
     gap: 5

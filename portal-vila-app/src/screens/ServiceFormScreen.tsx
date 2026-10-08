@@ -92,16 +92,12 @@ export function ServiceFormScreen() {
     return budgets.find((budget) => budget.id === selectedBudgetId);
   }, [budgets, selectedBudgetId]);
 
+  // Approved budgets that are still free, plus the one already linked to this service.
   const budgetOptions = useMemo(() => {
-    return budgets.filter((budget) => budget.status === 'APROVADO').slice().sort((a, b) => {
-      const aLinked = a.serviceId ? 1 : 0;
-      const bLinked = b.serviceId ? 1 : 0;
-      if (aLinked !== bLinked) {
-        return aLinked - bLinked;
-      }
-      return (a.title || '').localeCompare(b.title || '');
-    });
-  }, [budgets]);
+    return budgets
+      .filter((budget) => budget.status === 'APROVADO' && (!budget.serviceId || budget.serviceId === serviceId))
+      .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  }, [budgets, serviceId]);
 
   const isEditing = Boolean(serviceId);
   const canSave = Boolean(title.trim() && description.trim() && !saving && !loading);
@@ -173,7 +169,15 @@ export function ServiceFormScreen() {
             return;
           }
 
-          resetForm(seedBudgetId && nextBudgets.some((budget) => budget.id === seedBudgetId) ? seedBudgetId : null);
+          // Opened from an approved budget ("Criar serviço com este orçamento"): start from its data.
+          const seeded = nextBudgets.find((budget) => budget.id === seedBudgetId && budget.status === 'APROVADO' && !budget.serviceId);
+          resetForm(seeded?.id ?? null);
+          if (seeded) {
+            setTitle(seeded.title ?? '');
+            setExpectedValue(formatAmount(seeded.amount));
+            setSupplier(seeded.supplier ?? '');
+            setSupplierDocument(seeded.supplierDocument ?? '');
+          }
         } catch (err) {
           if (active) {
             resetForm(null);
@@ -383,7 +387,7 @@ export function ServiceFormScreen() {
       </FormSection>
 
       <FormSection icon={Link2} title="Orçamento vinculado">
-        <Text style={styles.sectionHelp}>Somente orçamentos aprovados podem ser vinculados a um serviço.</Text>
+        <Text style={styles.sectionHelp}>Aparecem aqui os orçamentos aprovados pela votação das casas que ainda não estão em outro serviço.</Text>
         <BudgetChoice
           selected={selectedBudgetId === null}
           title="Sem orçamento vinculado"
@@ -398,7 +402,7 @@ export function ServiceFormScreen() {
               key={budget.id}
               selected={selected}
               title={budget.title}
-              subtitle={`${budget.supplier} · ${budget.serviceId ? `Serviço #${budget.serviceId}` : 'sem serviço'}`}
+              subtitle={`${budget.supplier} · ${budget.serviceId ? 'vinculado a este serviço' : 'disponível'}`}
               onPress={() => chooseBudget(budget)}
               right={
                 <View style={styles.budgetRight}>

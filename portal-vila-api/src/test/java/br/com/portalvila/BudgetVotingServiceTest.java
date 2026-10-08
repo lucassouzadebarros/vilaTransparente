@@ -73,7 +73,7 @@ class BudgetVotingServiceTest {
 
     @Test
     void approvesWhenThreeOfTheFourHousesSayYes() {
-        Budget budget = newBudget(null, "1200.00");
+        Budget budget = newBudget("1200.00");
         assertThat(budget.status).isEqualTo("EM_ANALISE");
 
         BudgetVotingSummary start = voting.summary(budget.id, voters.get(2));
@@ -112,7 +112,7 @@ class BudgetVotingServiceTest {
 
     @Test
     void rejectsAsSoonAsApprovalIsNoLongerPossible() {
-        Budget budget = newBudget(null, "800.00");
+        Budget budget = newBudget("800.00");
 
         voting.vote(budget.id, "RECUSAR", voters.get(2));
         assertThat(voting.summary(budget.id, admin).open()).isTrue();
@@ -125,7 +125,7 @@ class BudgetVotingServiceTest {
 
     @Test
     void housesCanChangeTheirVoteAndTheAdminCanCloseEarly() {
-        Budget budget = newBudget(null, "500.00");
+        Budget budget = newBudget("500.00");
         voting.vote(budget.id, "APROVAR", voters.get(2));
         BudgetVotingSummary changed = voting.vote(budget.id, "RECUSAR", voters.get(2));
         assertThat(changed.approveVotes()).isZero();
@@ -138,14 +138,14 @@ class BudgetVotingServiceTest {
         assertThat(closed.status()).isEqualTo("APROVADO");
 
         // Without a majority of houses voting, closing early does not approve.
-        Budget quiet = newBudget(null, "90.00");
+        Budget quiet = newBudget("90.00");
         voting.vote(quiet.id, "APROVAR", voters.get(2));
         assertThat(voting.close(quiet.id, admin).status()).isEqualTo("REJEITADO");
     }
 
     @Test
     void aNewResidentOfTheHouseVotesAgain() {
-        Budget budget = newBudget(null, "300.00");
+        Budget budget = newBudget("300.00");
         voting.vote(budget.id, "APROVAR", voters.get(7));
 
         Resident previous = residents.findById(voters.get(7).residentId).orElseThrow();
@@ -161,7 +161,7 @@ class BudgetVotingServiceTest {
 
     @Test
     void editingTheTermsRestartsTheVotingAndOnlyVotesDecide() {
-        Budget budget = newBudget(null, "1000.00");
+        Budget budget = newBudget("1000.00");
         voting.vote(budget.id, "APROVAR", voters.get(2));
 
         Budget notesOnly = copy(budget);
@@ -198,30 +198,53 @@ class BudgetVotingServiceTest {
     }
 
     @Test
-    void approvalFillsTheServiceTheBudgetBelongsTo() {
-        ServiceOrder service = new ServiceOrder();
-        service.title = "Pintura do muro";
-        service.description = "Muro da entrada";
-        service = services.save(service);
+    void budgetsAreLinkedOnlyFromTheServiceOnceApproved() {
+        ServiceOrder wall = workflow.saveService(service("Pintura do muro", null));
 
-        Budget budget = newBudget(service.id, "2500.00");
-        voting.vote(budget.id, "APROVAR", voters.get(2));
-        voting.vote(budget.id, "APROVAR", voters.get(3));
-        voting.vote(budget.id, "APROVAR", voters.get(5));
+        // The budget side cannot link: the service id is ignored on create and on edit.
+        Budget budget = new Budget();
+        budget.title = "Pintura";
+        budget.supplier = "Pinturas Silva";
+        budget.amount = new BigDecimal("2500.00");
+        budget.serviceId = wall.id;
+        budget = workflow.saveBudget(budget);
+        assertThat(budget.serviceId).isNull();
+        Budget withService = copy(budget);
+        withService.serviceId = wall.id;
+        assertThat(workflow.updateBudget(budget.id, withService).serviceId).isNull();
 
-        ServiceOrder updated = services.findById(service.id).orElseThrow();
-        assertThat(updated.approvedBudgetId).isEqualTo(budget.id);
-        assertThat(updated.status).isEqualTo("APROVADO");
-        assertThat(updated.expectedValue).isEqualByComparingTo("2500.00");
+        // A budget still being voted on cannot be picked in the service.
+        Long budgetId = budget.id;
+        assertBadRequest(() -> workflow.updateService(wall.id, service("Pintura do muro", budgetId)));
+
+        voting.vote(budgetId, "APROVAR", voters.get(2));
+        voting.vote(budgetId, "APROVAR", voters.get(3));
+        voting.vote(budgetId, "APROVAR", voters.get(5));
+        assertThat(services.findById(wall.id).orElseThrow().approvedBudgetId).isNull();
+
+        workflow.updateService(wall.id, service("Pintura do muro", budgetId));
+        assertThat(budgets.findById(budgetId).orElseThrow().serviceId).isEqualTo(wall.id);
+        assertThat(services.findById(wall.id).orElseThrow().approvedBudgetId).isEqualTo(budgetId);
+
+        // Once linked, another service cannot take it.
+        assertBadRequest(() -> workflow.saveService(service("Outro serviço", budgetId)));
     }
 
-    private Budget newBudget(Long serviceId, String amount) {
+    private ServiceOrder service(String title, Long approvedBudgetId) {
+        ServiceOrder service = new ServiceOrder();
+        service.title = title;
+        service.description = "Descrição";
+        service.approvedBudgetId = approvedBudgetId;
+        return service;
+    }
+
+    private Budget newBudget(String amount) {
         Budget budget = new Budget();
         budget.title = "Orçamento " + amount;
         budget.supplier = "Fornecedor";
         budget.amount = new BigDecimal(amount);
         budget.status = "APROVADO"; // ignored: new budgets always go to the vote
-        return workflow.saveBudget(serviceId, budget);
+        return workflow.saveBudget(budget);
     }
 
     private Budget copy(Budget source) {

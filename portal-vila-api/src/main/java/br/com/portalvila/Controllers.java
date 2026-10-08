@@ -512,12 +512,6 @@ class ServiceOrderController {
         return budgets.findByServiceIdOrderByAmountAsc(id);
     }
 
-    @PostMapping("/{id}/budgets")
-    @PreAuthorize("@access.canManageBudgets()")
-    Budget createBudget(@PathVariable Long id, @RequestBody Budget budget) {
-        return workflow.saveBudget(id, budget);
-    }
-
     @PostMapping("/{id}/finish")
     @PreAuthorize("hasRole('ADMIN')")
     ServiceOrder finish(@PathVariable Long id, @Valid @RequestBody FinishServiceRequest request) {
@@ -575,7 +569,7 @@ class BudgetController {
     @PostMapping
     @PreAuthorize("@access.canManageBudgets()")
     Budget create(@RequestBody Budget budget) {
-        return workflow.saveBudget(budget.serviceId, budget);
+        return workflow.saveBudget(budget);
     }
 
     @GetMapping("/{id}")

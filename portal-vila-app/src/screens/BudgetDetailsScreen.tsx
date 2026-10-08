@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Linking, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { ExternalLink, Lock, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Vote } from 'lucide-react-native';
+import { ExternalLink, Lock, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Vote, Wrench } from 'lucide-react-native';
 import { Badge, Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
@@ -110,7 +110,7 @@ export function BudgetDetailsScreen() {
           <Row><Label>Serviço</Label><Value>{budget.serviceId ? `#${budget.serviceId}` : 'Sem vínculo'}</Value></Row>
           {budget.validUntil ? <Row><Label>Validade</Label><Value>{budget.validUntil}</Value></Row> : null}
           {budget.notes ? <Label>{budget.notes}</Label> : null}
-          {budget.status === 'APROVADO' && !budget.serviceId ? <Label>Aprovado pelas casas. Já pode ser vinculado a um serviço.</Label> : null}
+          {budget.status === 'APROVADO' && !budget.serviceId ? <Label>Aprovado pelas casas. Pode ser escolhido ao cadastrar ou editar um serviço.</Label> : null}
           {documents[0] ? (
             <Button
               title="Abrir PDF do orçamento"
@@ -121,6 +121,13 @@ export function BudgetDetailsScreen() {
           ) : null}
           {canManageBudgets ? (
             <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+              {budget.status === 'APROVADO' && !budget.serviceId ? (
+                <Button
+                  title="Criar serviço com este orçamento"
+                  icon={Wrench}
+                  onPress={() => navigation.navigate('ServiceForm', { formMode: 'create', serviceId: null, budgetId: budget.id, formKey: Date.now() })}
+                />
+              ) : null}
               <Button title="Editar" icon={Pencil} variant="ghost" onPress={() => navigation.navigate('BudgetForm', { formMode: 'edit', budgetId: budget.id, formKey: Date.now() })} />
             </Row>
           ) : null}

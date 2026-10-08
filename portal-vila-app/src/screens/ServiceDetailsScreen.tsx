@@ -1,7 +1,7 @@
 import { ReactNode, useCallback, useMemo, useState } from 'react';
 import { Alert, Linking, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { CheckCircle2, ClipboardList, ExternalLink, FileText, Pencil, Plus, RefreshCw } from 'lucide-react-native';
+import { CheckCircle2, ClipboardList, ExternalLink, FileText, Pencil, RefreshCw } from 'lucide-react-native';
 import { Badge, Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -93,9 +93,8 @@ export function ServiceDetailsScreen() {
 
           <Card>
             <Value>Orçamentos</Value>
-            <Label>{budgets.length} orçamento(s) vinculado(s). O detalhe financeiro principal usa somente o aprovado.</Label>
+            <Label>{budgets.length} orçamento(s) vinculado(s). Para vincular, edite o serviço e escolha um orçamento aprovado pelas casas.</Label>
             <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
-              {canManageBudgets ? <Button title="Novo orçamento" icon={Plus} onPress={() => navigation.navigate('BudgetForm', { formMode: 'create', budgetId: null, serviceId: service.id, returnToServiceId: service.id, formKey: Date.now() })} /> : null}
               <Button title="Ver orçamentos" icon={ClipboardList} variant="ghost" onPress={() => navigation.navigate('Budgets')} />
             </Row>
           </Card>

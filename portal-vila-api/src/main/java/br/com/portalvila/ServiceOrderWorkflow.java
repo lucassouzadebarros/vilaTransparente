@@ -89,34 +89,28 @@ class ServiceOrderWorkflow {
         dashboardEvents.publishDashboardChanged();
     }
 
+    /**
+     * Every new budget goes to the houses' vote. It is never linked to a service here: once approved,
+     * it is picked in the service form (see {@link #reconcileServiceBudget}).
+     */
     @Transactional
-    public Budget saveBudget(Long serviceId, Budget budget) {
-        if (serviceId != null) {
-            services.findById(serviceId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Serviço não encontrado."));
-        }
-        budget.serviceId = serviceId;
-        // Every new budget goes to the houses' vote.
+    public Budget saveBudget(Budget budget) {
+        budget.serviceId = null;
         budget.status = "EM_ANALISE";
         budget.votingClosedAt = null;
         validateBudget(budget);
         budget.updatedAt = LocalDateTime.now();
         Budget saved = budgets.save(budget);
-        applyBudgetStatusToService(saved, null);
         dashboardEvents.publishDashboardChanged();
         return saved;
     }
 
+    /** Keeps the budget's service link as it is: that link is only changed from the service form. */
     @Transactional
     public Budget updateBudget(Long id, Budget incoming) {
         Budget budget = budgets.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Orçamento não encontrado."));
-        Long previousServiceId = budget.serviceId;
         validateBudget(incoming);
-        if (incoming.serviceId != null) {
-            services.findById(incoming.serviceId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Serviço não encontrado."));
-        }
         String previousStatus = budget.status;
         String nextStatus = incoming.status == null || incoming.status.isBlank() ? previousStatus : incoming.status;
         boolean reopening = "EM_ANALISE".equals(nextStatus) && !"EM_ANALISE".equals(previousStatus);
@@ -141,7 +135,6 @@ class ServiceOrderWorkflow {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Este orçamento já foi votado. Para mudar título, fornecedor ou valor, cadastre um novo orçamento.");
             }
         }
-        budget.serviceId = incoming.serviceId;
         budget.title = incoming.title;
         budget.supplier = incoming.supplier;
         budget.supplierDocument = incoming.supplierDocument;
@@ -155,7 +148,6 @@ class ServiceOrderWorkflow {
         budget.notes = incoming.notes;
         budget.updatedAt = LocalDateTime.now();
         Budget saved = budgets.save(budget);
-        applyBudgetStatusToService(saved, previousServiceId);
         dashboardEvents.publishDashboardChanged();
         return saved;
     }
@@ -224,42 +216,10 @@ class ServiceOrderWorkflow {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Somente orçamentos aprovados podem ser vinculados a um serviço.");
         }
         if (budget.serviceId != null && !budget.serviceId.equals(service.id)) {
-            services.findById(budget.serviceId).ifPresent(previousService -> {
-                if (budget.id.equals(previousService.approvedBudgetId)) {
-                    previousService.approvedBudgetId = null;
-                    previousService.updatedAt = LocalDateTime.now();
-                    services.save(previousService);
-                }
-            });
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Este orçamento já está vinculado ao serviço #" + budget.serviceId + ".");
         }
         budget.serviceId = service.id;
         budget.updatedAt = LocalDateTime.now();
         budgets.save(budget);
-    }
-
-    private void applyBudgetStatusToService(Budget budget, Long previousServiceId) {
-        if (previousServiceId != null && !previousServiceId.equals(budget.serviceId)) {
-            services.findById(previousServiceId).ifPresent(previousService -> {
-                if (budget.id.equals(previousService.approvedBudgetId)) {
-                    previousService.approvedBudgetId = null;
-                    previousService.updatedAt = LocalDateTime.now();
-                    services.save(previousService);
-                }
-            });
-        }
-        if (budget.serviceId == null) {
-            return;
-        }
-        services.findById(budget.serviceId).ifPresent(service -> {
-            if ("APROVADO".equals(budget.status)) {
-                service.status = "APROVADO";
-                service.approvedBudgetId = budget.id;
-                service.expectedValue = budget.amount;
-            } else if (budget.id.equals(service.approvedBudgetId)) {
-                service.approvedBudgetId = budget.id;
-            }
-            service.updatedAt = LocalDateTime.now();
-            services.save(service);
-        });
     }
 }
