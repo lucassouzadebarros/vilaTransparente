@@ -64,7 +64,7 @@ export function Badge({ status }: { status: string }) {
       ? { bg: colors.redSoft, fg: colors.red }
       : normalized.includes('ACTIVE') || normalized.includes('ATIVO') || normalized.includes('LIBERADA') || normalized.includes('PAID') || normalized.includes('APROVADO') || normalized.includes('FINALIZADO')
       ? { bg: colors.greenSoft, fg: colors.green }
-      : normalized.includes('PENDING') || normalized.includes('ANALISE') || normalized.includes('PLANEJADO')
+      : normalized.includes('PENDING') || normalized.includes('ANALISE') || normalized.includes('PLANEJADO') || normalized.includes('VOTACAO')
         ? { bg: colors.amberSoft, fg: colors.amber }
         : normalized.includes('OVERDUE') || normalized.includes('REJEITADO') || normalized.includes('CANCEL')
           ? { bg: colors.redSoft, fg: colors.red }
@@ -75,6 +75,7 @@ export function Badge({ status }: { status: string }) {
     .replace('PAID', 'PAGO')
     .replace('PENDING', 'PENDENTE')
     .replace('OVERDUE', 'VENCIDA')
+    .replace('VOTACAO', 'VOTAÇÃO')
     .replace('_', ' ');
   return (
     <View style={[styles.badge, { backgroundColor: palette.bg }]}>

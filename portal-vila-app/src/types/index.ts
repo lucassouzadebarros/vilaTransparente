@@ -1,4 +1,11 @@
-export type Role = 'ADMIN' | 'RESIDENT';
+export type Role = 'ADMIN' | 'SINDICO' | 'RESIDENT';
+
+export type Sindico = {
+  residentId?: number | null;
+  name?: string | null;
+  houseId?: number | null;
+  houseLabel?: string | null;
+};
 
 export type Session = {
   token: string;
@@ -116,6 +123,31 @@ export type Budget = {
   status: 'EM_ANALISE' | 'APROVADO' | 'REJEITADO' | 'CANCELADO';
   documentId?: number;
   notes?: string;
+  votingClosedAt?: string | null;
+};
+
+export type BudgetVoteChoice = 'APROVAR' | 'RECUSAR';
+
+export type BudgetVoteHouse = {
+  houseId: number;
+  houseLabel: string;
+  voted: boolean;
+};
+
+export type BudgetVoting = {
+  budgetId: number;
+  status: Budget['status'];
+  open: boolean;
+  participatingHouses: number;
+  votesToApprove: number;
+  approveVotes: number;
+  rejectVotes: number;
+  pendingVotes: number;
+  myVote?: BudgetVoteChoice | null;
+  canVote: boolean;
+  cannotVoteReason?: string | null;
+  closedAt?: string | null;
+  houses: BudgetVoteHouse[];
 };
 
 export type ProblemReport = {

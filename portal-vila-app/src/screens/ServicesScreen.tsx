@@ -49,7 +49,7 @@ const statusLabels: Record<ServiceOrder['status'], string> = {
 
 export function ServicesScreen() {
   const navigation = useNavigation<any>();
-  const { isAdmin } = useAuth();
+  const { canManageBudgets } = useAuth();
   const [status, setStatus] = useState('TODOS');
   const [items, setItems] = useState<ServiceOrder[]>([]);
   const [loading, setLoading] = useState(false);
@@ -82,7 +82,7 @@ export function ServicesScreen() {
         </Pressable>
       </View>
 
-      {isAdmin ? (
+      {canManageBudgets ? (
         <Pressable
           accessibilityRole="button"
           style={styles.newButton}

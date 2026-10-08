@@ -19,6 +19,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -146,6 +147,12 @@ class CurrentUserService {
         return "ADMIN".equals(current().role);
     }
 
+    /** Admin, or the resident chosen as síndico: manages budgets and the services they are linked to. */
+    boolean canManageBudgets() {
+        String role = current().role;
+        return "ADMIN".equals(role) || "SINDICO".equals(role);
+    }
+
     Long requiredResidentId() {
         AppUser user = current();
         if (user.residentId == null) {
@@ -183,5 +190,22 @@ class CurrentUserService {
             return;
         }
         assertResidentAccess(contribution.residentId);
+    }
+}
+
+/**
+ * Permission checks used in @PreAuthorize as {@code @access...}. The role is read from the database
+ * rather than the token, so choosing or removing the síndico takes effect right away.
+ */
+@Component("access")
+class AccessRules {
+    private final CurrentUserService currentUser;
+
+    AccessRules(CurrentUserService currentUser) {
+        this.currentUser = currentUser;
+    }
+
+    public boolean canManageBudgets() {
+        return currentUser.canManageBudgets();
     }
 }

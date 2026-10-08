@@ -46,7 +46,9 @@ Sem `ASAAS_API_KEY`, o backend usa respostas mockadas para permitir desenvolvime
 - `GET/POST /api/services`
 - `GET /api/services/{id}/budgets`
 - `POST /api/services/{id}/budgets`
-- `POST /api/budgets/{id}/approve`
+- `GET /api/budgets/votes` e `GET /api/budgets/{id}/votes` (placar da votação)
+- `POST /api/budgets/{id}/vote` com `{"vote":"APROVAR"}` ou `{"vote":"RECUSAR"}` (um voto por casa participante)
+- `POST /api/budgets/{id}/close-voting` (admin encerra antes)
 - `POST /api/services/{id}/finish`
 - `GET/POST /api/documents`
 - `GET/POST /api/residents`

@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   TrendingUp,
   Users,
+  Vote,
   Wrench
 } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -42,6 +43,7 @@ export function HomeScreen() {
   const [contributions, setContributions] = useState([]);
   const [charges, setCharges] = useState([]);
   const [services, setServices] = useState([]);
+  const [votings, setVotings] = useState([]);
   const [month] = useState(currentMonth());
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -54,16 +56,18 @@ export function HomeScreen() {
     loadInFlight.current = true;
     setRefreshing(true);
     try {
-      const [nextDashboard, nextContributions, nextCharges, nextServices] = await Promise.all([
+      const [nextDashboard, nextContributions, nextCharges, nextServices, nextVotings] = await Promise.all([
         api.dashboard(month),
         api.contributions(month),
         api.pixCharges(month),
-        api.services()
+        api.services(),
+        api.budgetVotings().catch(() => [])
       ]);
       setDashboard(nextDashboard);
       setContributions(nextContributions);
       setCharges(nextCharges);
       setServices(sortMaintenance(nextServices));
+      setVotings(nextVotings);
     } finally {
       loadInFlight.current = false;
       setRefreshing(false);
@@ -90,6 +94,8 @@ export function HomeScreen() {
 
   const movements = dashboard?.movements?.slice(0, 4) ?? [];
   const maintenance = services.slice(0, 3);
+  const openVotings = votings.filter((voting) => voting.open);
+  const awaitingVotes = openVotings.filter((voting) => voting.canVote && !voting.myVote).length;
   const myContribution = contributions[0];
   const myCharge = charges.find((charge) => charge.id === myContribution?.pixChargeId) ?? charges[0];
   const firstName = session?.name?.split(' ')[0] ?? 'João';
@@ -152,6 +158,14 @@ export function HomeScreen() {
 
       <SectionTitle icon={Wrench} title="Serviços e orçamentos" />
       <LocalCard style={styles.listCard}>
+        {openVotings.length > 0 ? (
+          <VotingShortcutRow
+            openCount={openVotings.length}
+            awaitingCount={awaitingVotes}
+            last={maintenance.length === 0}
+            onPress={() => navigation.navigate('Budgets')}
+          />
+        ) : null}
         {maintenance.length > 0 ? (
           maintenance.map((item, index) => (
             <ShortcutRow
@@ -161,14 +175,14 @@ export function HomeScreen() {
               onPress={() => navigation.navigate('ServiceDetails', { id: item.id })}
             />
           ))
-        ) : (
+        ) : openVotings.length === 0 ? (
           <View style={styles.emptyRow}>
             <View style={styles.emptyIcon}>
               <FileText color={colors.muted} size={18} />
             </View>
             <Text style={styles.emptyList}>Nenhum serviço cadastrado.</Text>
           </View>
-        )}
+        ) : null}
       </LocalCard>
 
       {transparencyUnlocked ? (
@@ -355,6 +369,24 @@ function ShortcutRow({ item, last, onPress }) {
       <View style={styles.shortcutText}>
         <Text style={styles.shortcutTitle}>{item.title}</Text>
         <Text style={styles.shortcutStatus}>{formatStatus(item.status)}</Text>
+      </View>
+      <ChevronRight color={colors.muted} size={20} />
+    </Pressable>
+  );
+}
+
+function VotingShortcutRow({ openCount, awaitingCount, last, onPress }) {
+  const status = awaitingCount > 0
+    ? `${awaitingCount} aguardando seu voto`
+    : `${openCount} em votação`;
+  return (
+    <Pressable onPress={onPress} style={[styles.shortcutRow, last ? styles.lastRow : null]}>
+      <View style={styles.serviceIconCircle}>
+        <Vote color={colors.blue} size={19} />
+      </View>
+      <View style={styles.shortcutText}>
+        <Text style={styles.shortcutTitle}>Orçamentos em votação</Text>
+        <Text style={styles.shortcutStatus}>{status}</Text>
       </View>
       <ChevronRight color={colors.muted} size={20} />
     </Pressable>

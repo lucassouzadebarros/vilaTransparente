@@ -482,26 +482,26 @@ class ServiceOrderController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@access.canManageBudgets()")
     ServiceOrder create(@RequestBody ServiceOrder service) {
         return workflow.saveService(service);
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@access.canManageBudgets()")
     ServiceOrder update(@PathVariable Long id, @RequestBody ServiceOrder service) {
         return workflow.updateService(id, service);
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@access.canManageBudgets()")
     Map<String, String> delete(@PathVariable Long id) {
         workflow.cancelService(id);
         return Map.of("status", "CANCELADO");
     }
 
     @PostMapping("/{id}/cancel")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@access.canManageBudgets()")
     Map<String, String> cancel(@PathVariable Long id) {
         workflow.cancelService(id);
         return Map.of("status", "CANCELADO");
@@ -513,7 +513,7 @@ class ServiceOrderController {
     }
 
     @PostMapping("/{id}/budgets")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@access.canManageBudgets()")
     Budget createBudget(@PathVariable Long id, @RequestBody Budget budget) {
         return workflow.saveBudget(id, budget);
     }
@@ -531,10 +531,19 @@ class ServiceOrderController {
 class BudgetController {
     private final BudgetRepository budgets;
     private final ServiceOrderWorkflow workflow;
+    private final BudgetVotingService voting;
+    private final CurrentUserService currentUser;
 
-    BudgetController(BudgetRepository budgets, ServiceOrderWorkflow workflow) {
+    BudgetController(
+        BudgetRepository budgets,
+        ServiceOrderWorkflow workflow,
+        BudgetVotingService voting,
+        CurrentUserService currentUser
+    ) {
         this.budgets = budgets;
         this.workflow = workflow;
+        this.voting = voting;
+        this.currentUser = currentUser;
     }
 
     @GetMapping
@@ -542,8 +551,29 @@ class BudgetController {
         return budgets.findAll();
     }
 
+    @GetMapping("/votes")
+    List<BudgetVotingSummary> votings() {
+        return voting.summaries(currentUser.current());
+    }
+
+    @GetMapping("/{id}/votes")
+    BudgetVotingSummary voting(@PathVariable Long id) {
+        return voting.summary(id, currentUser.current());
+    }
+
+    @PostMapping("/{id}/vote")
+    BudgetVotingSummary vote(@PathVariable Long id, @Valid @RequestBody BudgetVoteRequest request) {
+        return voting.vote(id, request.vote(), currentUser.current());
+    }
+
+    @PostMapping("/{id}/close-voting")
+    @PreAuthorize("@access.canManageBudgets()")
+    BudgetVotingSummary closeVoting(@PathVariable Long id) {
+        return voting.close(id, currentUser.current());
+    }
+
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@access.canManageBudgets()")
     Budget create(@RequestBody Budget budget) {
         return workflow.saveBudget(budget.serviceId, budget);
     }
@@ -554,30 +584,18 @@ class BudgetController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@access.canManageBudgets()")
     Budget update(@PathVariable Long id, @RequestBody Budget budget) {
         return workflow.updateBudget(id, budget);
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@access.canManageBudgets()")
     Map<String, String> delete(@PathVariable Long id) {
         Budget budget = budgets.findById(id).orElseThrow();
         budget.status = "CANCELADO";
         budgets.save(budget);
         return Map.of("status", "CANCELADO");
-    }
-
-    @PostMapping("/{id}/approve")
-    @PreAuthorize("hasRole('ADMIN')")
-    Budget approve(@PathVariable Long id) {
-        return workflow.approveBudget(id);
-    }
-
-    @PostMapping("/{id}/reject")
-    @PreAuthorize("hasRole('ADMIN')")
-    Budget reject(@PathVariable Long id) {
-        return workflow.rejectBudget(id);
     }
 }
 
@@ -608,14 +626,15 @@ class DocumentController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@access.canManageBudgets()")
     PortalDocument create(@RequestBody PortalDocument document) {
+        assertCanAttach(document.relatedType);
         document.uploadedBy = currentUser.current().id;
         return documents.save(document);
     }
 
     @PostMapping("/upload")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@access.canManageBudgets()")
     PortalDocument upload(
         @RequestParam String name,
         @RequestParam(defaultValue = "DOCUMENT") String type,
@@ -624,6 +643,7 @@ class DocumentController {
         @RequestParam(required = false) String description,
         @RequestParam(required = false) MultipartFile file
     ) throws IOException {
+        assertCanAttach(relatedType);
         PortalDocument document = new PortalDocument();
         document.name = name;
         document.type = type;
@@ -668,6 +688,13 @@ class DocumentController {
             .contentType(type)
             .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
             .body(resource);
+    }
+
+    /** The síndico only attaches documents to budgets and services; the rest stays with the admin. */
+    private void assertCanAttach(String relatedType) {
+        if (!currentUser.isAdmin() && !"BUDGET".equals(relatedType) && !"SERVICE".equals(relatedType)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "O síndico só anexa documentos de orçamentos e serviços.");
+        }
     }
 }
 
@@ -1016,10 +1043,36 @@ class AdminHouseController {
 
         users.findByResidentId(resident.id).ifPresent(user -> {
             user.active = false;
+            // Whoever leaves the house stops being síndico.
+            if (SindicoService.ROLE.equals(user.role)) {
+                user.role = "RESIDENT";
+            }
             users.save(user);
         });
 
         return resident;
+    }
+}
+
+@RestController
+@CrossOrigin
+@RequestMapping("/api/admin/sindico")
+@PreAuthorize("hasRole('ADMIN')")
+class AdminSindicoController {
+    private final SindicoService sindico;
+
+    AdminSindicoController(SindicoService sindico) {
+        this.sindico = sindico;
+    }
+
+    @GetMapping
+    SindicoResponse current() {
+        return sindico.current();
+    }
+
+    @PutMapping
+    SindicoResponse choose(@RequestBody ChooseSindicoRequest request) {
+        return sindico.choose(request.residentId());
     }
 }
 

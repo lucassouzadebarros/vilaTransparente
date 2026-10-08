@@ -13,7 +13,7 @@ App Expo + React Native + TypeScript.
 - Admin Pix com geração de cobranças, totais, refresh de QR Code e cancelamento.
 - Logs de webhook para admin.
 - Despesas.
-- Serviços, cadastro de serviço, detalhes, orçamentos, aprovação/rejeição e finalização com despesa.
+- Serviços, cadastro de serviço, detalhes, orçamentos com votação das casas e finalização com despesa.
 - Documentos, moradores, relatorios e configuracoes.
 - Fallback local quando a API não está rodando.
 

@@ -49,7 +49,7 @@ const menuItems: MenuItem[] = [
   },
   {
     title: 'Orçamentos',
-    description: 'Crie e acompanhe seus orçamentos.',
+    description: 'Vote e acompanhe os orçamentos.',
     icon: ClipboardList,
     route: 'Budgets'
   },

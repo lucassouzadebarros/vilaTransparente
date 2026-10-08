@@ -1,6 +1,10 @@
 package br.com.portalvila;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -14,11 +18,13 @@ interface ResidentRepository extends JpaRepository<Resident, Long> {
     Optional<Resident> findFirstByHouseIdAndStatusOrderByCreatedAtDesc(Long houseId, String status);
     Optional<Resident> findFirstByGatewayCustomerIdAndStatusOrderByCreatedAtDesc(String gatewayCustomerId, String status);
     List<Resident> findAllByOrderByHouseIdAsc();
+    List<Resident> findByStatusOrderByCreatedAtDesc(String status);
 }
 
 interface AppUserRepository extends JpaRepository<AppUser, Long> {
     Optional<AppUser> findByEmailIgnoreCase(String email);
     Optional<AppUser> findByResidentId(Long residentId);
+    List<AppUser> findByRole(String role);
 }
 
 interface PasswordResetCodeRepository extends JpaRepository<PasswordResetCode, Long> {
@@ -65,6 +71,17 @@ interface ServiceOrderRepository extends JpaRepository<ServiceOrder, Long> {
 interface BudgetRepository extends JpaRepository<Budget, Long> {
     List<Budget> findByServiceIdOrderByAmountAsc(Long serviceId);
     List<Budget> findByServiceIdAndStatus(Long serviceId, String status);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select b from Budget b where b.id = :id")
+    Optional<Budget> findByIdForUpdate(@Param("id") Long id);
+}
+
+interface BudgetVoteRepository extends JpaRepository<BudgetVote, Long> {
+    List<BudgetVote> findByBudgetId(Long budgetId);
+    Optional<BudgetVote> findByBudgetIdAndHouseId(Long budgetId, Long houseId);
+    boolean existsByBudgetId(Long budgetId);
+    void deleteByBudgetId(Long budgetId);
 }
 
 interface PortalDocumentRepository extends JpaRepository<PortalDocument, Long> {

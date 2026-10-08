@@ -9,6 +9,9 @@ type AuthContextValue = {
   logout: () => Promise<void>;
   markPasswordChanged: () => Promise<void>;
   isAdmin: boolean;
+  isSindico: boolean;
+  /** Admin or síndico: registers and manages budgets and their services. */
+  canManageBudgets: boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -49,6 +52,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const value = useMemo<AuthContextValue>(() => ({
     session,
     isAdmin: session?.role === 'ADMIN',
+    isSindico: session?.role === 'SINDICO',
+    canManageBudgets: session?.role === 'ADMIN' || session?.role === 'SINDICO',
     async login(email: string, password: string) {
       await AsyncStorage.removeItem('portal-vila-session');
       setSession(null);

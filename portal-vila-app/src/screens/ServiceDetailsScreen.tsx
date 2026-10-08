@@ -11,7 +11,7 @@ import { Budget, PortalDocument, ServiceOrder } from '../types';
 export function ServiceDetailsScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { isAdmin } = useAuth();
+  const { isAdmin, canManageBudgets } = useAuth();
   const id = Number(route.params?.id ?? 1);
   const [service, setService] = useState<ServiceOrder | null>(null);
   const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -95,18 +95,19 @@ export function ServiceDetailsScreen() {
             <Value>Orçamentos</Value>
             <Label>{budgets.length} orçamento(s) vinculado(s). O detalhe financeiro principal usa somente o aprovado.</Label>
             <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
-              {isAdmin ? <Button title="Novo orçamento" icon={Plus} onPress={() => navigation.navigate('BudgetForm', { formMode: 'create', budgetId: null, serviceId: service.id, returnToServiceId: service.id, formKey: Date.now() })} /> : null}
+              {canManageBudgets ? <Button title="Novo orçamento" icon={Plus} onPress={() => navigation.navigate('BudgetForm', { formMode: 'create', budgetId: null, serviceId: service.id, returnToServiceId: service.id, formKey: Date.now() })} /> : null}
               <Button title="Ver orçamentos" icon={ClipboardList} variant="ghost" onPress={() => navigation.navigate('Budgets')} />
             </Row>
           </Card>
 
-          {isAdmin ? (
+          {canManageBudgets ? (
             <Card>
               <Value>Ações administrativas</Value>
               <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
                 <Button title="Editar" icon={Pencil} variant="ghost" onPress={() => navigation.navigate('ServiceForm', { formMode: 'edit', serviceId: service.id, formKey: Date.now() })} />
-                <Button title="Finalizar / anexar nota" icon={CheckCircle2} onPress={() => navigation.navigate('FinishService', { id: service.id })} />
+                {isAdmin ? <Button title="Finalizar / anexar nota" icon={CheckCircle2} onPress={() => navigation.navigate('FinishService', { id: service.id })} /> : null}
               </Row>
+              {!isAdmin ? <Label>Finalizar o serviço gera uma despesa no caixa, por isso fica com o admin.</Label> : null}
             </Card>
           ) : null}
         </>

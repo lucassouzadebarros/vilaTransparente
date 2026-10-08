@@ -2,6 +2,8 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Budget,
+  BudgetVoteChoice,
+  BudgetVoting,
   Contribution,
   Dashboard,
   Expense,
@@ -15,6 +17,7 @@ import {
   ResidentRegistrationResponse,
   ServiceOrder,
   Session,
+  Sindico,
   WebhookEvent
 } from '../types';
 
@@ -161,8 +164,10 @@ export const api = {
     serviceId ? apiClient.post(`/services/${serviceId}/budgets`, budget) : apiClient.post('/budgets', budget)
   ),
   updateBudget: (id: number, budget: Budget) => requestData<Budget>(apiClient.put(`/budgets/${id}`, budget)),
-  approveBudget: (id: number) => requestData<Budget>(apiClient.post(`/budgets/${id}/approve`)),
-  rejectBudget: (id: number) => requestData<Budget>(apiClient.post(`/budgets/${id}/reject`)),
+  budgetVotings: () => requestData<BudgetVoting[]>(apiClient.get('/budgets/votes')),
+  budgetVoting: (id: number) => requestData<BudgetVoting>(apiClient.get(`/budgets/${id}/votes`)),
+  voteBudget: (id: number, vote: BudgetVoteChoice) => requestData<BudgetVoting>(apiClient.post(`/budgets/${id}/vote`, { vote })),
+  closeBudgetVoting: (id: number) => requestData<BudgetVoting>(apiClient.post(`/budgets/${id}/close-voting`)),
   problemReports: (status?: string) => requestData<ProblemReport[]>(apiClient.get('/problem-reports', { params: status ? { status } : {} })),
   createProblemReport: (report: ProblemReport) => requestData<ProblemReport>(apiClient.post('/problem-reports', report)),
   updateProblemReport: (id: number, report: ProblemReport) => requestData<ProblemReport>(apiClient.put(`/problem-reports/${id}`, report)),
@@ -197,6 +202,8 @@ export const api = {
   requestResidentPasswordReset: (id: number) =>
     requestData<PasswordResetResponse>(apiClient.post(`/residents/${id}/password-reset`)),
   releaseHouse: (houseId: number) => requestData<Resident>(apiClient.post(`/admin/houses/${houseId}/release`)),
+  sindico: () => requestData<Sindico>(apiClient.get('/admin/sindico')),
+  chooseSindico: (residentId: number | null) => requestData<Sindico>(apiClient.put('/admin/sindico', { residentId })),
   settings: () => requestData(apiClient.get('/settings')),
   dashboardEventsUrl: () => `${baseURL.replace(/\/$/, '')}/events/dashboard`
 };

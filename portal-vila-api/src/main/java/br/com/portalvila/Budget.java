@@ -40,6 +40,8 @@ public class Budget {
 
     public Long createdBy;
 
+    public LocalDateTime votingClosedAt;
+
     @Column(nullable = false)
     public LocalDateTime createdAt = LocalDateTime.now();
 

@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Edit3, KeyRound, Plus, RefreshCw, Save, X } from 'lucide-react-native';
+import { Edit3, KeyRound, Plus, RefreshCw, Save, ShieldCheck, UserMinus, X } from 'lucide-react-native';
 import { Badge, Button, Card, Field, Label, Row, Screen, Stack, Value } from '../components/ui';
 import { api, apiErrorMessage } from '../services/api';
-import { Resident } from '../types';
+import { Resident, Sindico } from '../types';
 import { colors, spacing } from '../theme';
 
 export function ResidentsScreen() {
   const [items, setItems] = useState<Resident[]>([]);
+  const [sindico, setSindico] = useState<Sindico | null>(null);
+  const [savingSindico, setSavingSindico] = useState(false);
+  const [sindicoMessage, setSindicoMessage] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState<Resident | null>(null);
@@ -22,11 +25,41 @@ export function ResidentsScreen() {
     setLoading(true);
     setLoadError(null);
     try {
-      setItems(await api.residents());
+      const [nextResidents, nextSindico] = await Promise.all([
+        api.residents(),
+        api.sindico().catch(() => null)
+      ]);
+      setItems(nextResidents);
+      setSindico(nextSindico);
     } catch (error) {
       setLoadError(apiErrorMessage(error, 'Não consegui carregar os moradores.'));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function chooseSindico(item: Resident | null) {
+    setSavingSindico(true);
+    setSindicoMessage(null);
+    setMessage(null);
+    try {
+      const next = await api.chooseSindico(item?.id ?? null);
+      setSindico(next);
+      const text = item
+        ? `${next.houseLabel ?? 'A casa'} agora é o síndico. ${item.name} precisa sair e entrar de novo no app para ver as novas opções.`
+        : 'Síndico removido. Orçamentos e serviços voltam a ser só do admin.';
+      if (item?.id) {
+        setMessage({ residentId: item.id, type: 'success', text });
+      }
+      setSindicoMessage(text);
+    } catch (error) {
+      const text = apiErrorMessage(error, 'Não consegui alterar o síndico.');
+      if (item?.id) {
+        setMessage({ residentId: item.id, type: 'error', text });
+      }
+      setSindicoMessage(text);
+    } finally {
+      setSavingSindico(false);
     }
   }
 
@@ -154,6 +187,22 @@ export function ResidentsScreen() {
   return (
     <Screen title="Moradores" subtitle="11 casas da vila" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       <Button title="Novo morador" icon={Plus} onPress={startCreate} />
+      {!loading && !loadError ? (
+        <Card>
+          <Row>
+            <Value>Síndico</Value>
+            <ShieldCheck color={colors.blue} size={22} />
+          </Row>
+          <Value>{sindico?.residentId ? `${sindico.houseLabel} · ${sindico.name}` : 'Nenhum síndico definido'}</Value>
+          <Label>O síndico vota como as outras casas e também cadastra e edita orçamentos e serviços, além de encerrar votações. Pix, despesas, moradores e finalizar serviço continuam só com o admin.</Label>
+          {sindicoMessage ? <Label>{sindicoMessage}</Label> : null}
+          {sindico?.residentId ? (
+            <Button title={savingSindico ? 'Salvando...' : 'Remover síndico'} icon={UserMinus} variant="ghost" onPress={() => chooseSindico(null)} disabled={savingSindico} />
+          ) : (
+            <Label>Para escolher, toque em "Definir como síndico" no morador abaixo.</Label>
+          )}
+        </Card>
+      ) : null}
       {creating && draft ? (
         <Card>
           <Value>Cadastrar morador</Value>
@@ -202,7 +251,10 @@ export function ResidentsScreen() {
         <Card key={item.id}>
           <Row>
             <Value>{item.name}</Value>
-            <Badge status={item.status} />
+            <View style={styles.badges}>
+              {sindico?.residentId === item.id ? <Badge status="Síndico" /> : null}
+              <Badge status={item.status} />
+            </View>
           </Row>
           <Label>Casa {String(item.houseId).padStart(2, '0')}</Label>
           {editingId === item.id && draft ? (
@@ -261,6 +313,15 @@ export function ResidentsScreen() {
                 onPress={() => syncAsaas(item)}
                 disabled={syncingId === item.id || saving || !item.documentRegistered}
               />
+              {item.status === 'ACTIVE' && sindico?.residentId !== item.id ? (
+                <Button
+                  title={savingSindico ? 'Salvando...' : 'Definir como síndico'}
+                  icon={ShieldCheck}
+                  variant="ghost"
+                  onPress={() => chooseSindico(item)}
+                  disabled={savingSindico}
+                />
+              ) : null}
             </Stack>
           )}
         </Card>
@@ -297,6 +358,12 @@ function StatusToggle({ active, onChange }: { active: boolean; onChange: (active
 }
 
 const styles = StyleSheet.create({
+  badges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: spacing.xs
+  },
   toggleCard: {
     minHeight: 76,
     borderRadius: 8,

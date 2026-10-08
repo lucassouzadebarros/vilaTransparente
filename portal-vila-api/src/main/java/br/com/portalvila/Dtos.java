@@ -158,6 +158,40 @@ record ExcludePaymentsReport(
 ) {
 }
 
+record BudgetVoteRequest(@NotBlank String vote) {
+}
+
+/** residentId null removes the síndico. */
+record ChooseSindicoRequest(Long residentId) {
+}
+
+record SindicoResponse(Long residentId, String name, Long houseId, String houseLabel) {
+    static SindicoResponse none() {
+        return new SindicoResponse(null, null, null, null);
+    }
+}
+
+/** A house on the voting list. How each house voted stays private; only whether it voted is shown. */
+record BudgetVoteHouse(Long houseId, String houseLabel, boolean voted) {
+}
+
+record BudgetVotingSummary(
+    Long budgetId,
+    String status,
+    boolean open,
+    int participatingHouses,
+    int votesToApprove,
+    int approveVotes,
+    int rejectVotes,
+    int pendingVotes,
+    String myVote,
+    boolean canVote,
+    String cannotVoteReason,
+    LocalDateTime closedAt,
+    List<BudgetVoteHouse> houses
+) {
+}
+
 record AsaasSyncItem(String paymentId, String action, String remoteStatus, BigDecimal value, LocalDate date, String description, String note) {
 }
 

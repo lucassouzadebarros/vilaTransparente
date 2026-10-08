@@ -12,11 +12,26 @@ import { Budget, PortalDocument, ServiceOrder } from '../types';
 const statusOptions: Array<Budget['status']> = ['EM_ANALISE', 'APROVADO', 'REJEITADO', 'CANCELADO'];
 
 const statusLabels: Record<Budget['status'], string> = {
-  EM_ANALISE: 'Em análise',
+  EM_ANALISE: 'Em votação',
   APROVADO: 'Aprovado',
   REJEITADO: 'Rejeitado',
   CANCELADO: 'Cancelado'
 };
+
+/**
+ * Approving or rejecting is up to the houses' vote, so the admin only keeps the current status,
+ * cancels, or sends a rejected/cancelled budget back to a new vote.
+ */
+function allowedStatuses(savedStatus: Budget['status'] | null): Array<Budget['status']> {
+  if (!savedStatus) {
+    return ['EM_ANALISE'];
+  }
+  return statusOptions.filter((option) =>
+    option === savedStatus
+    || option === 'CANCELADO'
+    || (option === 'EM_ANALISE' && savedStatus !== 'APROVADO')
+  );
+}
 
 function positiveId(value: unknown) {
   const parsed = Number(value);
@@ -64,6 +79,7 @@ export function BudgetFormScreen() {
   const [validUntil, setValidUntil] = useState('');
   const [expectedDate, setExpectedDate] = useState('');
   const [status, setStatus] = useState<Budget['status']>('EM_ANALISE');
+  const [savedStatus, setSavedStatus] = useState<Budget['status'] | null>(null);
   const [notes, setNotes] = useState('');
   const [documentName, setDocumentName] = useState('Orçamento');
   const [documentUrl, setDocumentUrl] = useState('');
@@ -90,6 +106,7 @@ export function BudgetFormScreen() {
     setValidUntil('');
     setExpectedDate('');
     setStatus('EM_ANALISE');
+    setSavedStatus(null);
     setNotes('');
     setDocumentName('Orçamento');
     setDocumentUrl('');
@@ -110,6 +127,7 @@ export function BudgetFormScreen() {
     setValidUntil(budget.validUntil ?? '');
     setExpectedDate(budget.expectedDate ?? '');
     setStatus(budget.status ?? 'EM_ANALISE');
+    setSavedStatus(budget.status ?? 'EM_ANALISE');
     setNotes(budget.notes ?? '');
     setDocumentName(document?.name ?? 'Orçamento');
     setDocumentUrl(document?.url ?? '');
@@ -182,11 +200,6 @@ export function BudgetFormScreen() {
       showError('Informe um valor válido para o orçamento.');
       return;
     }
-    if (status === 'APROVADO' && !serviceIdToSave) {
-      showError('Vincule o orçamento a um serviço antes de marcar como aprovado.');
-      return;
-    }
-
     setSaving(true);
     setError('');
     try {
@@ -303,10 +316,17 @@ export function BudgetFormScreen() {
       <FormSection icon={Flag} title="Status">
         {loading ? <Text style={styles.sectionHelp}>Carregando...</Text> : null}
         <View style={styles.statusGrid}>
-          {statusOptions.map((item) => (
+          {allowedStatuses(savedStatus).map((item) => (
             <StatusChoice key={item} label={statusLabels[item]} selected={item === status} onPress={() => setStatus(item)} />
           ))}
         </View>
+        <Text style={styles.sectionHelp}>
+          {!isEditing
+            ? 'Todo orçamento novo vai para a votação das casas. Ele é aprovado quando a maioria das casas votar "Aprovar".'
+            : savedStatus === 'EM_ANALISE'
+              ? 'Aprovar ou recusar é decidido pela votação das casas. Mudar título, fornecedor ou valor zera os votos já dados.'
+              : 'Aprovar ou recusar é decidido pela votação das casas.'}
+        </Text>
       </FormSection>
 
       <FormSection icon={Link2} title="Serviço vinculado">
