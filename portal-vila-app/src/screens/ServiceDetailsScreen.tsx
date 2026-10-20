@@ -1,5 +1,6 @@
 import { ReactNode, useCallback, useMemo, useState } from 'react';
-import { Alert, Linking, StyleSheet, Text, View } from 'react-native';
+import { Linking, StyleSheet, Text, View } from 'react-native';
+import { Alert } from '../utils/alert';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { CheckCircle2, ClipboardList, ExternalLink, FileText, Pencil, RefreshCw } from 'lucide-react-native';
 import { Badge, Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
@@ -51,7 +52,7 @@ export function ServiceDetailsScreen() {
       Alert.alert('Documento', 'Nenhum documento fiscal foi vinculado a este serviço.');
       return;
     }
-    Linking.openURL(api.documentUrl(document.url)).catch(() => Alert.alert('Documento', 'Não foi possível abrir este documento.'));
+    api.openDocument(document.url).catch(() => Alert.alert('Documento', 'Não foi possível abrir este documento.'));
   }
 
   return (
@@ -104,7 +105,7 @@ export function ServiceDetailsScreen() {
               <Value>Ações administrativas</Value>
               <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
                 <Button title="Editar" icon={Pencil} variant="ghost" onPress={() => navigation.navigate('ServiceForm', { formMode: 'edit', serviceId: service.id, formKey: Date.now() })} />
-                {isAdmin ? <Button title="Finalizar / anexar nota" icon={CheckCircle2} onPress={() => navigation.navigate('FinishService', { id: service.id })} /> : null}
+                {isAdmin ? <Button title={service.status === 'FINALIZADO' ? 'Corrigir dados / anexar nota' : 'Finalizar / anexar nota'} icon={CheckCircle2} onPress={() => navigation.navigate('FinishService', { id: service.id })} /> : null}
               </Row>
               {!isAdmin ? <Label>Finalizar o serviço gera uma despesa no caixa, por isso fica com o admin.</Label> : null}
             </Card>

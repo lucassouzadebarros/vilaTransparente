@@ -1,9 +1,10 @@
-import { ReactNode, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
+import { ReactNode, useEffect, useState } from 'react';
+import { Linking, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
+import { Alert } from '../utils/alert';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ArrowLeft, CalendarDays, CreditCard, Eye, FileText, LucideIcon, Trash2, Upload } from 'lucide-react-native';
 import { SoftBackdrop } from '../components/SoftBackdrop';
-import { api } from '../services/api';
+import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
 
 export function FinishServiceScreen() {
@@ -18,47 +19,69 @@ export function FinishServiceScreen() {
   const [documentName, setDocumentName] = useState('Nota Fiscal');
   const [documentUrl, setDocumentUrl] = useState('');
   const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    // A finished service already has its expense: finishing again only fixes data and must not book it twice.
+    api.service(id)
+      .then((service) => {
+        if (service.status === 'FINALIZADO') {
+          setGenerateExpense(false);
+        }
+      })
+      .catch(() => undefined);
+  }, [id]);
 
   async function finish() {
+    if (busy) {
+      return;
+    }
     const paidValue = parseCurrencyInput(finalValue);
     if (paidValue <= 0) {
       Alert.alert('Serviço', 'Informe o valor final pago.');
       return;
     }
 
-    let documentId: number | undefined;
-    if (documentFile) {
-      const document = await api.uploadDocument(documentFile, {
-        name: documentName.trim() || documentFile.name,
-        type: 'NOTA_FISCAL',
-        relatedType: 'SERVICE',
-        relatedId: id,
-        description: 'Documento fiscal anexado na finalização do serviço.'
-      });
-      documentId = document.id;
-    } else if (documentUrl.trim()) {
-      const document = await api.createDocument({
-        name: documentName.trim() || 'Nota Fiscal',
-        type: 'NOTA_FISCAL',
-        url: documentUrl.trim(),
-        relatedType: 'SERVICE',
-        relatedId: id,
-        description: 'Documento fiscal anexado na finalização do serviço.'
-      });
-      documentId = document.id;
-    }
+    setBusy(true);
+    try {
+      let documentId: number | undefined;
+      if (documentFile) {
+        const document = await api.uploadDocument(documentFile, {
+          name: documentName.trim() || documentFile.name,
+          type: 'NOTA_FISCAL',
+          relatedType: 'SERVICE',
+          relatedId: id,
+          description: 'Documento fiscal anexado na finalização do serviço.'
+        });
+        documentId = document.id;
+      } else if (documentUrl.trim()) {
+        const document = await api.createDocument({
+          name: documentName.trim() || 'Nota Fiscal',
+          type: 'NOTA_FISCAL',
+          url: documentUrl.trim(),
+          relatedType: 'SERVICE',
+          relatedId: id,
+          description: 'Documento fiscal anexado na finalização do serviço.'
+        });
+        documentId = document.id;
+      }
 
-    await api.finishService(id, {
-      finalValue: paidValue,
-      completedDate,
-      supplier,
-      supplierDocument,
-      documentId,
-      generateExpense,
-      notes: ''
-    });
-    Alert.alert('Serviço', 'Serviço finalizado e prestação de contas atualizada.');
-    navigation.goBack();
+      await api.finishService(id, {
+        finalValue: paidValue,
+        completedDate,
+        supplier,
+        supplierDocument,
+        documentId,
+        generateExpense,
+        notes: ''
+      });
+      Alert.alert('Serviço', 'Serviço finalizado e prestação de contas atualizada.');
+      navigation.goBack();
+    } catch (error) {
+      Alert.alert('Serviço', apiErrorMessage(error, 'Não consegui finalizar o serviço.'));
+    } finally {
+      setBusy(false);
+    }
   }
 
   function previewDocument() {
@@ -67,7 +90,7 @@ export function FinishServiceScreen() {
       Alert.alert('Documento', 'Informe o link do PDF da nota fiscal ou recibo.');
       return;
     }
-    Linking.openURL(api.documentUrl(previewUrl)).catch(() => Alert.alert('Documento', 'Não foi possível abrir o link informado.'));
+    api.openDocument(previewUrl).catch(() => Alert.alert('Documento', 'Não foi possível abrir o link informado.'));
   }
 
   function selectPdf() {
@@ -165,7 +188,7 @@ export function FinishServiceScreen() {
 
       <View style={styles.footerActions}>
         <FooterActionButton title="Cancelar" onPress={() => navigation.goBack()} />
-        <FooterActionButton title="Finalizar serviço" onPress={finish} primary />
+        <FooterActionButton title={busy ? 'Finalizando...' : 'Finalizar serviço'} onPress={finish} primary />
       </View>
     </ScrollView>
   );

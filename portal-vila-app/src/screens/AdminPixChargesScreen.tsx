@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert } from '../utils/alert';
 import { useNavigation } from '@react-navigation/native';
 import { CheckCircle2, Home, Plus, RefreshCw, RotateCw, Users } from 'lucide-react-native';
 import { PixChargeCard } from '../components/pix/PixChargeCard';
@@ -69,6 +70,19 @@ export function AdminPixChargesScreen() {
       Alert.alert('Pix', mode === 'house' ? 'Selecione uma casa e informe um valor válido.' : 'Informe um valor válido.');
       return;
     }
+    Alert.alert(
+      mode === 'house' ? 'Gerar cobrança da casa' : 'Gerar cobranças do mês',
+      mode === 'house'
+        ? 'Uma cobrança Pix real será criada no Asaas para esta casa. Continuar?'
+        : 'Uma cobrança Pix real será criada no Asaas para cada casa com morador ativo que ainda não tem cobrança no mês. Continuar?',
+      [
+        { text: 'Voltar', style: 'cancel' },
+        { text: 'Gerar', onPress: () => runGenerate() }
+      ]
+    );
+  }
+
+  async function runGenerate() {
     setBusy(true);
     try {
       if (mode === 'house') {
@@ -108,7 +122,21 @@ export function AdminPixChargesScreen() {
     }
   }
 
-  async function cancel(id: number) {
+  function cancel(id: number) {
+    const charge = charges.find((item) => item.id === id);
+    Alert.alert(
+      'Cancelar cobrança',
+      charge
+        ? `Cancelar a cobrança de ${charge.houseLabel} (vencimento ${charge.dueDate})? Ela deixa de poder ser paga no Asaas.`
+        : 'Cancelar esta cobrança? Ela deixa de poder ser paga no Asaas.',
+      [
+        { text: 'Voltar', style: 'cancel' },
+        { text: 'Cancelar cobrança', style: 'destructive', onPress: () => confirmCancel(id) }
+      ]
+    );
+  }
+
+  async function confirmCancel(id: number) {
     try {
       await api.cancelCharge(id, 'Cancelada pelo admin');
       load();

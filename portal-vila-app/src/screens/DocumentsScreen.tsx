@@ -4,6 +4,7 @@ import { ExternalLink, RefreshCw } from 'lucide-react-native';
 import { Button, Card, Label, Row, Screen, Value } from '../components/ui';
 import { api } from '../services/api';
 import { PortalDocument } from '../types';
+import { Alert } from '../utils/alert';
 
 export function DocumentsScreen() {
   const [items, setItems] = useState<PortalDocument[]>([]);
@@ -25,7 +26,7 @@ export function DocumentsScreen() {
             <Label>{item.type}</Label>
           </Row>
           {item.description ? <Label>{item.description}</Label> : null}
-          <Button title="Abrir" icon={ExternalLink} variant="ghost" onPress={() => Linking.openURL(api.documentUrl(item.url))} />
+          <Button title="Abrir" icon={ExternalLink} variant="ghost" onPress={() => api.openDocument(item.url).catch(() => Alert.alert('Documento', 'Não foi possível abrir o documento.'))} />
         </Card>
       ))}
     </Screen>

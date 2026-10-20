@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
+import { Alert } from '../utils/alert';
 import { useFocusEffect } from '@react-navigation/native';
 import { CheckCircle2, Eye, FileText, Plus, ReceiptText, RefreshCw, Trash2, Upload, WalletCards } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
@@ -150,7 +151,7 @@ export function ExpensesScreen() {
       Alert.alert('Documento', 'Selecione um PDF ou informe o link do documento.');
       return;
     }
-    Linking.openURL(api.documentUrl(previewUrl)).catch(() => Alert.alert('Documento', 'Não foi possível abrir o documento.'));
+    api.openDocument(previewUrl).catch(() => Alert.alert('Documento', 'Não foi possível abrir o documento.'));
   }
 
   function clearDocument() {
@@ -164,7 +165,7 @@ export function ExpensesScreen() {
       Alert.alert('Documento', 'Essa despesa não possui documento vinculado.');
       return;
     }
-    Linking.openURL(api.documentUrl(portalDocument.url)).catch(() => Alert.alert('Documento', 'Não foi possível abrir o documento.'));
+    api.openDocument(portalDocument.url).catch(() => Alert.alert('Documento', 'Não foi possível abrir o documento.'));
   }
 
   return (

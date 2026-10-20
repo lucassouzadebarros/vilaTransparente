@@ -37,13 +37,13 @@ const menuItems: MenuItem[] = [
   },
   {
     title: 'Contribuições',
-    description: 'Visualize e gerencie suas contribuições.',
+    description: 'Contribuições e Pix de cada casa no mês.',
     icon: ListChecks,
     route: 'Contributions'
   },
   {
     title: 'Despesas',
-    description: 'Acompanhe e gerencie suas despesas.',
+    description: 'Saídas da caixinha, com os comprovantes.',
     icon: ReceiptText,
     route: 'Expenses'
   },
@@ -55,48 +55,47 @@ const menuItems: MenuItem[] = [
   },
   {
     title: 'Relatórios',
-    description: 'Acesse seus relatórios e indicadores.',
+    description: 'Totais e movimentos do caixa.',
     icon: BarChart3,
     route: 'Reports'
   },
   {
     title: 'Moradores',
-    description: 'Gerencie os moradores da sua casa.',
+    description: 'Cadastre e edite os moradores de cada casa.',
     icon: Users,
     route: 'Residents',
     adminOnly: true
   },
   {
     title: 'Liberar casa',
-    description: 'Libere o acesso da sua casa para outros usuários.',
+    description: 'Libere uma casa quando o morador mudar.',
     icon: LockOpen,
     route: 'ReleaseHouse',
     adminOnly: true
   },
   {
     title: 'Cobranças Pix',
-    description: 'Gerencie suas cobranças via Pix.',
+    description: 'Gere e acompanhe as cobranças Pix do mês.',
     icon: WalletCards,
     route: 'AdminPixCharges',
     adminOnly: true
   },
   {
     title: 'Logs Webhook',
-    description: 'Visualize os logs de integração do sistema.',
+    description: 'Pagamentos avisados pelo Asaas.',
     icon: FileClock,
     route: 'WebhookEvents',
     adminOnly: true
   },
   {
-    title: 'Relatar problema',
-    description: 'Informe um problema ou envie um feedback.',
+    title: 'Problemas da vila',
+    description: 'Relate um problema e acompanhe os relatos.',
     icon: AlertTriangle,
-    route: 'ProblemReports',
-    danger: true
+    route: 'ProblemReports'
   },
   {
     title: 'Configurações',
-    description: 'Ajuste as preferências do sistema.',
+    description: 'Valor, vencimento e dados da vila.',
     icon: Settings,
     route: 'Settings',
     adminOnly: true

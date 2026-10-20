@@ -36,7 +36,7 @@ export function PixChargeCard({
         </View>
       </View>
       <Button title="Ver Pix" icon={Eye} onPress={onOpen} variant="ghost" />
-      {canAdmin ? (
+      {canAdmin && charge.status !== 'PAID' && charge.status !== 'CANCELLED' ? (
         <Row style={styles.adminActions}>
           <IconButton icon={RefreshCw} label="Atualizar QR Code" onPress={onRefresh} />
           <IconButton icon={XCircle} label="Cancelar cobrança" danger onPress={onCancel} />

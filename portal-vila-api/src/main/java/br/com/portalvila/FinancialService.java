@@ -1,7 +1,9 @@
 package br.com.portalvila;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -111,7 +113,8 @@ class FinancialService {
             allDirectReceipts.forEach(receipt -> movements.add(new MovementResponse(
                 receipt.receivedAt.toLocalDate(),
                 "RECEBIMENTO_DIRETO",
-                receipt.description,
+                // The payer's name is for the admin only; houses see that the money came in, not from whom.
+                includeAllContributionMovements ? receipt.description : "Recebimento direto",
                 receipt.amount,
                 receipt.status
             )));
@@ -181,6 +184,15 @@ class FinancialService {
     @Transactional
     public ContributionResponse markManualPayment(Long id, ManualPaymentRequest request) {
         Contribution contribution = contributions.findById(id).orElseThrow();
+        if ("PAID".equals(contribution.status)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Esta contribuição já está paga.");
+        }
+        if ("CANCELLED".equals(contribution.status)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Esta contribuição foi cancelada.");
+        }
+        if (request.paidAmount() != null && request.paidAmount().signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe um valor pago maior que zero.");
+        }
         contribution.status = "PAID";
         contribution.paidAmount = request.paidAmount() == null ? contribution.amount : request.paidAmount();
         contribution.paymentDate = LocalDateTime.now();

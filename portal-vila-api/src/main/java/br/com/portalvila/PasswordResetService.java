@@ -18,6 +18,7 @@ class PasswordResetService {
     private static final String CHANGE_CONFIRMED_MESSAGE = "Senha alterada com sucesso.";
     private static final String EMAIL_NOT_CONFIGURED_MESSAGE = "Envio de e-mail nao configurado. Fale com a administracao para recuperar a senha.";
     private static final int MAX_ATTEMPTS = 5;
+    private static final int MAX_REQUESTS_PER_HOUR = 3;
     private static final String TEMP_PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 
     private final AppUserRepository users;
@@ -44,13 +45,43 @@ class PasswordResetService {
         this.expirationMinutes = expirationMinutes;
     }
 
+    /**
+     * Public: anyone can ask. It never touches the password; it only e-mails a short-lived code, and the answer is the
+     * same whether or not the e-mail exists. The password changes only in {@link #confirmReset}.
+     */
     @Transactional
     PasswordResetResponse requestReset(PasswordResetRequest request) {
+        if (!debugCodeEnabled && !passwordEmailService.isConfigured()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, EMAIL_NOT_CONFIGURED_MESSAGE);
+        }
         String email = normalizeEmail(request.email());
         return users.findByEmailIgnoreCase(email)
             .filter(user -> user.active)
-            .map(user -> createResetForUser(user, debugCodeEnabled))
+            .map(this::createResetCode)
             .orElseGet(() -> new PasswordResetResponse(RESET_SENT_MESSAGE, null));
+    }
+
+    private PasswordResetResponse createResetCode(AppUser user) {
+        LocalDateTime now = LocalDateTime.now();
+        if (resetCodes.countByUserIdAndCreatedAtAfter(user.id, now.minusHours(1)) >= MAX_REQUESTS_PER_HOUR) {
+            return new PasswordResetResponse(RESET_SENT_MESSAGE, null);
+        }
+        for (PasswordResetCode previous : resetCodes.findByUserIdAndUsedAtIsNull(user.id)) {
+            previous.usedAt = now;
+            resetCodes.save(previous);
+        }
+        String code = nextCode();
+        PasswordResetCode created = new PasswordResetCode();
+        created.userId = user.id;
+        created.codeHash = passwordEncoder.encode(code);
+        created.expiresAt = now.plusMinutes(expirationMinutes);
+        resetCodes.save(created);
+
+        boolean sentByEmail = passwordEmailService.sendResetCode(user, code, expirationMinutes);
+        if (!sentByEmail && !debugCodeEnabled) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, EMAIL_NOT_CONFIGURED_MESSAGE);
+        }
+        return new PasswordResetResponse(sentByEmail ? RESET_SENT_MESSAGE : RESET_DEBUG_MESSAGE, debugCodeEnabled ? code : null);
     }
 
     @Transactional
@@ -61,7 +92,8 @@ class PasswordResetService {
         return createResetForUser(user, true);
     }
 
-    @Transactional
+    /** A wrong code must still count as an attempt, so the failed answer does not roll the counter back. */
+    @Transactional(noRollbackFor = ResponseStatusException.class)
     PasswordResetResponse confirmReset(PasswordResetConfirmRequest request) {
         String email = normalizeEmail(request.email());
         String code = onlyDigits(request.code());
@@ -129,9 +161,18 @@ class PasswordResetService {
     }
 
     private void validateNewPassword(String password) {
-        if (password == null || password.trim().length() < 6) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A senha precisa ter pelo menos 6 caracteres.");
+        if (password == null || password.trim().length() < 8) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A senha precisa ter pelo menos 8 caracteres.");
         }
+    }
+
+    private String nextCode() {
+        return String.format("%06d", random.nextInt(1_000_000));
+    }
+
+    /** Random password handed to the admin (or e-mailed) for a first access; the person must change it on login. */
+    String newTemporaryPassword() {
+        return nextTemporaryPassword();
     }
 
     private String nextTemporaryPassword() {

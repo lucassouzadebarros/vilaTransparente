@@ -187,6 +187,8 @@ export type Resident = {
   documentNumber?: string;
   documentRegistered?: boolean;
   gatewayCustomerId?: string | null;
+  /** Only present in the answer to "create resident": the first-access password, shown once to the admin. */
+  temporaryPassword?: string;
   status: string;
 };
 

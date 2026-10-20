@@ -28,6 +28,11 @@ public class Resident {
 
     public String gatewayCustomerId;
 
+    /** Only filled in the answer to "create resident", so the admin can hand over the first-access password once. */
+    @Transient
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    public String temporaryPassword;
+
     @Column(nullable = false)
     public String status = "ACTIVE";
 

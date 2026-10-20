@@ -1,5 +1,7 @@
 package br.com.portalvila;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -10,6 +12,7 @@ import java.math.BigDecimal;
 
 @Component
 class DataSeeder implements CommandLineRunner {
+    private static final Logger log = LoggerFactory.getLogger(DataSeeder.class);
     private final boolean enabled;
     private final HouseRepository houses;
     private final AppUserRepository users;
@@ -49,7 +52,6 @@ class DataSeeder implements CommandLineRunner {
             settings.monthlyAmount = BigDecimal.valueOf(100);
             settings.paymentDueDay = 10;
             settings.gatewayProvider = "ASAAS";
-            settings.webhookSecret = "dev-webhook-token";
             settingsRepository.save(settings);
         }
 
@@ -59,12 +61,17 @@ class DataSeeder implements CommandLineRunner {
             }
         }
 
-        users.findByEmailIgnoreCase(adminEmail).orElseGet(() -> users.save(new AppUser(
-            "Administrador",
-            adminEmail,
-            passwordEncoder.encode(adminPassword),
-            "ADMIN",
-            null
-        )));
+        users.findByEmailIgnoreCase(adminEmail).orElseGet(() -> {
+            if ("123456".equals(adminPassword)) {
+                log.warn("Administrador criado com a senha padrao 123456. Defina PORTAL_ADMIN_PASSWORD e troque a senha agora.");
+            }
+            return users.save(new AppUser(
+                "Administrador",
+                adminEmail,
+                passwordEncoder.encode(adminPassword),
+                "ADMIN",
+                null
+            ));
+        });
     }
 }

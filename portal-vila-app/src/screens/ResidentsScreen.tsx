@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert } from '../utils/alert';
 import { Edit3, KeyRound, Plus, RefreshCw, Save, ShieldCheck, UserMinus, X } from 'lucide-react-native';
 import { Badge, Button, Card, Field, Label, Row, Screen, Stack, Value } from '../components/ui';
 import { api, apiErrorMessage } from '../services/api';
@@ -117,7 +118,14 @@ export function ResidentsScreen() {
       setEditingId(null);
       setDraft(null);
       setMessage({ residentId: saved.id ?? draft.id ?? 0, type: 'success', text: 'Dados salvos e cliente sincronizado.' });
-      Alert.alert('Moradores', 'Dados salvos e cliente sincronizado.');
+      if (saved.temporaryPassword) {
+        Alert.alert(
+          'Morador cadastrado',
+          `Senha temporária de acesso: ${saved.temporaryPassword}\n\nAnote e entregue à pessoa agora: ela não aparece de novo. No primeiro acesso o sistema pede uma senha nova.`
+        );
+      } else {
+        Alert.alert('Moradores', 'Dados salvos e cliente sincronizado.');
+      }
     } catch (error) {
       const text = apiErrorMessage(error, 'Não consegui salvar o morador.');
       setMessage({ residentId: draft.id ?? 0, type: 'error', text });

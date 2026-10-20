@@ -7,10 +7,12 @@ Sistema criado a partir do PDF `portal_da_vila_react_native_pix_asaas_pagamento_
 - `portal-vila-api`: backend Java 17 + Spring Boot + PostgreSQL, com Pix Asaas isolado por interface.
 - `portal-vila-app`: app Expo + React Native + TypeScript com telas mobile do Portal da Vila.
 
-## Credenciais seed
+## Acesso inicial
 
-- Admin: `ubaldinajacare207@gmail.com` / `123456`
-- Morador: `morador@vila.com` / `123456`
+O administrador e criado no primeiro start com o e-mail de `PORTAL_ADMIN_EMAIL` e a senha de `PORTAL_ADMIN_PASSWORD`.
+Defina as duas antes de subir (sem `PORTAL_ADMIN_PASSWORD` o padrao inseguro `123456` e usado e um aviso sai no log).
+Moradores criados pelo administrador recebem uma senha temporaria aleatoria, mostrada uma unica vez, e precisam troca-la
+no primeiro acesso. Senhas novas tem no minimo 8 caracteres.
 
 ## Execucao rapida
 

@@ -1,5 +1,6 @@
 import { ReactNode, useCallback, useMemo, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
+import { Alert } from '../utils/alert';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { ArrowLeft, CalendarDays, Check, ChevronDown, ClipboardList, ExternalLink, FileText, Flag, Link2, Save, Trash2, Upload, UserRound, X } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
@@ -285,7 +286,7 @@ export function ServiceFormScreen() {
       Alert.alert('Documento fiscal', 'Informe o link do PDF da nota fiscal ou recibo.');
       return;
     }
-    Linking.openURL(api.documentUrl(previewUrl)).catch(() => Alert.alert('Documento fiscal', 'Não foi possível abrir o link informado.'));
+    api.openDocument(previewUrl).catch(() => Alert.alert('Documento fiscal', 'Não foi possível abrir o link informado.'));
   }
 
   function selectPdf() {

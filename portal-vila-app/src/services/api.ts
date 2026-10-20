@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { Linking, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Budget,
@@ -193,6 +194,30 @@ export const api = {
     return requestData<PortalDocument>(apiClient.post('/documents/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } }));
   },
   documentUrl: (url: string) => (url.startsWith('/') ? `${publicBaseURL}${url}` : url),
+  /**
+   * Stored files are no longer public: ask the API for a short-lived link first. Links the user typed (or a local
+   * preview) open as they are.
+   */
+  openDocument: async (url: string) => {
+    const stored = /^\/api\/documents\/(\d+)\/file/.exec(url);
+    if (!stored) {
+      return Linking.openURL(api.documentUrl(url));
+    }
+    // The tab is opened before the request so the browser still counts it as a click and does not block it.
+    const tab = Platform.OS === 'web' && typeof window !== 'undefined' ? window.open('', '_blank') : null;
+    try {
+      const access = await requestData<{ path: string }>(apiClient.get(`/documents/${stored[1]}/access`));
+      const target = `${publicBaseURL}${access.path}`;
+      if (tab) {
+        tab.location.href = target;
+        return undefined;
+      }
+      return Linking.openURL(target);
+    } catch (error) {
+      tab?.close();
+      throw error;
+    }
+  },
   residents: () => requestData<Resident[]>(apiClient.get('/residents')),
   createResident: (resident: Resident) => requestData<Resident>(apiClient.post('/residents', resident)),
   updateResident: (id: number, resident: Resident) => requestData<Resident>(apiClient.put(`/residents/${id}`, resident)),

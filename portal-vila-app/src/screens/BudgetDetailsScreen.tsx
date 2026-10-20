@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
 import { Budget, BudgetVoteChoice, BudgetVoting, PortalDocument } from '../types';
+import { Alert } from '../utils/alert';
 import { budgetBadgeStatus, closingResult, formatVotingDate, voteLabel, votingScore } from '../utils/budgetVoting';
 
 export function BudgetDetailsScreen() {
@@ -116,7 +117,7 @@ export function BudgetDetailsScreen() {
               title="Abrir PDF do orçamento"
               icon={ExternalLink}
               variant="ghost"
-              onPress={() => Linking.openURL(api.documentUrl(documents[0].url))}
+              onPress={() => api.openDocument(documents[0].url).catch(() => Alert.alert('Orçamento', 'Não foi possível abrir o documento.'))}
             />
           ) : null}
           {canManageBudgets ? (

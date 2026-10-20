@@ -1,5 +1,6 @@
 import { ReactNode, useCallback, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
+import { Alert } from '../utils/alert';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { ArrowLeft, CalendarDays, CheckCircle2, ExternalLink, FileText, Flag, Save, Trash2, Upload, UserRound, X } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
@@ -266,7 +267,7 @@ export function BudgetFormScreen() {
       Alert.alert('Orçamento', 'Informe o PDF ou link do orçamento.');
       return;
     }
-    Linking.openURL(api.documentUrl(previewUrl)).catch(() => Alert.alert('Orçamento', 'Não foi possível abrir o documento.'));
+    api.openDocument(previewUrl).catch(() => Alert.alert('Orçamento', 'Não foi possível abrir o documento.'));
   }
 
   function cancel() {

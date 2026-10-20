@@ -47,4 +47,35 @@ public class JwtService {
             .parseSignedClaims(token)
             .getPayload();
     }
+
+    private static final String DOCUMENT_TOKEN_TYPE = "document";
+    private static final long DOCUMENT_TOKEN_MINUTES = 10;
+
+    /** Short-lived link token that lets a browser tab (which cannot send the login header) open one document. */
+    public String issueDocumentToken(Long documentId) {
+        Instant now = Instant.now();
+        return Jwts.builder()
+            .subject("document:" + documentId)
+            .claim("type", DOCUMENT_TOKEN_TYPE)
+            .issuedAt(Date.from(now))
+            .expiration(Date.from(now.plusSeconds(DOCUMENT_TOKEN_MINUTES * 60)))
+            .signWith(key)
+            .compact();
+    }
+
+    public boolean isValidDocumentToken(String token, Long documentId) {
+        if (token == null || token.isBlank()) {
+            return false;
+        }
+        try {
+            Claims claims = parse(token);
+            return isDocumentToken(claims) && ("document:" + documentId).equals(claims.getSubject());
+        } catch (RuntimeException ex) {
+            return false;
+        }
+    }
+
+    static boolean isDocumentToken(Claims claims) {
+        return DOCUMENT_TOKEN_TYPE.equals(claims.get("type"));
+    }
 }

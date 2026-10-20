@@ -43,6 +43,8 @@ class ServiceOrderWorkflow {
 
     @Transactional
     public ServiceOrder saveService(ServiceOrder incoming) {
+        validateService(incoming);
+        incoming.id = null;
         if (incoming.status == null || incoming.status.isBlank()) {
             incoming.status = "PLANEJADO";
         }
@@ -58,6 +60,7 @@ class ServiceOrderWorkflow {
 
     @Transactional
     public ServiceOrder updateService(Long id, ServiceOrder incoming) {
+        validateService(incoming);
         ServiceOrder service = services.findById(id).orElseThrow();
         Long previousBudgetId = service.approvedBudgetId;
         service.title = incoming.title;
@@ -95,6 +98,9 @@ class ServiceOrderWorkflow {
      */
     @Transactional
     public Budget saveBudget(Budget budget) {
+        // A new budget is always a new row: sending an id must never overwrite one that was already voted.
+        budget.id = null;
+        budget.createdAt = LocalDateTime.now();
         budget.serviceId = null;
         budget.status = "EM_ANALISE";
         budget.votingClosedAt = null;
@@ -155,6 +161,16 @@ class ServiceOrderWorkflow {
     @Transactional
     public ServiceOrder finishService(Long id, FinishServiceRequest request) {
         ServiceOrder service = services.findById(id).orElseThrow();
+        if ("CANCELADO".equals(service.status)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Este serviço foi cancelado e não pode ser finalizado.");
+        }
+        if (request.finalValue().signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe o valor final pago, maior que zero.");
+        }
+        // Finishing again may fix the note or the supplier, but must not book the same payment twice.
+        if (request.generateExpense() && !expenses.findByServiceOrderId(service.id).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "A despesa deste serviço já foi lançada. Finalize sem gerar despesa para só atualizar os dados.");
+        }
         service.status = "FINALIZADO";
         service.finalValue = request.finalValue();
         service.completedDate = request.completedDate();
@@ -180,6 +196,15 @@ class ServiceOrderWorkflow {
         }
         dashboardEvents.publishDashboardChanged();
         return service;
+    }
+
+    private void validateService(ServiceOrder service) {
+        if (service == null || service.title == null || service.title.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Título do serviço obrigatório.");
+        }
+        if (service.description == null || service.description.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Descrição do serviço obrigatória.");
+        }
     }
 
     private void validateBudget(Budget budget) {
