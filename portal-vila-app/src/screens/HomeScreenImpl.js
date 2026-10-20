@@ -47,6 +47,9 @@ export function HomeScreen() {
   const [month] = useState(currentMonth());
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // Until the first answer arrives there is nothing to judge: no "locked" card, no "no services" line.
+  const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const loadInFlight = useRef(false);
 
   async function load() {
@@ -68,6 +71,10 @@ export function HomeScreen() {
       setCharges(nextCharges);
       setServices(sortMaintenance(nextServices));
       setVotings(nextVotings);
+      setLoadFailed(false);
+      setLoaded(true);
+    } catch (error) {
+      setLoadFailed(true);
     } finally {
       loadInFlight.current = false;
       setRefreshing(false);
@@ -134,7 +141,20 @@ export function HomeScreen() {
         ) : null}
       </View>
 
-      {isAdmin ? (
+      {!loaded ? (
+        <LocalCard style={styles.transparencyCard}>
+          <Text style={styles.cardTitle}>{loadFailed ? 'Não consegui carregar' : 'Carregando...'}</Text>
+          <Text style={styles.cardSubtitle}>
+            {loadFailed ? 'Confira a conexão e toque em atualizar para tentar de novo.' : 'Buscando os dados da vila.'}
+          </Text>
+          {loadFailed ? (
+            <Pressable style={styles.primaryAction} onPress={load}>
+              <RefreshCw color={colors.surface} size={18} />
+              <Text style={styles.primaryActionText}>Tentar de novo</Text>
+            </Pressable>
+          ) : null}
+        </LocalCard>
+      ) : isAdmin ? (
         <AdminHome
           dashboard={dashboard}
           month={month}
@@ -175,6 +195,10 @@ export function HomeScreen() {
               onPress={() => navigation.navigate('ServiceDetails', { id: item.id })}
             />
           ))
+        ) : !loaded ? (
+          <View style={styles.emptyRow}>
+            <Text style={styles.emptyList}>Carregando...</Text>
+          </View>
         ) : openVotings.length === 0 ? (
           <View style={styles.emptyRow}>
             <View style={styles.emptyIcon}>
