@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
 import { Alert } from '../utils/alert';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { CheckCircle2, Eye, FileText, Plus, ReceiptText, RefreshCw, Trash2, Upload, WalletCards } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { SoftBackdrop } from '../components/SoftBackdrop';
@@ -22,6 +22,10 @@ const documentTypeLabels: Record<DocumentType, string> = {
 
 export function ExpensesScreen() {
   const { isAdmin } = useAuth();
+  const route = useRoute<any>();
+  const navigation = useNavigation<any>();
+  // The form stays folded so the list of expenses is the first thing anyone sees.
+  const [formOpen, setFormOpen] = useState(false);
   const [items, setItems] = useState<Expense[]>([]);
   const [documents, setDocuments] = useState<PortalDocument[]>([]);
   const [description, setDescription] = useState('');
@@ -49,10 +53,16 @@ export function ExpensesScreen() {
     setDocuments(documentList);
   }, []);
 
+  const openFormRequested = Boolean(route.params?.openForm);
+
   useFocusEffect(
     useCallback(() => {
       load().catch(() => undefined);
-    }, [load])
+      if (openFormRequested) {
+        setFormOpen(true);
+        navigation.setParams({ openForm: undefined });
+      }
+    }, [load, openFormRequested, navigation])
   );
 
   async function create() {
@@ -115,6 +125,7 @@ export function ExpensesScreen() {
       }
 
       resetForm();
+      setFormOpen(false);
       await load();
       Alert.alert('Despesa', 'Despesa cadastrada.');
     } catch (error) {
@@ -200,7 +211,18 @@ export function ExpensesScreen() {
         </Pressable>
       </View>
 
-      {isAdmin ? (
+      {isAdmin && !formOpen ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setFormOpen(true)}
+          style={({ pressed }) => [styles.primaryButton, { opacity: pressed ? 0.84 : 1 }]}
+        >
+          <Plus color={colors.surface} size={18} strokeWidth={2.6} />
+          <Text style={styles.primaryButtonText}>Nova despesa</Text>
+        </Pressable>
+      ) : null}
+
+      {isAdmin && formOpen ? (
         <View style={styles.formCard}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionIcon}>
@@ -282,6 +304,9 @@ export function ExpensesScreen() {
           >
             <Plus color={colors.surface} size={18} strokeWidth={2.6} />
             <Text style={styles.primaryButtonText}>{saving ? 'Salvando...' : 'Cadastrar despesa'}</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={() => setFormOpen(false)} style={styles.closeFormButton}>
+            <Text style={styles.closeFormText}>Fechar sem salvar</Text>
           </Pressable>
         </View>
       ) : null}
@@ -748,6 +773,16 @@ const styles = StyleSheet.create({
     color: colors.amber,
     fontSize: 12,
     lineHeight: 16,
+    fontWeight: '800'
+  },
+  closeFormButton: {
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  closeFormText: {
+    color: colors.muted,
+    fontSize: 13,
     fontWeight: '800'
   },
   categoryBox: {

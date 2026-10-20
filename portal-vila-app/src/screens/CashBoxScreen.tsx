@@ -1,18 +1,32 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { CalendarDays, Home, ListChecks, Lock, ReceiptText, RefreshCw, WalletCards } from 'lucide-react-native';
-import type { LucideIcon } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Badge } from '../components/ui';
-import { SoftBackdrop } from '../components/SoftBackdrop';
+import { BarChart3, Eye, Home, Lock, Plus, QrCode, RefreshCw } from 'lucide-react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Badge, Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
 import { api } from '../services/api';
-import { Contribution, Dashboard, Movement, PixCharge } from '../types';
+import { Contribution, Dashboard, Expense, Movement, PixCharge, PortalDocument } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { colors, spacing } from '../theme';
+import { Alert } from '../utils/alert';
 import { reloadIfNewVersion } from '../utils/appVersion';
-import { currentMonth } from '../utils/month';
+import { formatDateBR, formatMoneyBR } from '../utils/format';
+import { currentMonth, monthLabel } from '../utils/month';
 
-const RECEIVED_PREVIEW_COUNT = 8;
+const PREVIEW_COUNT = 8;
+
+type Tab = 'ENTRADAS' | 'SAIDAS' | 'CASAS';
+
+const tabLabels: Record<Tab, string> = {
+  ENTRADAS: 'Entradas',
+  SAIDAS: 'Saídas',
+  CASAS: 'Contribuições'
+};
+
+const originLabels: Record<string, string> = {
+  PIX_ASAAS: 'Contribuição via Pix',
+  PAGAMENTO_MANUAL: 'Pagamento manual',
+  RECEBIMENTO_DIRETO: 'Recebimento direto'
+};
 
 export function CashBoxScreen() {
   const navigation = useNavigation<any>();
@@ -20,9 +34,12 @@ export function CashBoxScreen() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [charges, setCharges] = useState<PixCharge[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [documents, setDocuments] = useState<PortalDocument[]>([]);
   const [month] = useState(currentMonth());
   const [loading, setLoading] = useState(false);
-  const [showAllReceived, setShowAllReceived] = useState(false);
+  const [tab, setTab] = useState<Tab>('ENTRADAS');
+  const [showAll, setShowAll] = useState(false);
   const loadInFlight = useRef(false);
 
   async function load() {
@@ -32,14 +49,18 @@ export function CashBoxScreen() {
     loadInFlight.current = true;
     setLoading(true);
     try {
-      const [dash, list, pixList] = await Promise.all([
+      const [dash, list, pixList, expenseList, documentList] = await Promise.all([
         api.dashboard(month),
         api.contributions(month),
-        api.pixCharges(month)
+        api.pixCharges(month),
+        api.expenses().catch(() => [] as Expense[]),
+        api.documents().catch(() => [] as PortalDocument[])
       ]);
       setDashboard(dash);
       setContributions(list);
       setCharges(pixList);
+      setExpenses(expenseList);
+      setDocuments(documentList);
     } finally {
       loadInFlight.current = false;
       setLoading(false);
@@ -101,180 +122,198 @@ export function CashBoxScreen() {
     }, [isAdmin, month])
   );
 
+  const documentsById = useMemo(() => {
+    return documents.reduce<Record<number, PortalDocument>>((acc, item) => {
+      if (item.id) {
+        acc[item.id] = item;
+      }
+      return acc;
+    }, {});
+  }, [documents]);
+
   const hasPaidContribution = contributions.some((contribution) => contribution?.status === 'PAID');
   const hasVisibleFinancialData = (dashboard?.movements?.length ?? 0) > 0
     || Number(dashboard?.collected ?? 0) > 0
     || Number(dashboard?.totalCollected ?? 0) > 0;
   const transparencyUnlocked = isAdmin || dashboard?.transparencyEnabled === true || hasPaidContribution || hasVisibleFinancialData;
-  const visibleContributions = isAdmin ? contributions.slice(0, 5) : [];
-  const directReceiptMovements = (dashboard?.movements ?? []).filter((movement) =>
-    movement.type === 'RECEBIMENTO_DIRETO' && Number(movement.amount) > 0
-  );
-  const directReceiptTotal = directReceiptMovements.reduce((total, movement) => total + Number(movement.amount ?? 0), 0);
+  const directReceiptTotal = (dashboard?.movements ?? [])
+    .filter((movement) => movement.type === 'RECEBIMENTO_DIRETO' && Number(movement.amount) > 0)
+    .reduce((total, movement) => total + Number(movement.amount ?? 0), 0);
   // One list for every received payment, newest first, so direct receipts and house payments interleave by date.
-  const receivedMovements = (dashboard?.movements ?? [])
-    .filter((movement) =>
-      (movement.type === 'RECEBIMENTO_DIRETO' || movement.type === 'PIX_ASAAS' || movement.type === 'PAGAMENTO_MANUAL')
-      && Number(movement.amount) > 0
-    )
+  const received = (dashboard?.movements ?? [])
+    .filter((movement) => Object.keys(originLabels).includes(movement.type) && Number(movement.amount) > 0)
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const outgoing = [...expenses].sort((a, b) => {
+    const byDate = String(b.expenseDate ?? '').localeCompare(String(a.expenseDate ?? ''));
+    return byDate !== 0 ? byDate : (b.id ?? 0) - (a.id ?? 0);
+  });
+  const withoutDocument = outgoing.filter((expense) => !expense.documentId).length;
+
+  function chooseTab(next: Tab) {
+    setTab(next);
+    setShowAll(false);
+  }
+
+  function openDocument(portalDocument?: PortalDocument) {
+    if (!portalDocument) {
+      return;
+    }
+    api.openDocument(portalDocument.url).catch(() => Alert.alert('Documento', 'Não foi possível abrir o documento.'));
+  }
+
+  const entriesToShow = showAll ? received : received.slice(0, PREVIEW_COUNT);
+  const outgoingToShow = showAll ? outgoing : outgoing.slice(0, PREVIEW_COUNT);
+  const listSize = tab === 'ENTRADAS' ? received.length : tab === 'SAIDAS' ? outgoing.length : 0;
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <SoftBackdrop compact />
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Caixa</Text>
-          <Text style={styles.subtitle}>Resumo financeiro</Text>
-        </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Atualizar caixa" onPress={() => { refreshFromButton().catch(() => undefined); }} style={styles.refreshButton}>
-          <RefreshCw color={loading ? colors.muted : colors.blue} size={24} />
-        </Pressable>
-      </View>
-
+    <Screen
+      title="Caixa"
+      subtitle="Quanto entrou e quanto saiu"
+      right={<Button title="" icon={RefreshCw} variant="ghost" onPress={() => { refreshFromButton().catch(() => undefined); }} disabled={loading} />}
+    >
       {!transparencyUnlocked ? (
-        <View style={styles.lockedCard}>
-          <Lock color={colors.ink} size={24} />
-          <View style={styles.lockedCopy}>
-            <Text style={styles.lockedTitle}>Desbloqueie todas as funcionalidades</Text>
-            <Text style={styles.lockedText}>Faça seu primeiro pagamento para desbloquear.</Text>
-          </View>
-        </View>
+        <Card>
+          <Row>
+            <Value>Desbloqueie o caixa</Value>
+            <Lock color={colors.muted} size={20} />
+          </Row>
+          <Label>O caixa é aberto para as casas que contribuem. Faça sua primeira contribuição para ver.</Label>
+        </Card>
       ) : (
         <>
-          <View style={styles.balanceCard}>
-            <View style={styles.balanceTop}>
-              <View style={styles.walletIcon}>
-                <WalletCards color={colors.surface} size={25} />
-              </View>
-              <View style={styles.balanceCopy}>
-                <Text style={styles.summaryLabel}>Saldo acumulado da vila</Text>
-                <Text style={styles.balanceValue}>{formatCurrency(dashboard?.balance ?? 0)}</Text>
-              </View>
-            </View>
+          <Card>
+            <Label>Saldo acumulado da vila</Label>
+            <Text style={styles.balance}>{formatMoneyBR(dashboard?.balance ?? 0)}</Text>
             <View style={styles.divider} />
-            <SummaryRow icon={WalletCards} label="Arrecadado total" value={formatCurrency(dashboard?.totalCollected ?? dashboard?.collected ?? 0)} />
-            <SummaryRow icon={CalendarDays} label={`Arrecadado no mês (${monthLabel(month)})`} value={formatCurrency(dashboard?.collected ?? 0)} />
-            {directReceiptTotal > 0 ? (
-              <SummaryRow icon={WalletCards} label="Recebimentos diretos" value={formatCurrency(directReceiptTotal)} />
-            ) : null}
-            <SummaryRow icon={ReceiptText} label="Despesas acumuladas" value={formatCurrency(dashboard?.expenses ?? 0)} />
+            <Row><Label>Arrecadado total</Label><Money value={dashboard?.totalCollected ?? dashboard?.collected ?? 0} /></Row>
+            <Row><Label>Arrecadado no mês ({monthLabel(month)})</Label><Money value={dashboard?.collected ?? 0} /></Row>
+            {directReceiptTotal > 0 ? <Row><Label>Recebimentos diretos</Label><Money value={directReceiptTotal} /></Row> : null}
+            <Row><Label>Despesas acumuladas</Label><Money value={-(dashboard?.expenses ?? 0)} /></Row>
+            <Button title="Ver prestação de contas do mês" icon={BarChart3} variant="ghost" onPress={() => navigation.navigate('Reports')} />
+          </Card>
+
+          <View style={styles.segmented}>
+            {(Object.keys(tabLabels) as Tab[]).map((key) => (
+              <Pressable
+                key={key}
+                accessibilityRole="button"
+                accessibilityState={{ selected: tab === key }}
+                onPress={() => chooseTab(key)}
+                style={[styles.segment, tab === key ? styles.segmentActive : null]}
+              >
+                <Text style={[styles.segmentText, tab === key ? styles.segmentTextActive : null]}>{tabLabels[key]}</Text>
+              </Pressable>
+            ))}
           </View>
 
-          <View style={styles.actionsRow}>
-            <Pressable style={styles.primaryAction} onPress={() => navigation.navigate('Contributions')}>
-              <ListChecks color={colors.surface} size={16} />
-              <Text style={styles.primaryActionText}>Contribuições</Text>
-            </Pressable>
-            <Pressable style={styles.secondaryAction} onPress={() => navigation.navigate('Expenses')}>
-              <ReceiptText color={colors.blue} size={16} />
-              <Text style={styles.secondaryActionText}>Despesas</Text>
-            </Pressable>
-          </View>
+          {tab === 'ENTRADAS' ? (
+            <Card>
+              <Value>Entradas</Value>
+              {received.length === 0 ? <Label>Nenhuma entrada ainda.</Label> : null}
+              {entriesToShow.map((movement: Movement, index) => (
+                <View key={`${movement.date}-${movement.amount}-${index}`} style={styles.entry}>
+                  <View style={styles.entryText}>
+                    <Text style={styles.entryTitle}>{movement.description}</Text>
+                    <Label>{formatDateBR(movement.date)} - {originLabels[movement.type] ?? movement.type}</Label>
+                  </View>
+                  <Money value={movement.amount} />
+                </View>
+              ))}
+            </Card>
+          ) : null}
+
+          {tab === 'SAIDAS' ? (
+            <>
+              {isAdmin ? <Button title="Lançar despesa" icon={Plus} onPress={() => navigation.navigate('Expenses', { openForm: true })} /> : null}
+              {withoutDocument > 0 ? (
+                <Card style={styles.warningCard}>
+                  <Text style={styles.warningText}>
+                    {withoutDocument} {withoutDocument === 1 ? 'saída está' : 'saídas estão'} sem comprovante anexado.
+                  </Text>
+                </Card>
+              ) : null}
+              <Card>
+                <Value>Saídas</Value>
+                {outgoing.length === 0 ? <Label>Nenhuma despesa lançada.</Label> : null}
+                {outgoingToShow.map((expense) => {
+                  const portalDocument = expense.documentId ? documentsById[expense.documentId] : undefined;
+                  const category = !expense.category || expense.category === 'Manual' ? 'Outros' : expense.category;
+                  return (
+                    <View key={expense.id} style={styles.entry}>
+                      <View style={styles.entryText}>
+                        <Text style={styles.entryTitle}>{expense.description}</Text>
+                        <Label>
+                          {formatDateBR(expense.expenseDate)} - {category}{expense.supplier ? ` - ${expense.supplier}` : ''}
+                        </Label>
+                        {portalDocument ? (
+                          <Pressable accessibilityRole="button" onPress={() => openDocument(portalDocument)} style={styles.documentLink}>
+                            <Eye color={colors.blue} size={14} />
+                            <Text style={styles.documentLinkText}>Ver {portalDocument.type === 'NOTA_FISCAL' ? 'nota fiscal' : 'comprovante'}</Text>
+                          </Pressable>
+                        ) : (
+                          <Text style={styles.noDocument}>Sem comprovante anexado</Text>
+                        )}
+                      </View>
+                      <Money value={-expense.amount} />
+                    </View>
+                  );
+                })}
+              </Card>
+            </>
+          ) : null}
+
+          {tab === 'CASAS' ? (
+            <>
+              {isAdmin ? (
+                <>
+                  <Button title="Gerar e gerenciar cobranças Pix" icon={QrCode} variant="ghost" onPress={() => navigation.navigate('AdminPixCharges')} />
+                  {contributions.length === 0 ? <Card><Label>Nenhuma contribuição gerada neste mês.</Label></Card> : null}
+                  {contributions.map((item) => (
+                    <HouseCard
+                      key={item.id}
+                      title={item.houseLabel}
+                      name={item.residentName}
+                      value={item.amount}
+                      status={item.status}
+                      pixChargeId={item.pixChargeId}
+                      onOpenPix={() => item.pixChargeId ? navigation.navigate('PixPayment', { id: item.pixChargeId }) : undefined}
+                    />
+                  ))}
+                </>
+              ) : (
+                <>
+                  {charges.length === 0 ? <Card><Label>Você ainda não tem contribuição neste mês.</Label></Card> : null}
+                  {charges.map((charge) => (
+                    <HouseCard
+                      key={charge.id}
+                      title={charge.houseLabel}
+                      name={charge.month ? monthLabel(charge.month) : formatDateBR(charge.dueDate)}
+                      description={`Vencimento ${formatDateBR(charge.dueDate)}`}
+                      value={charge.value}
+                      status={charge.status}
+                      pixChargeId={charge.id}
+                      onOpenPix={() => navigation.navigate('PixPayment', { id: charge.id })}
+                    />
+                  ))}
+                </>
+              )}
+            </>
+          ) : null}
+
+          {tab !== 'CASAS' && listSize > PREVIEW_COUNT ? (
+            <Button
+              title={showAll ? 'Ver menos' : `Ver tudo (${listSize})`}
+              variant="ghost"
+              onPress={() => setShowAll((value) => !value)}
+            />
+          ) : null}
         </>
       )}
-
-      {(showAllReceived ? receivedMovements : receivedMovements.slice(0, RECEIVED_PREVIEW_COUNT)).map((movement, index) => (
-        movement.type === 'RECEBIMENTO_DIRETO'
-          ? <DirectReceiptCard key={`${movement.date}-${movement.amount}-${index}`} movement={movement} />
-          : <HousePaymentCard key={`${movement.date}-${movement.amount}-${index}`} movement={movement} />
-      ))}
-
-      {receivedMovements.length > RECEIVED_PREVIEW_COUNT ? (
-        <Pressable accessibilityRole="button" style={styles.secondaryAction} onPress={() => setShowAllReceived((value) => !value)}>
-          <Text style={styles.secondaryActionText}>
-            {showAllReceived ? 'Ver menos' : `Ver todas as entradas (${receivedMovements.length})`}
-          </Text>
-        </Pressable>
-      ) : null}
-
-      {visibleContributions.map((item) => (
-        <ContributionCard
-          key={item.id}
-          title={item.houseLabel}
-          name={item.residentName}
-          value={item.amount}
-          status={item.status}
-          pixChargeId={item.pixChargeId}
-          onOpenPix={() => item.pixChargeId ? navigation.navigate('PixPayment', { id: item.pixChargeId }) : undefined}
-        />
-      ))}
-
-      {!isAdmin ? (
-        <>
-          {charges.map((charge) => (
-            <ContributionCard
-              key={charge.id}
-              title={charge.houseLabel}
-              name={charge.month ? monthLabel(charge.month) : formatDate(charge.dueDate)}
-              description={`Vencimento ${formatDate(charge.dueDate)}`}
-              value={charge.value}
-              status={charge.status}
-              pixChargeId={charge.id}
-              onOpenPix={() => navigation.navigate('PixPayment', { id: charge.id })}
-            />
-          ))}
-        </>
-      ) : null}
-    </ScrollView>
+    </Screen>
   );
 }
 
-function SummaryRow({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
-  return (
-    <View style={styles.summaryRow}>
-      <View style={styles.summaryLabelRow}>
-        <Icon color={colors.blue} size={15} />
-        <Text style={styles.summaryLabel}>{label}</Text>
-      </View>
-      <Text style={styles.summaryValue}>{value}</Text>
-    </View>
-  );
-}
-
-function DirectReceiptCard({ movement }: { movement: Movement }) {
-  return (
-    <View style={styles.chargeCard}>
-      <View style={styles.chargeTop}>
-        <View style={styles.directIcon}>
-          <WalletCards color={colors.green} size={25} />
-        </View>
-        <View style={styles.chargeCopy}>
-          <Text style={styles.chargeTitle}>Recebimento direto</Text>
-          <Text style={styles.chargeName}>{movement.description}</Text>
-          <Text style={styles.chargeDescription}>Sem casa vinculada - {formatDate(movement.date)}</Text>
-        </View>
-        <View style={styles.chargeRight}>
-          <Badge status={movement.status} />
-          <Text style={styles.directValue}>{formatCurrency(movement.amount)}</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function HousePaymentCard({ movement }: { movement: Movement }) {
-  return (
-    <View style={styles.chargeCard}>
-      <View style={styles.chargeTop}>
-        <View style={styles.houseIcon}>
-          <Home color={colors.blue} size={25} />
-        </View>
-        <View style={styles.chargeCopy}>
-          <Text style={styles.chargeTitle}>Pagamento recebido</Text>
-          <Text style={styles.chargeName}>{movement.description}</Text>
-          <Text style={styles.chargeDescription}>{formatDate(movement.date)}</Text>
-        </View>
-        <View style={styles.chargeRight}>
-          <Badge status={movement.status} />
-          <Text style={styles.directValue}>{formatCurrency(movement.amount)}</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function ContributionCard({
+function HouseCard({
   title,
   name,
   description,
@@ -292,361 +331,49 @@ function ContributionCard({
   onOpenPix: () => void;
 }) {
   return (
-    <View style={styles.chargeCard}>
-      <View style={styles.chargeTop}>
+    <Card>
+      <View style={styles.houseTop}>
         <View style={styles.houseIcon}>
-          <Home color={colors.blue} size={25} />
+          <Home color={colors.blue} size={22} />
         </View>
-        <View style={styles.chargeCopy}>
-          <Text style={styles.chargeTitle}>{title}</Text>
-          {name ? <Text style={styles.chargeName}>{name}</Text> : null}
-          {description ? <Text style={styles.chargeDescription}>{description}</Text> : null}
+        <View style={styles.entryText}>
+          <Text style={styles.entryTitle}>{title}</Text>
+          {name ? <Label>{name}</Label> : null}
+          {description ? <Label>{description}</Label> : null}
         </View>
-        <View style={styles.chargeRight}>
+        <View style={styles.houseRight}>
           <Badge status={status} />
-          <Text style={styles.chargeValue}>{formatCurrency(value)}</Text>
+          <Money value={value} />
         </View>
       </View>
-      <Pressable
-        accessibilityRole="button"
-        disabled={!pixChargeId}
-        style={[styles.pixButton, !pixChargeId ? styles.disabledAction : null]}
-        onPress={onOpenPix}
-      >
-        <View style={styles.pixMark}>
-          <View style={styles.pixDiamond} />
-          <View style={styles.pixDiamond} />
-          <View style={styles.pixDiamond} />
-          <View style={styles.pixDiamond} />
-        </View>
-        <Text style={styles.pixButtonText}>{pixChargeId ? 'Ver Pix' : 'Pix não gerado'}</Text>
-      </Pressable>
-    </View>
+      <Button title={pixChargeId ? 'Ver Pix' : 'Pix não gerado'} icon={QrCode} variant="ghost" onPress={onOpenPix} disabled={!pixChargeId} />
+    </Card>
   );
 }
 
-function monthLabel(value: string) {
-  const [year, month] = value.split('-');
-  if (!year || !month) {
-    return value;
-  }
-  return `${month}/${year}`;
-}
-
-function formatDate(value: string) {
-  const [year, month, day] = String(value).slice(0, 10).split('-');
-  if (!year || !month || !day) {
-    return value;
-  }
-  return `${day}/${month}/${year}`;
-}
-
-function formatCurrency(value?: number | null) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value ?? 0);
-}
-
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.bg
-  },
-  content: {
-    width: '100%',
-    maxWidth: 430,
-    alignSelf: 'center',
-    paddingHorizontal: 14,
-    paddingTop: 16,
-    paddingBottom: 106,
-    gap: 12,
-    position: 'relative'
-  },
-  header: {
-    minHeight: 58,
+  balance: { color: colors.ink, fontSize: 32, lineHeight: 38, fontWeight: '900' },
+  divider: { height: 1, backgroundColor: colors.border },
+  segmented: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    zIndex: 1
-  },
-  title: {
-    color: colors.ink,
-    fontSize: 26,
-    lineHeight: 31,
-    fontWeight: '900',
-    letterSpacing: 0
-  },
-  subtitle: {
-    color: colors.muted,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '600',
-    marginTop: 2
-  },
-  refreshButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#163052',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2
-  },
-  balanceCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    gap: 10,
-    shadowColor: '#163052',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
-    zIndex: 1
-  },
-  balanceTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12
-  },
-  walletIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 999,
-    backgroundColor: colors.blue,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.blue,
-    shadowOpacity: 0.25,
-    shadowRadius: 15,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4
-  },
-  balanceCopy: {
-    flex: 1,
-    gap: spacing.xs
-  },
-  summaryLabel: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '600'
-  },
-  balanceValue: {
-    color: colors.ink,
-    fontSize: 32,
-    lineHeight: 37,
-    fontWeight: '900'
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border
-  },
-  summaryRow: {
-    minHeight: 34,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10
-  },
-  summaryLabelRow: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10
-  },
-  summaryValue: {
-    color: colors.ink,
-    fontSize: 15,
-    lineHeight: 19,
-    fontWeight: '900'
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    zIndex: 1
-  },
-  primaryAction: {
-    flex: 1,
-    minHeight: 38,
-    borderRadius: 8,
-    backgroundColor: colors.blue,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    shadowColor: colors.blue,
-    shadowOpacity: 0.18,
-    shadowRadius: 13,
-    shadowOffset: { width: 0, height: 7 },
-    elevation: 3
-  },
-  secondaryAction: {
-    flex: 1,
-    minHeight: 38,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8
-  },
-  primaryActionText: {
-    color: colors.surface,
-    fontSize: 13,
-    fontWeight: '900'
-  },
-  secondaryActionText: {
-    color: colors.blue,
-    fontSize: 13,
-    fontWeight: '900'
-  },
-  chargeCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    gap: 12,
-    shadowColor: '#163052',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
-    zIndex: 1
-  },
-  chargeTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12
-  },
-  houseIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 9,
     backgroundColor: colors.blueSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0
+    borderRadius: 10,
+    padding: 4,
+    gap: 4
   },
-  directIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 9,
-    backgroundColor: colors.greenSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0
-  },
-  chargeCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 3
-  },
-  chargeTitle: {
-    color: colors.ink,
-    fontSize: 18,
-    lineHeight: 22,
-    fontWeight: '900'
-  },
-  chargeName: {
-    color: colors.muted,
-    fontSize: 13,
-    lineHeight: 17,
-    fontWeight: '600'
-  },
-  chargeDescription: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '600'
-  },
-  chargeRight: {
-    alignItems: 'flex-end',
-    gap: 8
-  },
-  chargeValue: {
-    color: colors.ink,
-    fontSize: 17,
-    lineHeight: 21,
-    fontWeight: '900'
-  },
-  directValue: {
-    color: colors.green,
-    fontSize: 17,
-    lineHeight: 21,
-    fontWeight: '900'
-  },
-  pixButton: {
-    minHeight: 38,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8
-  },
-  pixButtonText: {
-    color: colors.blue,
-    fontSize: 13,
-    fontWeight: '900'
-  },
-  pixMark: {
-    width: 18,
-    height: 18,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transform: [{ rotate: '45deg' }]
-  },
-  pixDiamond: {
-    width: 7,
-    height: 7,
-    borderRadius: 2,
-    borderWidth: 1.5,
-    borderColor: colors.blue,
-    margin: 1
-  },
-  disabledAction: {
-    opacity: 0.5
-  },
-  lockedCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    zIndex: 1
-  },
-  lockedCopy: {
-    flex: 1,
-    gap: spacing.xs
-  },
-  lockedTitle: {
-    color: colors.ink,
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '900'
-  },
-  lockedText: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '700'
-  }
+  segment: { flex: 1, minHeight: 38, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  segmentActive: { backgroundColor: colors.blue },
+  segmentText: { color: colors.blue, fontSize: 13, fontWeight: '800' },
+  segmentTextActive: { color: colors.surface, fontWeight: '900' },
+  entry: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md, paddingVertical: 6 },
+  entryText: { flex: 1, minWidth: 0, gap: 2 },
+  entryTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  documentLink: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingTop: 2 },
+  documentLinkText: { color: colors.blue, fontSize: 12, fontWeight: '800' },
+  noDocument: { color: colors.amber, fontSize: 12, fontWeight: '800' },
+  warningCard: { backgroundColor: colors.amberSoft, borderColor: colors.amber },
+  warningText: { color: colors.ink, fontSize: 14, fontWeight: '700' },
+  houseTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  houseIcon: { width: 42, height: 42, borderRadius: 9, backgroundColor: colors.blueSoft, alignItems: 'center', justifyContent: 'center' },
+  houseRight: { alignItems: 'flex-end', gap: 6 }
 });
