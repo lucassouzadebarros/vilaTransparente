@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { FileText, Home, MoreHorizontal, WalletCards, Wrench } from 'lucide-react-native';
 import { colors } from '../theme';
 import { AdminPixChargesScreen } from '../screens/AdminPixChargesScreen';
+import { AuditLogScreen } from '../screens/AuditLogScreen';
 import { BudgetDetailsScreen } from '../screens/BudgetDetailsScreen';
 import { BudgetFormScreen } from '../screens/BudgetFormScreen';
 import { BudgetsScreen } from '../screens/BudgetsScreen';
@@ -94,6 +95,7 @@ function PortalTabs() {
       <Tabs.Screen name="Reports" component={ReportsScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="AdminPixCharges" component={AdminPixChargesScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="WebhookEvents" component={WebhookEventsScreen} options={hiddenTabOptions} />
+      <Tabs.Screen name="AuditLog" component={AuditLogScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="Settings" component={SettingsScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="ChangePassword" component={ChangePasswordScreen} options={hiddenTabOptions} />
     </Tabs.Navigator>

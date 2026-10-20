@@ -16,11 +16,13 @@ class SindicoService {
     private final AppUserRepository users;
     private final ResidentRepository residents;
     private final HouseRepository houses;
+    private final AuditService audit;
 
-    SindicoService(AppUserRepository users, ResidentRepository residents, HouseRepository houses) {
+    SindicoService(AppUserRepository users, ResidentRepository residents, HouseRepository houses, AuditService audit) {
         this.users = users;
         this.residents = residents;
         this.houses = houses;
+        this.audit = audit;
     }
 
     @Transactional(readOnly = true)
@@ -64,6 +66,7 @@ class SindicoService {
             chosen.role = ROLE;
             users.save(chosen);
         }
+        audit.record("SINDICO_CHANGED", "RESIDENT", residentId, chosen == null ? "síndico removido" : "síndico: " + chosen.name);
         return current();
     }
 }

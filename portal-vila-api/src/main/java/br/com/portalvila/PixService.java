@@ -27,6 +27,7 @@ class PixService {
     private final SettingsRepository settingsRepository;
     private final DashboardEventService dashboardEvents;
     private final GatewayPaymentLockService paymentLocks;
+    private final AuditService audit;
 
     PixService(
         PixGatewayClient gatewayClient,
@@ -37,8 +38,10 @@ class PixService {
         PixChargeRepository pixCharges,
         SettingsRepository settingsRepository,
         DashboardEventService dashboardEvents,
-        GatewayPaymentLockService paymentLocks
+        GatewayPaymentLockService paymentLocks,
+        AuditService audit
     ) {
+        this.audit = audit;
         this.gatewayClient = gatewayClient;
         this.financialService = financialService;
         this.houses = houses;
@@ -221,6 +224,8 @@ class PixService {
         contribution.updatedAt = LocalDateTime.now();
         contributions.save(contribution);
         PixChargeResponse response = toResponse(pixCharges.save(charge), contribution);
+        audit.record("PIX_CANCELLED", "PIX_CHARGE", charge.id,
+            response.houseLabel() + " " + contribution.referenceMonth + " - " + AuditService.money(charge.value) + " - motivo: " + request.reason());
         dashboardEvents.publishDashboardChanged();
         return response;
     }

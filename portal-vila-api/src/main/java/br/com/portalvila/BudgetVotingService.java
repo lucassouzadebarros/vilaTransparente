@@ -33,14 +33,17 @@ class BudgetVotingService {
     private final ResidentRepository residents;
     private final HouseRepository houses;
     private final DashboardEventService dashboardEvents;
+    private final AuditService audit;
 
     BudgetVotingService(
         BudgetRepository budgets,
         BudgetVoteRepository votes,
         ResidentRepository residents,
         HouseRepository houses,
-        DashboardEventService dashboardEvents
+        DashboardEventService dashboardEvents,
+        AuditService audit
     ) {
+        this.audit = audit;
         this.budgets = budgets;
         this.votes = votes;
         this.residents = residents;
@@ -134,6 +137,7 @@ class BudgetVotingService {
         budget.votingClosedAt = now;
         budget.updatedAt = now;
         budgets.save(budget);
+        audit.record("BUDGET_" + status, "BUDGET", budget.id, budget.title + " - " + AuditService.money(budget.amount));
         dashboardEvents.publishDashboardChanged();
     }
 

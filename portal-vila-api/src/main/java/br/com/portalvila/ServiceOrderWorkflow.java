@@ -16,14 +16,17 @@ class ServiceOrderWorkflow {
     private final ExpenseRepository expenses;
     private final DashboardEventService dashboardEvents;
     private final BudgetVotingService voting;
+    private final AuditService audit;
 
     ServiceOrderWorkflow(
         ServiceOrderRepository services,
         BudgetRepository budgets,
         ExpenseRepository expenses,
         DashboardEventService dashboardEvents,
-        BudgetVotingService voting
+        BudgetVotingService voting,
+        AuditService audit
     ) {
+        this.audit = audit;
         this.services = services;
         this.budgets = budgets;
         this.expenses = expenses;
@@ -89,6 +92,7 @@ class ServiceOrderWorkflow {
         service.status = "CANCELADO";
         service.updatedAt = LocalDateTime.now();
         services.save(service);
+        audit.record("SERVICE_CANCELLED", "SERVICE", service.id, service.title);
         dashboardEvents.publishDashboardChanged();
     }
 
@@ -194,6 +198,10 @@ class ServiceOrderWorkflow {
             expense.budgetId = service.approvedBudgetId;
             expenses.save(expense);
         }
+        audit.record("SERVICE_FINISHED", "SERVICE", service.id,
+            service.title + " - pago " + AuditService.money(request.finalValue())
+                + (service.expectedValue == null ? "" : " (previsto " + AuditService.money(service.expectedValue) + ")")
+                + (request.generateExpense() ? " - despesa lançada" : " - sem despesa"));
         dashboardEvents.publishDashboardChanged();
         return service;
     }

@@ -5,6 +5,7 @@ import {
   ChevronRight,
   ClipboardList,
   FileClock,
+  History,
   KeyRound,
   ListChecks,
   LockOpen,
@@ -54,8 +55,8 @@ const menuItems: MenuItem[] = [
     route: 'Budgets'
   },
   {
-    title: 'Relatórios',
-    description: 'Totais e movimentos do caixa.',
+    title: 'Prestação de contas',
+    description: 'Entradas e saídas de cada mês, com planilha e PDF.',
     icon: BarChart3,
     route: 'Reports'
   },
@@ -85,6 +86,13 @@ const menuItems: MenuItem[] = [
     description: 'Pagamentos avisados pelo Asaas.',
     icon: FileClock,
     route: 'WebhookEvents',
+    adminOnly: true
+  },
+  {
+    title: 'Histórico de alterações',
+    description: 'Quem mexeu em dinheiro e acessos, e quando.',
+    icon: History,
+    route: 'AuditLog',
     adminOnly: true
   },
   {

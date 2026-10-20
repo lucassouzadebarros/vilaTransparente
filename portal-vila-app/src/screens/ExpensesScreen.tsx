@@ -12,6 +12,9 @@ import { Expense, PortalDocument } from '../types';
 
 type DocumentType = 'RECIBO' | 'NOTA_FISCAL';
 
+/** One list for every screen, so the monthly statement can add up by category. */
+const EXPENSE_CATEGORIES = ['Energia', 'Água', 'Limpeza', 'Manutenção', 'Segurança', 'Jardinagem', 'Taxas', 'Outros'];
+
 const documentTypeLabels: Record<DocumentType, string> = {
   RECIBO: 'Recibo',
   NOTA_FISCAL: 'Nota fiscal'
@@ -24,6 +27,7 @@ export function ExpensesScreen() {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [supplier, setSupplier] = useState('');
+  const [category, setCategory] = useState('Outros');
   const [documentType, setDocumentType] = useState<DocumentType>('RECIBO');
   const [documentName, setDocumentName] = useState('Recibo');
   const [documentUrl, setDocumentUrl] = useState('');
@@ -61,14 +65,28 @@ export function ExpensesScreen() {
       Alert.alert('Despesa', 'Informe um valor válido.');
       return;
     }
+    if (!documentFile && !documentUrl.trim()) {
+      Alert.alert(
+        'Despesa sem comprovante',
+        'Esta despesa será lançada sem recibo ou nota fiscal e vai aparecer como "sem comprovante" para as casas. Lançar assim mesmo?',
+        [
+          { text: 'Voltar', style: 'cancel' },
+          { text: 'Lançar sem comprovante', onPress: () => save(amountValue) }
+        ]
+      );
+      return;
+    }
+    await save(amountValue);
+  }
 
+  async function save(amountValue: number) {
     setSaving(true);
     try {
       let saved = await api.createExpense({
         description: description.trim(),
         amount: amountValue,
         expenseDate: new Date().toISOString().slice(0, 10),
-        category: 'Manual',
+        category,
         supplier: supplier.trim() || undefined,
         paymentMethod: 'PIX'
       });
@@ -110,6 +128,7 @@ export function ExpensesScreen() {
     setDescription('');
     setAmount('');
     setSupplier('');
+    setCategory('Outros');
     setDocumentType('RECIBO');
     setDocumentName('Recibo');
     setDocumentUrl('');
@@ -217,6 +236,22 @@ export function ExpensesScreen() {
             />
           </View>
 
+          <View style={styles.categoryBox}>
+            <Text style={styles.categoryTitle}>Categoria</Text>
+            <View style={styles.categoryRow}>
+              {EXPENSE_CATEGORIES.map((name) => (
+                <Pressable
+                  key={name}
+                  accessibilityRole="button"
+                  onPress={() => setCategory(name)}
+                  style={[styles.categoryChip, category === name ? styles.categoryChipSelected : null]}
+                >
+                  <Text style={[styles.categoryChipText, category === name ? styles.categoryChipTextSelected : null]}>{name}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
           <View style={styles.documentBox}>
             <View style={styles.documentHeader}>
               <FileText color={colors.blue} size={18} strokeWidth={2.4} />
@@ -268,7 +303,7 @@ export function ExpensesScreen() {
               </View>
               <View style={styles.expenseCopy}>
                 <Text style={styles.expenseTitle}>{item.description}</Text>
-                <Text style={styles.expenseMeta}>{item.category ?? 'Geral'} - {formatDate(item.expenseDate)}</Text>
+                <Text style={styles.expenseMeta}>{!item.category || item.category === 'Manual' ? 'Outros' : item.category} - {formatDate(item.expenseDate)}</Text>
                 {item.supplier ? <Text style={styles.expenseMeta}>{item.supplier}</Text> : null}
               </View>
               <Text style={styles.expenseValue}>{formatCurrency(item.amount)}</Text>
@@ -282,7 +317,7 @@ export function ExpensesScreen() {
             ) : (
               <View style={styles.noDocumentRow}>
                 <FileText color={colors.muted} size={15} />
-                <Text style={styles.noDocumentText}>Sem documento vinculado</Text>
+                <Text style={styles.noDocumentText}>Sem comprovante anexado</Text>
               </View>
             )}
           </View>
@@ -710,9 +745,45 @@ const styles = StyleSheet.create({
     gap: 7
   },
   noDocumentText: {
-    color: colors.muted,
+    color: colors.amber,
     fontSize: 12,
     lineHeight: 16,
+    fontWeight: '800'
+  },
+  categoryBox: {
+    gap: 8
+  },
+  categoryTitle: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: '800'
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8
+  },
+  categoryChip: {
+    minHeight: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  categoryChipSelected: {
+    borderColor: colors.blue,
+    backgroundColor: colors.blueSoft
+  },
+  categoryChipText: {
+    color: colors.ink,
+    fontSize: 13,
     fontWeight: '700'
+  },
+  categoryChipTextSelected: {
+    color: colors.blue,
+    fontWeight: '900'
   }
 });

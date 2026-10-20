@@ -8,6 +8,7 @@ import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
 import { Budget, BudgetVoteChoice, BudgetVoting, PortalDocument } from '../types';
 import { Alert } from '../utils/alert';
+import { formatDateBR } from '../utils/format';
 import { budgetBadgeStatus, closingResult, formatVotingDate, voteLabel, votingScore } from '../utils/budgetVoting';
 
 export function BudgetDetailsScreen() {
@@ -109,7 +110,7 @@ export function BudgetDetailsScreen() {
           <Label>{budget.title}</Label>
           <Money value={budget.amount} strong />
           <Row><Label>Serviço</Label><Value>{budget.serviceId ? `#${budget.serviceId}` : 'Sem vínculo'}</Value></Row>
-          {budget.validUntil ? <Row><Label>Validade</Label><Value>{budget.validUntil}</Value></Row> : null}
+          {budget.validUntil ? <Row><Label>Validade</Label><Value>{formatDateBR(budget.validUntil)}</Value></Row> : null}
           {budget.notes ? <Label>{budget.notes}</Label> : null}
           {budget.status === 'APROVADO' && !budget.serviceId ? <Label>Aprovado pelas casas. Pode ser escolhido ao cadastrar ou editar um serviço.</Label> : null}
           {documents[0] ? (

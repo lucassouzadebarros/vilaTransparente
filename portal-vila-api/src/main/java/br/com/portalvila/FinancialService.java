@@ -25,6 +25,7 @@ class FinancialService {
     private final ResidentRepository residents;
     private final SettingsRepository settingsRepository;
     private final DashboardEventService dashboardEvents;
+    private final AuditService audit;
 
     FinancialService(
         ContributionRepository contributions,
@@ -33,8 +34,10 @@ class FinancialService {
         HouseRepository houses,
         ResidentRepository residents,
         SettingsRepository settingsRepository,
-        DashboardEventService dashboardEvents
+        DashboardEventService dashboardEvents,
+        AuditService audit
     ) {
+        this.audit = audit;
         this.contributions = contributions;
         this.expenses = expenses;
         this.directReceipts = directReceipts;
@@ -136,6 +139,11 @@ class FinancialService {
         );
     }
 
+    /** Houses that never contributed see no totals: the portal opens its books to those who take part. */
+    boolean transparencyEnabledFor(Long residentId) {
+        return hasPaidContribution(residentId);
+    }
+
     private boolean hasPaidContribution(Long residentId) {
         return residentId != null && contributions.findAll().stream()
             .anyMatch(c -> residentId.equals(c.residentId) && "PAID".equals(c.status));
@@ -201,6 +209,9 @@ class FinancialService {
         contribution.manualReason = request.reason();
         contribution.updatedAt = LocalDateTime.now();
         contribution = contributions.save(contribution);
+        String houseLabel = houses.findById(contribution.houseId).map(house -> house.label).orElse("casa " + contribution.houseId);
+        audit.record("MANUAL_PAYMENT", "CONTRIBUTION", contribution.id,
+            houseLabel + " " + contribution.referenceMonth + " - " + AuditService.money(contribution.paidAmount) + " - motivo: " + request.reason());
         dashboardEvents.publishDashboardChanged();
         return toContributionResponse(contribution, houses.findById(contribution.houseId).orElse(null),
             contribution.residentId == null ? null : residents.findById(contribution.residentId).orElse(null));

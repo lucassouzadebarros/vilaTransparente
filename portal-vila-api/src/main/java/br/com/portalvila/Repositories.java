@@ -94,6 +94,10 @@ interface ExcludedGatewayPaymentRepository extends JpaRepository<ExcludedGateway
     boolean existsByGatewayAndGatewayPaymentId(String gateway, String gatewayPaymentId);
 }
 
+interface AuditEntryRepository extends JpaRepository<AuditEntry, Long> {
+    List<AuditEntry> findTop200ByOrderByCreatedAtDescIdDesc();
+}
+
 interface ProblemReportRepository extends JpaRepository<ProblemReport, Long> {
     List<ProblemReport> findAllByOrderByCreatedAtDesc();
     List<ProblemReport> findByStatusOrderByCreatedAtDesc(String status);
