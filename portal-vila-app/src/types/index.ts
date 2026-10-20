@@ -1,5 +1,52 @@
 export type Role = 'ADMIN' | 'SINDICO' | 'RESIDENT';
 
+export type ReportLine = { label: string; amount: number; count: number };
+
+export type ReportIncome = { date: string; source: string; description: string; amount: number };
+
+export type ReportExpense = {
+  id: number;
+  date: string;
+  description: string;
+  category: string;
+  supplier?: string | null;
+  amount: number;
+  hasDocument: boolean;
+};
+
+export type MonthlyReport = {
+  month: string;
+  transparencyEnabled: boolean;
+  openingBalance: number;
+  totalIncome: number;
+  totalExpenses: number;
+  closingBalance: number;
+  incomeBySource: ReportLine[];
+  expensesByCategory: ReportLine[];
+  incomes: ReportIncome[];
+  expenses: ReportExpense[];
+  expensesWithoutDocument: number;
+};
+
+export type Reconciliation = {
+  portalBalance: number;
+  asaasBalance?: number | null;
+  difference?: number | null;
+  checkedAt: string;
+  message: string;
+};
+
+export type AuditEntry = {
+  id: number;
+  actorEmail?: string | null;
+  actorRole?: string | null;
+  action: string;
+  entityType?: string | null;
+  entityId?: number | null;
+  summary?: string | null;
+  createdAt: string;
+};
+
 export type Sindico = {
   residentId?: number | null;
   name?: string | null;

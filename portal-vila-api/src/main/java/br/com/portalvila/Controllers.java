@@ -184,10 +184,20 @@ class AuthController {
 class DashboardController {
     private final FinancialService financialService;
     private final CurrentUserService currentUser;
+    private final ReportService reportService;
 
-    DashboardController(FinancialService financialService, CurrentUserService currentUser) {
+    DashboardController(FinancialService financialService, CurrentUserService currentUser, ReportService reportService) {
         this.financialService = financialService;
         this.currentUser = currentUser;
+        this.reportService = reportService;
+    }
+
+    @GetMapping("/reports/monthly")
+    MonthlyReportResponse monthlyReport(@RequestParam(required = false) String month) {
+        String referenceMonth = month == null || month.isBlank() ? YearMonth.now().toString() : month;
+        return currentUser.isAdmin()
+            ? reportService.monthly(referenceMonth, true, null)
+            : reportService.monthly(referenceMonth, false, currentUser.requiredResidentId());
     }
 
     @GetMapping("/dashboard")
@@ -424,10 +434,12 @@ class AsaasSyncController {
 class ExpenseController {
     private final ExpenseRepository expenses;
     private final DashboardEventService dashboardEvents;
+    private final AuditService audit;
 
-    ExpenseController(ExpenseRepository expenses, DashboardEventService dashboardEvents) {
+    ExpenseController(ExpenseRepository expenses, DashboardEventService dashboardEvents, AuditService audit) {
         this.expenses = expenses;
         this.dashboardEvents = dashboardEvents;
+        this.audit = audit;
     }
 
     @GetMapping
@@ -444,6 +456,7 @@ class ExpenseController {
             expense.expenseDate = LocalDate.now();
         }
         Expense saved = expenses.save(expense);
+        audit.record("EXPENSE_CREATED", "EXPENSE", saved.id, saved.description + " - " + AuditService.money(saved.amount));
         dashboardEvents.publishDashboardChanged();
         return saved;
     }
@@ -451,10 +464,10 @@ class ExpenseController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     void delete(@PathVariable Long id) {
-        if (!expenses.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Despesa não encontrada.");
-        }
+        Expense existing = expenses.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Despesa não encontrada."));
         expenses.deleteById(id);
+        audit.record("EXPENSE_DELETED", "EXPENSE", id, existing.description + " - " + AuditService.money(existing.amount));
         dashboardEvents.publishDashboardChanged();
     }
 
@@ -463,6 +476,7 @@ class ExpenseController {
     Expense update(@PathVariable Long id, @RequestBody Expense incoming) {
         validate(incoming);
         Expense expense = expenses.findById(id).orElseThrow();
+        String before = expense.description + " - " + AuditService.money(expense.amount);
         expense.description = incoming.description;
         expense.category = incoming.category;
         expense.amount = incoming.amount;
@@ -474,6 +488,7 @@ class ExpenseController {
         expense.serviceOrderId = incoming.serviceOrderId;
         expense.budgetId = incoming.budgetId;
         Expense saved = expenses.save(expense);
+        audit.record("EXPENSE_UPDATED", "EXPENSE", saved.id, before + " -> " + saved.description + " - " + AuditService.money(saved.amount));
         dashboardEvents.publishDashboardChanged();
         return saved;
     }
@@ -577,13 +592,16 @@ class BudgetController {
     private final ServiceOrderWorkflow workflow;
     private final BudgetVotingService voting;
     private final CurrentUserService currentUser;
+    private final AuditService audit;
 
     BudgetController(
         BudgetRepository budgets,
         ServiceOrderWorkflow workflow,
         BudgetVotingService voting,
-        CurrentUserService currentUser
+        CurrentUserService currentUser,
+        AuditService audit
     ) {
+        this.audit = audit;
         this.budgets = budgets;
         this.workflow = workflow;
         this.voting = voting;
@@ -646,6 +664,7 @@ class BudgetController {
         Budget budget = budgets.findById(id).orElseThrow();
         budget.status = "CANCELADO";
         budgets.save(budget);
+        audit.record("BUDGET_CANCELADO", "BUDGET", budget.id, budget.title + " - " + AuditService.money(budget.amount));
         return Map.of("status", "CANCELADO");
     }
 }
@@ -1107,11 +1126,13 @@ class AdminHouseController {
     private final HouseRepository houses;
     private final ResidentRepository residents;
     private final AppUserRepository users;
+    private final AuditService audit;
 
-    AdminHouseController(HouseRepository houses, ResidentRepository residents, AppUserRepository users) {
+    AdminHouseController(HouseRepository houses, ResidentRepository residents, AppUserRepository users, AuditService audit) {
         this.houses = houses;
         this.residents = residents;
         this.users = users;
+        this.audit = audit;
     }
 
     @PostMapping("/{houseId}/release")
@@ -1134,6 +1155,7 @@ class AdminHouseController {
             users.save(user);
         });
 
+        audit.record("HOUSE_RELEASED", "HOUSE", house.id, house.label + " liberada - morador: " + resident.name);
         return resident;
     }
 }

@@ -2,6 +2,9 @@ import axios from 'axios';
 import { Linking, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  AuditEntry,
+  MonthlyReport,
+  Reconciliation,
   Budget,
   BudgetVoteChoice,
   BudgetVoting,
@@ -136,6 +139,9 @@ export const api = {
   registerResident: (registration: ResidentRegistration) =>
     requestData<ResidentRegistrationResponse>(apiClient.post('/auth/register-resident', registration)),
   dashboard: (month: string) => requestData<Dashboard>(apiClient.get('/dashboard', { params: { month } })),
+  monthlyReport: (month: string) => requestData<MonthlyReport>(apiClient.get('/reports/monthly', { params: { month } })),
+  reconciliation: () => requestData<Reconciliation>(apiClient.get('/admin/reconciliation')),
+  auditLog: () => requestData<AuditEntry[]>(apiClient.get('/admin/audit')),
   contributions: (month: string) => requestData<Contribution[]>(apiClient.get('/contributions', { params: { month } })),
   pixCharges: (month: string) => requestData<PixCharge[]>(apiClient.get('/pix/charges', { params: { month } })),
   allPixCharges: () => requestData<PixCharge[]>(apiClient.get('/pix/charges/all')),

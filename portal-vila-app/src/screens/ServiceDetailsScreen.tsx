@@ -1,9 +1,10 @@
 import { ReactNode, useCallback, useMemo, useState } from 'react';
 import { Linking, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../utils/alert';
+import { formatDateBR } from '../utils/format';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { CheckCircle2, ClipboardList, ExternalLink, FileText, Pencil, RefreshCw } from 'lucide-react-native';
-import { Badge, Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
+import { Badge, Button, Card, Label, Money, Row, Screen, Value, formatMoney } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { colors, spacing } from '../theme';
@@ -63,17 +64,22 @@ export function ServiceDetailsScreen() {
             <DetailLine label="Status">
               <Badge status={service.status} />
             </DetailLine>
-            <DetailLine label="Valor total">
-              <Money value={service.finalValue ?? service.expectedValue ?? approvedBudget?.amount ?? 0} />
+            <DetailLine label="Valor previsto">
+              <Money value={service.expectedValue ?? approvedBudget?.amount ?? 0} />
             </DetailLine>
+            {service.finalValue != null && (service.expectedValue ?? approvedBudget?.amount) != null ? (
+              <DetailLine label="Pago x previsto">
+                <Value>{differenceLabel(service.finalValue, (service.expectedValue ?? approvedBudget?.amount) as number)}</Value>
+              </DetailLine>
+            ) : null}
             <DetailLine label="Fornecedor">
               <View style={styles.detailTextBlockRight}>
                 <Value>{service.supplier ?? approvedBudget?.supplier ?? 'Não definido'}</Value>
-                <Label>{service.supplierDocument ?? approvedBudget?.supplierDocument ?? 'CNPJ não informado'}</Label>
+                <Label>{service.supplierDocument ?? approvedBudget?.supplierDocument ?? 'CPF/CNPJ não informado'}</Label>
               </View>
             </DetailLine>
             <DetailLine label="Data do serviço">
-              <Value>{service.completedDate ?? service.plannedDate ?? 'A definir'}</Value>
+              <Value>{formatDateBR(service.completedDate ?? service.plannedDate) || 'A definir'}</Value>
             </DetailLine>
             <DetailLine label="Orçamento vinculado">
               <View style={styles.detailTextBlockRight}>
@@ -84,7 +90,7 @@ export function ServiceDetailsScreen() {
             <DetailLine label="Pagamento">
               <View style={styles.detailTextBlockRight}>
                 {service.finalValue ? <Money value={service.finalValue} /> : <Value>Aguardando finalização</Value>}
-                {service.completedDate ? <Label>Pago em {service.completedDate}</Label> : null}
+                {service.completedDate ? <Label>Pago em {formatDateBR(service.completedDate)}</Label> : null}
               </View>
             </DetailLine>
           </Card>
@@ -114,6 +120,14 @@ export function ServiceDetailsScreen() {
       ) : null}
     </Screen>
   );
+}
+
+function differenceLabel(paid: number, expected: number) {
+  const delta = Math.round((paid - expected) * 100) / 100;
+  if (delta === 0) {
+    return 'Igual ao previsto';
+  }
+  return `${formatMoney(Math.abs(delta))} ${delta > 0 ? 'acima' : 'abaixo'} do previsto`;
 }
 
 function DetailLine({ label, children }: { label: string; children: ReactNode }) {

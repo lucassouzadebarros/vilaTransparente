@@ -177,7 +177,11 @@ function ServiceCard({ item, onPress }: { item: ServiceOrder; onPress: () => voi
       <View style={styles.metaGrid}>
         <MetaItem icon={Flag} label="Prioridade" value={priorityLabels[item.priority] ?? item.priority} color={priorityColor} />
         <MetaItem icon={CalendarDays} label="Data prevista" value={item.plannedDate ? formatDate(item.plannedDate) : 'Sem data'} />
-        <MetaItem icon={BadgeDollarSign} label="Valor previsto" value={formatCurrency(item.finalValue ?? item.expectedValue ?? 0)} />
+        <MetaItem
+          icon={BadgeDollarSign}
+          label={item.finalValue != null ? 'Valor pago' : 'Valor previsto'}
+          value={formatCurrency(item.finalValue != null ? item.finalValue : item.expectedValue ?? 0)}
+        />
       </View>
     </Pressable>
   );
