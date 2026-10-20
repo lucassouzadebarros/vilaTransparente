@@ -29,6 +29,8 @@ interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
 interface PasswordResetCodeRepository extends JpaRepository<PasswordResetCode, Long> {
     Optional<PasswordResetCode> findFirstByUserIdAndUsedAtIsNullOrderByCreatedAtDesc(Long userId);
+    List<PasswordResetCode> findByUserIdAndUsedAtIsNull(Long userId);
+    long countByUserIdAndCreatedAtAfter(Long userId, java.time.LocalDateTime since);
 }
 
 interface SettingsRepository extends JpaRepository<Settings, Long> {

@@ -22,6 +22,39 @@ class PasswordEmailService {
         this.from = from == null ? "" : from.trim();
     }
 
+    boolean isConfigured() {
+        return mailSender.getIfAvailable() != null && !mailHost.isBlank() && !from.isBlank();
+    }
+
+    /** The code only works for a short time; the current password keeps working until the code is used. */
+    boolean sendResetCode(AppUser user, String code, long validForMinutes) {
+        JavaMailSender sender = mailSender.getIfAvailable();
+        if (!isConfigured() || sender == null) {
+            return false;
+        }
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(from);
+        message.setTo(user.email);
+        message.setSubject("Portal da Vila - codigo para trocar a senha");
+        message.setText("""
+            Ola, %s.
+
+            Recebemos um pedido para trocar a senha do Portal da Vila.
+
+            Seu codigo e: %s
+
+            Ele vale por %d minutos. Digite o codigo no aplicativo, na tela "Esqueci minha senha", junto com a nova senha.
+
+            Se voce nao pediu, ignore este e-mail: sua senha atual continua funcionando.
+            """.formatted(user.name, code, validForMinutes));
+        try {
+            sender.send(message);
+            return true;
+        } catch (org.springframework.mail.MailException ex) {
+            return false;
+        }
+    }
+
     boolean sendTemporaryPassword(AppUser user, String temporaryPassword) {
         JavaMailSender sender = mailSender.getIfAvailable();
         if (sender == null || mailHost.isBlank() || from.isBlank()) {

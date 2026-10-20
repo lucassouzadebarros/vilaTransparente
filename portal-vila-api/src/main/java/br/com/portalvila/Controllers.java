@@ -43,6 +43,7 @@ class AuthController {
     private final PixGatewayClient gatewayClient;
     private final PasswordResetService passwordResetService;
     private final CurrentUserService currentUser;
+    private final LoginAttemptLimiter loginLimiter;
 
     AuthController(
         AppUserRepository users,
@@ -52,8 +53,10 @@ class AuthController {
         JwtService jwtService,
         PixGatewayClient gatewayClient,
         PasswordResetService passwordResetService,
-        CurrentUserService currentUser
+        CurrentUserService currentUser,
+        LoginAttemptLimiter loginLimiter
     ) {
+        this.loginLimiter = loginLimiter;
         this.users = users;
         this.residents = residents;
         this.houses = houses;
@@ -65,11 +68,18 @@ class AuthController {
     }
 
     @PostMapping("/login")
-    LoginResponse login(@Valid @RequestBody LoginRequest request) {
+    LoginResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest http) {
+        String attemptKey = LoginAttemptLimiter.key("login", request.email(), http);
+        loginLimiter.check(attemptKey);
         AppUser user = users.findByEmailIgnoreCase(request.email())
             .filter(u -> u.active)
             .filter(u -> passwordEncoder.matches(request.password(), u.passwordHash))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciais inválidas."));
+            .orElse(null);
+        if (user == null) {
+            loginLimiter.fail(attemptKey);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciais inválidas.");
+        }
+        loginLimiter.succeed(attemptKey);
         return new LoginResponse(jwtService.issue(user), user.name, user.email, user.role, user.residentId, user.mustChangePassword);
     }
 
@@ -79,8 +89,17 @@ class AuthController {
     }
 
     @PostMapping("/password-reset/confirm")
-    PasswordResetResponse confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest request) {
-        return passwordResetService.confirmReset(request);
+    PasswordResetResponse confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest request, HttpServletRequest http) {
+        String attemptKey = LoginAttemptLimiter.key("reset", request.email(), http);
+        loginLimiter.check(attemptKey);
+        try {
+            PasswordResetResponse response = passwordResetService.confirmReset(request);
+            loginLimiter.succeed(attemptKey);
+            return response;
+        } catch (ResponseStatusException ex) {
+            loginLimiter.fail(attemptKey);
+            throw ex;
+        }
     }
 
     @PostMapping("/change-password")
@@ -103,8 +122,8 @@ class AuthController {
         users.findByEmailIgnoreCase(normalizedEmail).ifPresent(user -> {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "E-mail já cadastrado.");
         });
-        if (request.password().trim().length() < 6) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A senha precisa ter pelo menos 6 caracteres.");
+        if (request.password().trim().length() < 8) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A senha precisa ter pelo menos 8 caracteres.");
         }
 
         Resident resident = new Resident();
@@ -419,6 +438,8 @@ class ExpenseController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     Expense create(@RequestBody Expense expense) {
+        validate(expense);
+        expense.id = null;
         if (expense.expenseDate == null) {
             expense.expenseDate = LocalDate.now();
         }
@@ -440,6 +461,7 @@ class ExpenseController {
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     Expense update(@PathVariable Long id, @RequestBody Expense incoming) {
+        validate(incoming);
         Expense expense = expenses.findById(id).orElseThrow();
         expense.description = incoming.description;
         expense.category = incoming.category;
@@ -455,6 +477,15 @@ class ExpenseController {
         dashboardEvents.publishDashboardChanged();
         return saved;
     }
+
+    private static void validate(Expense expense) {
+        if (expense == null || expense.description == null || expense.description.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe a descrição da despesa.");
+        }
+        if (expense.amount == null || expense.amount.signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe um valor maior que zero.");
+        }
+    }
 }
 
 @RestController
@@ -464,21 +495,39 @@ class ServiceOrderController {
     private final ServiceOrderWorkflow workflow;
     private final ServiceOrderRepository services;
     private final BudgetRepository budgets;
+    private final CurrentUserService currentUser;
 
-    ServiceOrderController(ServiceOrderWorkflow workflow, ServiceOrderRepository services, BudgetRepository budgets) {
+    ServiceOrderController(ServiceOrderWorkflow workflow, ServiceOrderRepository services, BudgetRepository budgets, CurrentUserService currentUser) {
         this.workflow = workflow;
         this.services = services;
         this.budgets = budgets;
+        this.currentUser = currentUser;
+    }
+
+    /** Admin and síndico edit these records and need the full number; the houses only see it masked. */
+    private ServiceOrder forViewer(ServiceOrder service, boolean full) {
+        if (!full) {
+            service.supplierDocument = DocumentMask.mask(service.supplierDocument);
+        }
+        return service;
+    }
+
+    private Budget forViewer(Budget budget, boolean full) {
+        if (!full) {
+            budget.supplierDocument = DocumentMask.mask(budget.supplierDocument);
+        }
+        return budget;
     }
 
     @GetMapping
     List<ServiceOrder> list(@RequestParam(required = false) String status) {
-        return workflow.listServices(status);
+        boolean full = currentUser.canManageBudgets();
+        return workflow.listServices(status).stream().map(service -> forViewer(service, full)).toList();
     }
 
     @GetMapping("/{id}")
     ServiceOrder get(@PathVariable Long id) {
-        return services.findById(id).orElseThrow();
+        return forViewer(services.findById(id).orElseThrow(), currentUser.canManageBudgets());
     }
 
     @PostMapping
@@ -509,7 +558,8 @@ class ServiceOrderController {
 
     @GetMapping("/{id}/budgets")
     List<Budget> budgets(@PathVariable Long id) {
-        return budgets.findByServiceIdOrderByAmountAsc(id);
+        boolean full = currentUser.canManageBudgets();
+        return budgets.findByServiceIdOrderByAmountAsc(id).stream().map(budget -> forViewer(budget, full)).toList();
     }
 
     @PostMapping("/{id}/finish")
@@ -540,9 +590,16 @@ class BudgetController {
         this.currentUser = currentUser;
     }
 
+    private Budget forViewer(Budget budget) {
+        if (!currentUser.canManageBudgets()) {
+            budget.supplierDocument = DocumentMask.mask(budget.supplierDocument);
+        }
+        return budget;
+    }
+
     @GetMapping
     List<Budget> list() {
-        return budgets.findAll();
+        return budgets.findAll().stream().map(this::forViewer).toList();
     }
 
     @GetMapping("/votes")
@@ -574,7 +631,7 @@ class BudgetController {
 
     @GetMapping("/{id}")
     Budget get(@PathVariable Long id) {
-        return budgets.findById(id).orElseThrow();
+        return forViewer(budgets.findById(id).orElseThrow());
     }
 
     @PutMapping("/{id}")
@@ -599,15 +656,18 @@ class BudgetController {
 class DocumentController {
     private final PortalDocumentRepository documents;
     private final CurrentUserService currentUser;
+    private final JwtService jwtService;
     private final Path uploadRoot;
 
     DocumentController(
         PortalDocumentRepository documents,
         CurrentUserService currentUser,
+        JwtService jwtService,
         @Value("${portal.uploads.dir:uploads/documents}") String uploadDir
     ) {
         this.documents = documents;
         this.currentUser = currentUser;
+        this.jwtService = jwtService;
         this.uploadRoot = Paths.get(uploadDir).toAbsolutePath().normalize();
     }
 
@@ -623,8 +683,18 @@ class DocumentController {
     @PreAuthorize("@access.canManageBudgets()")
     PortalDocument create(@RequestBody PortalDocument document) {
         assertCanAttach(document.relatedType);
+        document.id = null;
         document.uploadedBy = currentUser.current().id;
         return documents.save(document);
+    }
+
+    /** A signed, short-lived path the browser can open in a new tab, since a tab cannot send the login header. */
+    @GetMapping("/{id}/access")
+    Map<String, String> access(@PathVariable Long id) {
+        if (!documents.existsById(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Documento não encontrado.");
+        }
+        return Map.of("path", "/api/documents/" + id + "/file?t=" + jwtService.issueDocumentToken(id));
     }
 
     @PostMapping("/upload")
@@ -666,7 +736,10 @@ class DocumentController {
     }
 
     @GetMapping("/{id}/file")
-    ResponseEntity<Resource> file(@PathVariable Long id) throws MalformedURLException {
+    ResponseEntity<Resource> file(@PathVariable Long id, @RequestParam(name = "t", required = false) String accessToken) throws MalformedURLException {
+        if (!isSignedIn() && !jwtService.isValidDocumentToken(accessToken, id)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Link do documento expirado. Abra o documento de novo pelo aplicativo.");
+        }
         PortalDocument document = documents.findById(id).orElseThrow();
         if (document.storagePath == null || document.storagePath.isBlank()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Arquivo não encontrado.");
@@ -682,6 +755,13 @@ class DocumentController {
             .contentType(type)
             .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
             .body(resource);
+    }
+
+    private static boolean isSignedIn() {
+        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null
+            && authentication.isAuthenticated()
+            && !(authentication instanceof org.springframework.security.authentication.AnonymousAuthenticationToken);
     }
 
     /** The síndico only attaches documents to budgets and services; the rest stays with the admin. */
@@ -729,7 +809,7 @@ class ProblemReportController {
         report.createdBy = user.id;
         if (user.residentId != null) {
             Resident resident = residents.findById(user.residentId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Morador nÃ£o encontrado."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Morador não encontrado."));
             report.residentId = resident.id;
             report.houseId = resident.houseId;
         }
@@ -756,16 +836,16 @@ class ProblemReportController {
 
     private void validate(ProblemReport report) {
         if (report == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dados do relato obrigatÃ³rios.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dados do relato obrigatórios.");
         }
         if (report.title == null || report.title.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TÃ­tulo do problema obrigatÃ³rio.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Título do problema obrigatório.");
         }
         if (report.location == null || report.location.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Local obrigatÃ³rio.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Local obrigatório.");
         }
         if (report.description == null || report.description.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "DescriÃ§Ã£o obrigatÃ³ria.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Descrição obrigatória.");
         }
     }
 
@@ -834,8 +914,8 @@ class ResidentController {
         if (house.number == null || house.number < 2 || house.number > 11) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cadastro publico permitido apenas para as casas 02 a 11.");
         }
-        if (request.password().trim().length() < 6) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A senha precisa ter pelo menos 6 caracteres.");
+        if (request.password().trim().length() < 8) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A senha precisa ter pelo menos 8 caracteres.");
         }
         Resident saved = createResidentAccount(
             house.id,
@@ -844,6 +924,7 @@ class ResidentController {
             request.phone(),
             request.documentNumber(),
             request.password(),
+            false,
             false
         );
         return new ResidentRegistrationResponse(
@@ -866,15 +947,19 @@ class ResidentController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     Resident create(@RequestBody Resident resident) {
-        return createResidentAccount(
+        String temporaryPassword = passwordResetService.newTemporaryPassword();
+        Resident saved = createResidentAccount(
             resident.houseId,
             resident.name,
             resident.email,
             resident.phone,
             resident.documentNumber,
-            "123456",
+            temporaryPassword,
+            true,
             true
         );
+        saved.temporaryPassword = temporaryPassword;
+        return saved;
     }
 
     @PutMapping("/{id}")
@@ -929,7 +1014,8 @@ class ResidentController {
         String phone,
         String documentNumber,
         String password,
-        boolean allowAnyHouse
+        boolean allowAnyHouse,
+        boolean mustChangePassword
     ) {
         House house = houses.findById(houseId)
             .filter(candidate -> candidate.active)
@@ -955,13 +1041,15 @@ class ResidentController {
         validateDocument(resident.documentNumber);
         syncGatewayCustomer(resident);
         Resident saved = residents.save(resident);
-        users.save(new AppUser(
+        AppUser account = new AppUser(
             saved.name,
             saved.email,
             passwordEncoder.encode(password),
             "RESIDENT",
             saved.id
-        ));
+        );
+        account.mustChangePassword = mustChangePassword;
+        users.save(account);
         return saved;
     }
 
@@ -970,7 +1058,9 @@ class ResidentController {
             AppUser created = new AppUser();
             created.role = "RESIDENT";
             created.residentId = resident.id;
-            created.passwordHash = passwordEncoder.encode("123456");
+            // Nobody knows this password: the admin uses "enviar senha temporária" to give the resident access.
+            created.passwordHash = passwordEncoder.encode(passwordResetService.newTemporaryPassword());
+            created.mustChangePassword = true;
             return created;
         });
         user.name = resident.name;

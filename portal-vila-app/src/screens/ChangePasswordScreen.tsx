@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert } from '../utils/alert';
+import { MIN_PASSWORD_LENGTH } from '../utils/password';
 import { CheckCircle2, Eye, EyeOff, KeyRound, ShieldCheck } from 'lucide-react-native';
 import { Button, Card, Field, Label, Screen, Stack, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
@@ -19,15 +21,15 @@ export function ChangePasswordScreen({ forced = false }: { forced?: boolean } = 
 
   const newPasswordError = passwordFieldError(newPassword);
   const confirmPasswordError = confirmPasswordFieldError(newPassword, confirmPassword);
-  const canSubmit = Boolean(currentPassword && newPassword.length >= 6 && newPassword === confirmPassword && !saving);
+  const canSubmit = Boolean(currentPassword && newPassword.length >= MIN_PASSWORD_LENGTH && newPassword === confirmPassword && !saving);
 
   async function submit() {
     if (!currentPassword) {
       setMessage({ type: 'error', text: forced ? 'Informe a senha temporaria recebida por e-mail.' : 'Informe sua senha atual.' });
       return;
     }
-    if (newPassword.length < 6) {
-      setMessage({ type: 'error', text: 'A nova senha precisa ter pelo menos 6 caracteres.' });
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      setMessage({ type: 'error', text: `A nova senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.` });
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -104,7 +106,7 @@ export function ChangePasswordScreen({ forced = false }: { forced?: boolean } = 
             }}
             secureTextEntry={!showNew}
             errorText={newPasswordError}
-            helpText="Minimo de 6 caracteres."
+            helpText={`Mínimo de ${MIN_PASSWORD_LENGTH} caracteres.`}
             right={
               <PasswordToggle
                 visible={showNew}
@@ -155,7 +157,7 @@ function passwordFieldError(value: string) {
   if (!value) {
     return '';
   }
-  return value.length >= 6 ? '' : 'A senha precisa ter pelo menos 6 caracteres.';
+  return value.length >= MIN_PASSWORD_LENGTH ? '' : `A senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`;
 }
 
 function confirmPasswordFieldError(password: string, confirmation: string) {

@@ -3,11 +3,17 @@ package br.com.portalvila;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -16,6 +22,10 @@ import java.util.Objects;
 
 @Service
 class WebhookService {
+    private static final Logger log = LoggerFactory.getLogger(WebhookService.class);
+    /** Value older installs stored in the settings table; it must never be trusted once a real token is in place. */
+    static final String LEGACY_DEFAULT_SECRET = "dev-webhook-token";
+
     private final ObjectMapper objectMapper;
     private final WebhookEventRepository events;
     private final PixChargeRepository pixCharges;
@@ -29,6 +39,7 @@ class WebhookService {
     private final GatewayPaymentLockService paymentLocks;
     private final ExcludedGatewayPaymentRepository excludedPayments;
     private final String configuredToken;
+    private final boolean acceptStoredSecret;
 
     WebhookService(
         ObjectMapper objectMapper,
@@ -43,7 +54,8 @@ class WebhookService {
         DashboardEventService dashboardEvents,
         GatewayPaymentLockService paymentLocks,
         ExcludedGatewayPaymentRepository excludedPayments,
-        @Value("${portal.asaas.webhook-token:}") String configuredToken
+        @Value("${portal.asaas.webhook-token:}") String configuredToken,
+        @Value("${portal.asaas.accept-stored-webhook-secret:true}") boolean acceptStoredSecret
     ) {
         this.objectMapper = objectMapper;
         this.events = events;
@@ -58,6 +70,19 @@ class WebhookService {
         this.paymentLocks = paymentLocks;
         this.excludedPayments = excludedPayments;
         this.configuredToken = configuredToken;
+        this.acceptStoredSecret = acceptStoredSecret;
+    }
+
+    /** Tells the admin, in the logs, when the guessable legacy secret is still accepted. */
+    @EventListener(ApplicationReadyEvent.class)
+    void warnAboutLegacySecret() {
+        if (acceptStoredSecret && LEGACY_DEFAULT_SECRET.equals(storedSecret())) {
+            log.warn("O segredo do webhook gravado no banco ainda e o valor padrao '{}'. Troque o token no Asaas e em "
+                + "ASAAS_WEBHOOK_TOKEN e depois defina ASAAS_ACCEPT_STORED_WEBHOOK_SECRET=false.", LEGACY_DEFAULT_SECRET);
+        }
+        if (isBlank(configuredToken) && isBlank(storedSecret())) {
+            log.warn("Nenhum token de webhook configurado: todas as chamadas ao webhook serao recusadas.");
+        }
     }
 
     @Transactional
@@ -532,15 +557,33 @@ class WebhookService {
         };
     }
 
+    /**
+     * The token must match ASAAS_WEBHOOK_TOKEN or, while accept-stored-webhook-secret is on, the secret kept in the
+     * settings table. With neither configured every call is refused (it used to be accepted).
+     */
     private void validateWebhookToken(String token) {
-        String secret = settingsRepository.findAll().stream()
-            .findFirst()
-            .map(s -> s.webhookSecret)
-            .filter(s -> s != null && !s.isBlank())
-            .orElse(configuredToken);
-        if (secret != null && !secret.isBlank() && (token == null || !secret.equals(token))) {
+        String stored = acceptStoredSecret ? storedSecret() : null;
+        String fromEnvironment = isBlank(configuredToken) ? null : configuredToken;
+        if (token == null || !(sameSecret(token, fromEnvironment) || sameSecret(token, stored))) {
             throw new InvalidWebhookTokenException();
         }
+    }
+
+    private String storedSecret() {
+        return settingsRepository.findAll().stream()
+            .findFirst()
+            .map(s -> s.webhookSecret)
+            .filter(s -> !isBlank(s))
+            .orElse(null);
+    }
+
+    private static boolean sameSecret(String provided, String expected) {
+        return expected != null
+            && MessageDigest.isEqual(provided.getBytes(StandardCharsets.UTF_8), expected.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private String text(JsonNode node, String field) {

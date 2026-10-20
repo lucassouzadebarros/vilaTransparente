@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
 import { RegistrationHouseOption } from '../types';
+import { MIN_PASSWORD_LENGTH } from '../utils/password';
 
 type Mode = 'login' | 'register' | 'forgot' | 'reset' | 'resetDone';
 
@@ -59,14 +60,14 @@ export function LoginScreen() {
   const loginPasswordError = password ? '' : '';
   const canSubmitLogin = Boolean(email.trim() && password && !loginEmailError && !loading);
   const resetEmailError = emailFieldError(resetEmail);
-  const resetCodeError = resetCode ? (resetCode.trim().length >= 6 ? '' : 'Informe a senha temporária recebida.') : '';
+  const resetCodeError = resetCode ? (onlyDigits(resetCode).length === 6 ? '' : 'O código tem 6 números.') : '';
   const resetPasswordError = passwordFieldError(resetPassword);
   const resetConfirmPasswordError = confirmPasswordFieldError(resetPassword, resetConfirmPassword);
   const canSubmitForgot = Boolean(resetEmail.trim() && !resetEmailError && !loading);
   const canSubmitReset = Boolean(
     resetEmail.trim()
-      && resetCode.trim().length >= 6
-      && resetPassword.length >= 6
+      && onlyDigits(resetCode).length === 6
+      && resetPassword.length >= MIN_PASSWORD_LENGTH
       && resetPassword === resetConfirmPassword
       && !loading
   );
@@ -176,8 +177,8 @@ export function LoginScreen() {
     if (!(documentDigits.length === 11 || documentDigits.length === 14)) {
       return 'Informe CPF com 11 dígitos ou CNPJ com 14 dígitos.';
     }
-    if (registerPassword.length < 6) {
-      return 'A senha precisa ter pelo menos 6 caracteres.';
+    if (registerPassword.length < MIN_PASSWORD_LENGTH) {
+      return `A senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`;
     }
     if (registerPassword !== confirmPassword) {
       return 'As senhas não conferem.';
@@ -230,7 +231,8 @@ export function LoginScreen() {
       setPassword('');
       setResetDebugCode(response.debugCode ?? null);
       setResetInfoMessage(response.message);
-      setMode('resetDone');
+      setResetCode('');
+      setMode('reset');
     } catch (error) {
       setErrorMessage(apiErrorMessage(error, 'Não consegui iniciar a recuperação de senha.'));
     } finally {
@@ -239,13 +241,13 @@ export function LoginScreen() {
   }
 
   async function submitPasswordResetConfirm() {
-    const temporaryPassword = resetCode.trim();
-    if (temporaryPassword.length < 6) {
-      setErrorMessage('Informe a senha temporária recebida por e-mail.');
+    const code = onlyDigits(resetCode);
+    if (code.length !== 6) {
+      setErrorMessage('Digite o código de 6 números que chegou no seu e-mail.');
       return;
     }
-    if (resetPassword.length < 6) {
-      setErrorMessage('A senha precisa ter pelo menos 6 caracteres.');
+    if (resetPassword.length < MIN_PASSWORD_LENGTH) {
+      setErrorMessage(`A senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`);
       return;
     }
     if (resetPassword !== resetConfirmPassword) {
@@ -256,8 +258,7 @@ export function LoginScreen() {
     setLoading(true);
     setErrorMessage('');
     try {
-      await login(normalizeEmail(resetEmail), temporaryPassword);
-      const response = await api.changePassword(temporaryPassword, resetPassword);
+      await api.confirmPasswordReset(normalizeEmail(resetEmail), code, resetPassword);
       await login(normalizeEmail(resetEmail), resetPassword);
       setEmail(normalizeEmail(resetEmail));
       setPassword('');
@@ -265,10 +266,8 @@ export function LoginScreen() {
       setResetPassword('');
       setResetConfirmPassword('');
       setResetDebugCode(null);
-      setResetInfoMessage(response.message);
-      setMode('resetDone');
     } catch (error) {
-      setErrorMessage(apiErrorMessage(error, 'Não consegui alterar a senha. Confira a senha temporária e tente novamente.'));
+      setErrorMessage(apiErrorMessage(error, 'Não consegui alterar a senha. Confira o código e tente novamente.'));
     } finally {
       setLoading(false);
     }
@@ -368,10 +367,9 @@ export function LoginScreen() {
             <Card style={[styles.raisedCard, styles.supportCardModern]}>
               <View style={styles.supportHeaderModern}>
                 <ShieldCheck color={colors.teal} size={22} />
-                <Text style={styles.supportTitle}>Suporte e acesso administrativo</Text>
+                <Text style={styles.supportTitle}>Problemas para entrar?</Text>
               </View>
               <View style={styles.supportActionsModern}>
-                <LoginGhostButton title="Preencher admin" icon={ShieldCheck} onPress={() => { setEmail('ubaldinajacare207@gmail.com'); setPassword('123456'); setErrorMessage(''); }} compact />
                 <LoginGhostButton title="Limpar sessão" icon={Trash2} onPress={clearSession} compact />
               </View>
             </Card>
@@ -469,7 +467,7 @@ export function LoginScreen() {
                 value={registerPassword}
                 onChangeText={setRegisterPassword}
                 secureTextEntry={!showRegisterPassword}
-                placeholder="Mínimo de 6 caracteres"
+                placeholder={`Mínimo de ${MIN_PASSWORD_LENGTH} caracteres`}
                 errorText={passwordError}
                 right={
                   <PasswordToggle
@@ -524,13 +522,13 @@ export function LoginScreen() {
                 </Pressable>
                 <View style={styles.headerCopy}>
                   <Text style={styles.cardTitle}>Recuperar senha</Text>
-                  <Text style={styles.muted}>Informe o e-mail da conta para receber uma senha temporária.</Text>
+                  <Text style={styles.muted}>Informe o e-mail da conta para receber um código de 6 números.</Text>
                 </View>
               </View>
 
               {errorMessage ? (
                 <View style={styles.errorBanner}>
-                  <Text style={styles.errorBannerTitle}>Não consegui enviar a senha</Text>
+                  <Text style={styles.errorBannerTitle}>Não consegui enviar o código</Text>
                   <Text style={styles.errorBannerText}>{errorMessage}</Text>
                 </View>
               ) : null}
@@ -540,8 +538,8 @@ export function LoginScreen() {
                   <Mail color={colors.blue} size={24} />
                 </View>
                 <View style={styles.headerCopy}>
-                  <Value>Senha temporária por e-mail</Value>
-                  <Text style={styles.muted}>Depois de entrar, o sistema vai pedir uma nova senha.</Text>
+                  <Value>Código por e-mail</Value>
+                  <Text style={styles.muted}>Você digita o código e escolhe uma nova senha. A senha atual continua valendo até lá.</Text>
                 </View>
               </View>
 
@@ -557,7 +555,7 @@ export function LoginScreen() {
                 errorText={resetEmailError}
                 helpText="Use o mesmo e-mail cadastrado no portal."
               />
-              <Button title={loading ? 'Enviando...' : 'Enviar senha temporária'} icon={Mail} onPress={submitPasswordResetRequest} disabled={!canSubmitForgot} />
+              <Button title={loading ? 'Enviando...' : 'Enviar código'} icon={Mail} onPress={submitPasswordResetRequest} disabled={!canSubmitForgot} />
               <View style={styles.securityNote}>
                 <ShieldCheck color={colors.muted} size={18} />
                 <Text style={styles.securityNoteText}>Para sua segurança, a tela não informa se o e-mail existe ou não.</Text>
@@ -573,7 +571,7 @@ export function LoginScreen() {
                 </Pressable>
                 <View style={styles.headerCopy}>
                   <Text style={styles.cardTitle}>Trocar senha</Text>
-                  <Text style={styles.muted}>Digite a senha temporária enviada e escolha uma nova senha.</Text>
+                  <Text style={styles.muted}>Digite o código enviado por e-mail e escolha uma nova senha.</Text>
                 </View>
               </View>
 
@@ -585,7 +583,7 @@ export function LoginScreen() {
               ) : null}
               {resetDebugCode ? (
                 <View style={styles.debugCodeBox}>
-                  <Text style={styles.debugLabel}>Senha temporária de teste</Text>
+                  <Text style={styles.debugLabel}>Código de teste</Text>
                   <Text style={styles.debugCode}>{resetDebugCode}</Text>
                 </View>
               ) : null}
@@ -597,16 +595,17 @@ export function LoginScreen() {
               ) : null}
 
               <Field
-                label="Senha temporária"
+                label="Código"
                 value={resetCode}
                 onChangeText={(value) => {
-                  setResetCode(value.trim().slice(0, 20));
+                  setResetCode(onlyDigits(value).slice(0, 6));
                   setErrorMessage('');
                 }}
+                keyboardType="numeric"
                 autoCapitalize="none"
-                placeholder="Senha recebida por e-mail"
+                placeholder="6 números"
                 errorText={resetCodeError}
-                helpText="Use a senha temporária recebida por e-mail."
+                helpText="O código vale por 15 minutos."
               />
               <Field
                 label="Nova senha"
@@ -617,7 +616,7 @@ export function LoginScreen() {
                 }}
                 secureTextEntry={!showResetPassword}
                 errorText={resetPasswordError}
-                helpText="Mínimo de 6 caracteres."
+                helpText={`Mínimo de ${MIN_PASSWORD_LENGTH} caracteres.`}
                 right={
                   <PasswordToggle
                     visible={showResetPassword}
@@ -644,7 +643,7 @@ export function LoginScreen() {
                 }
               />
               <Button title={loading ? 'Alterando...' : 'Alterar senha'} icon={KeyRound} onPress={submitPasswordResetConfirm} disabled={!canSubmitReset} />
-              <Button title="Reenviar senha temporária" icon={Mail} variant="ghost" onPress={submitPasswordResetRequest} disabled={loading} />
+              <Button title="Reenviar código" icon={Mail} variant="ghost" onPress={submitPasswordResetRequest} disabled={loading} />
             </Card>
           </View>
         ) : (
@@ -654,10 +653,10 @@ export function LoginScreen() {
                 <CheckCircle2 color={colors.surface} size={32} />
               </View>
               <Text style={styles.cardTitle}>Verifique seu e-mail</Text>
-              <Text style={styles.centerText}>{resetInfoMessage || 'Enviamos uma senha temporária para seu e-mail.'}</Text>
+              <Text style={styles.centerText}>{resetInfoMessage || 'Enviamos um código para seu e-mail.'}</Text>
               {resetDebugCode ? (
                 <View style={styles.debugCodeBox}>
-                  <Text style={styles.debugLabel}>Senha temporária de teste</Text>
+                  <Text style={styles.debugLabel}>Código de teste</Text>
                   <Text style={styles.debugCode}>{resetDebugCode}</Text>
                 </View>
               ) : null}
@@ -889,7 +888,7 @@ function passwordFieldError(value: string) {
   if (!value) {
     return '';
   }
-  return value.length >= 6 ? '' : 'A senha precisa ter pelo menos 6 caracteres.';
+  return value.length >= MIN_PASSWORD_LENGTH ? '' : `A senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`;
 }
 
 function confirmPasswordFieldError(password: string, confirmation: string) {

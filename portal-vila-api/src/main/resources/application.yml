@@ -46,7 +46,8 @@ portal:
   asaas:
     base-url: ${ASAAS_BASE_URL:https://api-sandbox.asaas.com/v3}
     api-key: ${ASAAS_API_KEY:}
-    webhook-token: ${ASAAS_WEBHOOK_TOKEN:dev-webhook-token}
+    webhook-token: ${ASAAS_WEBHOOK_TOKEN:}
+    accept-stored-webhook-secret: ${ASAAS_ACCEPT_STORED_WEBHOOK_SECRET:true}
     user-agent: ${ASAAS_USER_AGENT:Portal da Vila}
   uploads:
     dir: ${PORTAL_UPLOAD_DIR:uploads/documents}

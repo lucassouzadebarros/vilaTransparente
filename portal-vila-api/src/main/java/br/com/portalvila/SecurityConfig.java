@@ -96,11 +96,18 @@ class SecurityConfig {
 @Configuration
 class JwtAuthFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
+    private final AppUserRepository users;
 
-    JwtAuthFilter(JwtService jwtService) {
+    JwtAuthFilter(JwtService jwtService, AppUserRepository users) {
         this.jwtService = jwtService;
+        this.users = users;
     }
 
+    /**
+     * The token only says who the caller is. Whether the account is still active, and which role it has now, comes
+     * from the database, so a released house or a removed síndico loses access right away instead of when the token
+     * expires.
+     */
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
         throws ServletException, IOException {
@@ -108,13 +115,17 @@ class JwtAuthFilter extends OncePerRequestFilter {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             try {
                 Claims claims = jwtService.parse(authHeader.substring(7));
-                String role = String.valueOf(claims.get("role"));
-                var auth = new UsernamePasswordAuthenticationToken(
-                    claims.getSubject(),
-                    null,
-                    List.of(new SimpleGrantedAuthority("ROLE_" + role))
-                );
-                org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+                AppUser user = claims.getSubject() == null ? null : users.findByEmailIgnoreCase(claims.getSubject())
+                    .filter(candidate -> candidate.active)
+                    .orElse(null);
+                if (user != null && !JwtService.isDocumentToken(claims)) {
+                    var auth = new UsernamePasswordAuthenticationToken(
+                        user.email,
+                        null,
+                        List.of(new SimpleGrantedAuthority("ROLE_" + user.role))
+                    );
+                    org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+                }
             } catch (RuntimeException ignored) {
                 org.springframework.security.core.context.SecurityContextHolder.clearContext();
             }

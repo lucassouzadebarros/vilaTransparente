@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert } from '../utils/alert';
 import { useNavigation } from '@react-navigation/native';
 import { CheckCircle2, QrCode, RefreshCw } from 'lucide-react-native';
 import { Badge, Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../services/api';
+import { api, apiErrorMessage } from '../services/api';
 import { Contribution } from '../types';
 import { currentMonth } from '../utils/month';
 
@@ -18,10 +18,25 @@ export function ContributionsScreen() {
     setItems(await api.contributions(month));
   }
 
-  async function manualPayment(id: number) {
-    await api.manualPayment(id, 'Excecao registrada pelo app');
-    Alert.alert('Pagamento manual', 'Contribuição marcada como paga.');
-    load();
+  function manualPayment(item: Contribution) {
+    Alert.alert(
+      'Marcar como pago',
+      `Registrar que ${item.houseLabel} pagou R$ ${item.amount.toFixed(2).replace('.', ',')} fora do Pix? O valor entra no saldo.`,
+      [
+        { text: 'Voltar', style: 'cancel' },
+        { text: 'Marcar pago', onPress: () => confirmManualPayment(item.id) }
+      ]
+    );
+  }
+
+  async function confirmManualPayment(id: number) {
+    try {
+      await api.manualPayment(id, 'Excecao registrada pelo app');
+      Alert.alert('Pagamento manual', 'Contribuição marcada como paga.');
+      load();
+    } catch (error) {
+      Alert.alert('Pagamento manual', apiErrorMessage(error, 'Não consegui marcar como paga.'));
+    }
   }
 
   useEffect(() => {
@@ -44,7 +59,9 @@ export function ContributionsScreen() {
             onPress={() => item.pixChargeId ? navigation.navigate('PixPayment', { id: item.pixChargeId }) : undefined}
             disabled={!item.pixChargeId}
           />
-          {isAdmin ? <Button title="Marcar pago" icon={CheckCircle2} variant="ghost" onPress={() => manualPayment(item.id)} /> : null}
+          {isAdmin && item.status !== 'PAID' && item.status !== 'CANCELLED' ? (
+            <Button title="Marcar pago" icon={CheckCircle2} variant="ghost" onPress={() => manualPayment(item)} />
+          ) : null}
         </Card>
       ))}
     </Screen>

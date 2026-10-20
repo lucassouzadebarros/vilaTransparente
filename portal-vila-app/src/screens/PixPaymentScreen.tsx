@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Alert } from '../utils/alert';
 import { useRoute } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { Copy, QrCode, RefreshCw } from 'lucide-react-native';

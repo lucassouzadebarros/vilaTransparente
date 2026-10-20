@@ -79,6 +79,19 @@ Eventos recomendados:
 - `PAYMENT_REFUNDED`
 - `PAYMENT_DELETED`
 
+### Trocar o token do webhook sem derrubar os pagamentos
+
+Versoes antigas guardavam um segredo padrao (`dev-webhook-token`) na tabela de configuracoes e ele valia mais que a
+variavel `ASAAS_WEBHOOK_TOKEN`. Agora a API aceita o token da variavel e, enquanto
+`ASAAS_ACCEPT_STORED_WEBHOOK_SECRET` for `true` (padrao), tambem o segredo antigo do banco. Para fechar essa porta:
+
+1. No Render, em `portal-vila-api`, defina `ASAAS_WEBHOOK_TOKEN` com um valor longo e aleatorio (32+ caracteres).
+2. No Asaas (Integracoes > Webhooks), troque o token de autenticacao do webhook para esse mesmo valor.
+3. Confira na tela "Logs Webhook" que os eventos novos continuam chegando como processados.
+4. No Render, defina `ASAAS_ACCEPT_STORED_WEBHOOK_SECRET=false`. O segredo antigo deixa de valer.
+
+Sem nenhum token configurado, todas as chamadas ao webhook sao recusadas.
+
 ## 5.1 Recuperar dados depois de ficar fora do ar
 
 O Asaas so guarda webhooks nao entregues por 14 dias; passado isso, o portal fica sem esses pagamentos.
