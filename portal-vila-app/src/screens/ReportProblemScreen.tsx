@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { Alert } from '../utils/alert';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import {
@@ -8,7 +8,6 @@ import {
   Brush,
   Camera,
   CheckCircle2,
-  ChevronDown,
   CircleAlert,
   CircleArrowDown,
   CircleArrowUp,
@@ -38,6 +37,12 @@ import { colors, spacing } from '../theme';
 import { ProblemReport } from '../types';
 
 const locations = ['Portão', 'Interfone', 'Corredor', 'Garagem', 'Área comum', 'Outro'];
+
+// The photo is not sent to the server yet (only its file name was kept), so the section stays hidden instead of
+// promising something that never arrives. Turn it on together with the real upload.
+const PHOTO_ATTACHMENT_ENABLED = false;
+
+type FieldErrors = Partial<Record<'title' | 'location' | 'category' | 'description', string>>;
 
 const categories = [
   { label: 'Iluminação', icon: Lightbulb },
@@ -71,22 +76,40 @@ export function ReportProblemScreen() {
   const compact = Math.min(width, 430) < 560;
   const editingReport = route.params?.report as ProblemReport | undefined;
   const isEditing = Boolean(editingReport?.id);
+  const scrollRef = useRef<ScrollView>(null);
   const [title, setTitle] = useState('');
-  const [location, setLocation] = useState('');
-  const [category, setCategory] = useState('Iluminação');
-  const [priority, setPriority] = useState('Urgente');
+  const [locationChoice, setLocationChoice] = useState('');
+  const [locationOther, setLocationOther] = useState('');
+  // Nothing is pre-selected: a report that nobody classified used to arrive as "Iluminação" and "Urgente".
+  const [category, setCategory] = useState('');
+  const [priority, setPriority] = useState('Média');
   const [status, setStatus] = useState<ProblemReport['status']>('ABERTO');
   const [description, setDescription] = useState('');
   const [photoName, setPhotoName] = useState('');
   const [photoPreview, setPhotoPreview] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const canSubmit = Boolean(title.trim() && location.trim() && description.trim() && !saving);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const location = locationChoice === 'Outro' ? locationOther.trim() : locationChoice;
+
+  function applyLocation(saved: string) {
+    if (!saved) {
+      setLocationChoice('');
+      setLocationOther('');
+    } else if (locations.includes(saved) && saved !== 'Outro') {
+      setLocationChoice(saved);
+      setLocationOther('');
+    } else {
+      setLocationChoice('Outro');
+      setLocationOther(saved === 'Outro' ? '' : saved);
+    }
+  }
 
   useEffect(() => {
+    setFieldErrors({});
     if (editingReport?.id) {
       setTitle(editingReport.title ?? '');
-      setLocation(editingReport.location ?? '');
+      applyLocation(editingReport.location ?? '');
       setCategory(editingReport.category || 'Outro');
       setPriority(fromProblemPriority(editingReport.priority));
       setStatus(editingReport.status ?? 'ABERTO');
@@ -98,9 +121,9 @@ export function ReportProblemScreen() {
     }
 
     setTitle('');
-    setLocation('');
-    setCategory('Iluminação');
-    setPriority('Urgente');
+    applyLocation('');
+    setCategory('');
+    setPriority('Média');
     setStatus('ABERTO');
     setDescription('');
     setPhotoName('');
@@ -108,10 +131,28 @@ export function ReportProblemScreen() {
     setError('');
   }, [editingReport?.id, route.params?.formKey]);
 
-  function selectLocation() {
-    const currentIndex = locations.indexOf(location);
-    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % locations.length : 0;
-    setLocation(locations[nextIndex]);
+  function clearFieldError(field: keyof FieldErrors) {
+    setFieldErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
+  }
+
+  function validate() {
+    const next: FieldErrors = {};
+    if (!title.trim()) {
+      next.title = 'Dê um título curto ao problema.';
+    }
+    if (!locationChoice) {
+      next.location = 'Escolha onde está o problema.';
+    } else if (!location) {
+      next.location = 'Escreva qual é o local.';
+    }
+    if (!category) {
+      next.category = 'Escolha o tipo do problema.';
+    }
+    if (!description.trim()) {
+      next.description = 'Descreva o que está acontecendo.';
+    }
+    setFieldErrors(next);
+    return Object.keys(next).length === 0;
   }
 
   function pickPhoto(capture?: boolean) {
@@ -145,8 +186,9 @@ export function ReportProblemScreen() {
       setError('Apenas o administrador pode editar um relato já cadastrado.');
       return;
     }
-    if (!canSubmit) {
-      Alert.alert(isEditing ? 'Editar problema' : 'Relatar problema', 'Informe o título, selecione o local e descreva o problema.');
+    if (!validate()) {
+      setError('Falta preencher os campos destacados em vermelho.');
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
     setSaving(true);
@@ -175,6 +217,7 @@ export function ReportProblemScreen() {
       navigation.navigate('ProblemReports', { refreshKey: Date.now() });
     } catch (err) {
       setError(apiErrorMessage(err, isEditing ? 'Não consegui atualizar o relato.' : 'Não consegui cadastrar o relato.'));
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
     } finally {
       setSaving(false);
     }
@@ -189,9 +232,10 @@ export function ReportProblemScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, compact ? styles.contentCompact : null]}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={[styles.content, compact ? styles.contentCompact : null]} keyboardShouldPersistTaps="handled">
       <SoftBackdrop />
-      <PortalBrandHeader compact={compact} />
+      {compact ? null : <PortalBrandHeader compact={compact} />}
 
       <View style={[styles.formCard, compact ? styles.formCardCompact : null]}>
         <View style={[styles.formHeader, compact ? styles.formHeaderCompact : null]}>
@@ -206,12 +250,16 @@ export function ReportProblemScreen() {
           </View>
         </View>
 
-        <FormField label="Título do problema" compact={compact}>
-          <View style={[styles.inputFrame, compact ? styles.inputFrameCompact : null]}>
+        <FormField label="Título do problema" required error={fieldErrors.title} compact={compact}>
+          <View style={[styles.inputFrame, compact ? styles.inputFrameCompact : null, fieldErrors.title ? styles.inputFrameError : null]}>
             <FileText color={colors.muted} size={compact ? 18 : 26} />
             <TextInput
               value={title}
-              onChangeText={setTitle}
+              onChangeText={(value) => {
+                setTitle(value);
+                clearFieldError('title');
+              }}
+              maxLength={150}
               placeholder="Ex.: Vazamento no corredor"
               placeholderTextColor={colors.muted}
               style={[styles.input, compact ? styles.inputCompact : null]}
@@ -237,6 +285,7 @@ export function ReportProblemScreen() {
                   selected={status === item.value}
                   color={item.color}
                   compact={compact}
+                  columns={2}
                   onPress={() => setStatus(item.value)}
                 />
               ))}
@@ -244,15 +293,43 @@ export function ReportProblemScreen() {
           </FormField>
         ) : null}
 
-        <FormField label="Local" compact={compact}>
-          <Pressable accessibilityRole="button" onPress={selectLocation} style={[styles.inputFrame, compact ? styles.inputFrameCompact : null]}>
-            <MapPin color={colors.muted} size={compact ? 19 : 27} />
-            <Text style={[styles.selectText, compact ? styles.selectTextCompact : null, !location ? styles.placeholderText : null]}>{location || 'Selecione o local'}</Text>
-            <ChevronDown color={colors.muted} size={compact ? 18 : 25} />
-          </Pressable>
+        <FormField label="Local" required error={fieldErrors.location} compact={compact}>
+          <View style={[styles.chipGrid, compact ? styles.chipGridCompact : null]}>
+            {locations.map((item) => (
+              <SelectableChip
+                key={item}
+                label={item}
+                icon={MapPin}
+                selected={locationChoice === item}
+                color={colors.blue}
+                compact={compact}
+                columns={3}
+                onPress={() => {
+                  setLocationChoice(item);
+                  clearFieldError('location');
+                }}
+              />
+            ))}
+          </View>
+          {locationChoice === 'Outro' ? (
+            <View style={[styles.inputFrame, compact ? styles.inputFrameCompact : null, fieldErrors.location ? styles.inputFrameError : null]}>
+              <MapPin color={colors.muted} size={compact ? 18 : 26} />
+              <TextInput
+                value={locationOther}
+                onChangeText={(value) => {
+                  setLocationOther(value);
+                  clearFieldError('location');
+                }}
+                maxLength={60}
+                placeholder="Qual é o local?"
+                placeholderTextColor={colors.muted}
+                style={[styles.input, compact ? styles.inputCompact : null]}
+              />
+            </View>
+          ) : null}
         </FormField>
 
-        <FormField label="Categoria" compact={compact}>
+        <FormField label="Tipo do problema" required error={fieldErrors.category} compact={compact}>
           <View style={[styles.chipGrid, compact ? styles.chipGridCompact : null]}>
             {categories.map((item) => (
               <SelectableChip
@@ -262,7 +339,11 @@ export function ReportProblemScreen() {
                 selected={category === item.label}
                 color={colors.blue}
                 compact={compact}
-                onPress={() => setCategory(item.label)}
+                columns={4}
+                onPress={() => {
+                  setCategory(item.label);
+                  clearFieldError('category');
+                }}
               />
             ))}
           </View>
@@ -278,18 +359,22 @@ export function ReportProblemScreen() {
                 selected={priority === item.label}
                 color={item.color}
                 compact={compact}
+                columns={4}
                 onPress={() => setPriority(item.label)}
               />
             ))}
           </View>
         </FormField>
 
-        <FormField label="Descrição" compact={compact}>
-          <View style={[styles.inputFrame, styles.textareaFrame, compact ? styles.textareaFrameCompact : null]}>
+        <FormField label="Descrição" required error={fieldErrors.description} compact={compact}>
+          <View style={[styles.inputFrame, styles.textareaFrame, compact ? styles.textareaFrameCompact : null, fieldErrors.description ? styles.inputFrameError : null]}>
             <MessageCircle color={colors.muted} size={compact ? 18 : 26} style={styles.textareaIcon} />
             <TextInput
               value={description}
-              onChangeText={(value) => setDescription(value.slice(0, 500))}
+              onChangeText={(value) => {
+                setDescription(value.slice(0, 500));
+                clearFieldError('description');
+              }}
               placeholder="Descreva o problema com o máximo de detalhes possível..."
               placeholderTextColor={colors.muted}
               multiline
@@ -299,6 +384,7 @@ export function ReportProblemScreen() {
           </View>
         </FormField>
 
+        {PHOTO_ATTACHMENT_ENABLED ? (
         <View style={styles.attachmentsSection}>
           <View>
             <Text style={[styles.fieldLabel, compact ? styles.fieldLabelCompact : null]}>Anexos</Text>
@@ -331,6 +417,7 @@ export function ReportProblemScreen() {
             </View>
           </View>
         </View>
+        ) : null}
 
         <View style={styles.successBanner}>
           <ShieldCheck color={colors.teal} size={28} />
@@ -343,13 +430,14 @@ export function ReportProblemScreen() {
           <Pressable accessibilityRole="button" onPress={returnToMenu} style={[styles.cancelButton, compact ? styles.footerButtonCompact : null]}>
             <Text style={[styles.cancelButtonText, compact ? styles.footerButtonTextCompact : null]}>Cancelar</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={submitReport} style={[styles.submitButton, compact ? styles.footerButtonCompact : null, !canSubmit ? styles.submitButtonDisabled : null]}>
+          <Pressable accessibilityRole="button" onPress={submitReport} style={[styles.submitButton, compact ? styles.footerButtonCompact : null, saving ? styles.submitButtonDisabled : null]}>
             <Send color={colors.surface} size={compact ? 19 : 25} />
             <Text style={[styles.submitButtonText, compact ? styles.footerButtonTextCompact : null]}>{saving ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Enviar relato'}</Text>
           </Pressable>
         </View>
       </View>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -367,11 +455,27 @@ function PortalBrandHeader({ compact }: { compact: boolean }) {
   );
 }
 
-function FormField({ label, children, compact }: { label: string; children: React.ReactNode; compact: boolean }) {
+function FormField({
+  label,
+  children,
+  compact,
+  required,
+  error
+}: {
+  label: string;
+  children: React.ReactNode;
+  compact: boolean;
+  required?: boolean;
+  error?: string;
+}) {
   return (
     <View style={styles.field}>
-      <Text style={[styles.fieldLabel, compact ? styles.fieldLabelCompact : null]}>{label}</Text>
+      <Text style={[styles.fieldLabel, compact ? styles.fieldLabelCompact : null]}>
+        {label}
+        {required ? <Text style={styles.requiredMark}> *</Text> : null}
+      </Text>
       {children}
+      {error ? <Text style={[styles.fieldError, compact ? styles.fieldErrorCompact : null]}>{error}</Text> : null}
     </View>
   );
 }
@@ -382,6 +486,7 @@ function SelectableChip({
   selected,
   color,
   compact,
+  columns = 4,
   onPress
 }: {
   label: string;
@@ -389,6 +494,8 @@ function SelectableChip({
   selected: boolean;
   color: string;
   compact: boolean;
+  /** How many chips share a row on a phone: the width is a fraction of the form so the rows line up. */
+  columns?: 2 | 3 | 4;
   onPress: () => void;
 }) {
   return (
@@ -398,6 +505,7 @@ function SelectableChip({
       style={({ pressed }) => [
         styles.chip,
         compact ? styles.chipCompact : null,
+        compact ? (columns === 3 ? styles.chipThird : columns === 2 ? styles.chipHalf : null) : null,
         { borderColor: selected ? color : colors.border },
         selected ? styles.chipSelected : null,
         pressed ? styles.chipPressed : null
@@ -589,6 +697,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 17
   },
+  requiredMark: {
+    color: colors.red
+  },
+  fieldError: {
+    color: colors.red,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '800'
+  },
+  fieldErrorCompact: {
+    fontSize: 12,
+    lineHeight: 16
+  },
+  inputFrameError: {
+    borderColor: colors.red,
+    backgroundColor: colors.redSoft
+  },
   inputFrame: {
     minHeight: 66,
     borderRadius: 8,
@@ -645,7 +770,8 @@ const styles = StyleSheet.create({
   },
   chipGridCompact: {
     gap: 8,
-    justifyContent: 'space-between'
+    // Rows fill from the left: the last row used to spread its chips apart and look misaligned.
+    justifyContent: 'flex-start'
   },
   priorityGrid: {
     flexDirection: 'row',
@@ -667,11 +793,17 @@ const styles = StyleSheet.create({
   },
   chipCompact: {
     width: '23%',
-    minHeight: 40,
+    minHeight: 44,
     minWidth: 0,
     flexGrow: 0,
     paddingHorizontal: 4,
     gap: 5
+  },
+  chipThird: {
+    width: '31.5%'
+  },
+  chipHalf: {
+    width: '48%'
   },
   chipSelected: {
     backgroundColor: '#F7FAFF'

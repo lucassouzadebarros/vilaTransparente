@@ -3,10 +3,10 @@ import { Linking, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../utils/alert';
 import { formatDateBR } from '../utils/format';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { CheckCircle2, ClipboardList, ExternalLink, FileText, Pencil, RefreshCw } from 'lucide-react-native';
+import { CheckCircle2, ClipboardList, ExternalLink, FileText, Pencil, RefreshCw, XCircle } from 'lucide-react-native';
 import { Badge, Button, Card, Label, Money, Row, Screen, Value, formatMoney } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../services/api';
+import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
 import { Budget, PortalDocument, ServiceOrder } from '../types';
 
@@ -56,8 +56,26 @@ export function ServiceDetailsScreen() {
     api.openDocument(document.url).catch(() => Alert.alert('Documento', 'Não foi possível abrir este documento.'));
   }
 
+  function confirmCancel() {
+    Alert.alert('Cancelar serviço', 'O serviço deixa de aparecer como em andamento e não poderá ser finalizado. Deseja cancelar?', [
+      { text: 'Voltar', style: 'cancel' },
+      {
+        text: 'Cancelar serviço',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.cancelService(id);
+            await load();
+          } catch (err) {
+            Alert.alert('Cancelar serviço', apiErrorMessage(err, 'Não consegui cancelar o serviço.'));
+          }
+        }
+      }
+    ]);
+  }
+
   return (
-    <Screen title={service?.title ?? 'Detalhes do serviço'} subtitle="Prestação de contas" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
+    <Screen title={service?.title ?? 'Detalhes do serviço'} subtitle="Detalhes do serviço" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       {service ? (
         <>
           <Card>
@@ -89,14 +107,18 @@ export function ServiceDetailsScreen() {
             </DetailLine>
             <DetailLine label="Pagamento">
               <View style={styles.detailTextBlockRight}>
-                {service.finalValue ? <Money value={service.finalValue} /> : <Value>Aguardando finalização</Value>}
+                {service.finalValue ? (
+                  <Money value={service.finalValue} />
+                ) : (
+                  <Value>{service.status === 'CANCELADO' ? 'Serviço cancelado' : 'Aguardando finalização'}</Value>
+                )}
                 {service.completedDate ? <Label>Pago em {formatDateBR(service.completedDate)}</Label> : null}
               </View>
             </DetailLine>
           </Card>
 
           <Value>Documento</Value>
-          <DocumentCard document={fiscalDocument} onPress={() => openDocument(fiscalDocument)} />
+          <DocumentCard document={fiscalDocument} status={service.status} onPress={() => openDocument(fiscalDocument)} />
 
           <Card>
             <Value>Orçamentos</Value>
@@ -111,7 +133,8 @@ export function ServiceDetailsScreen() {
               <Value>Ações administrativas</Value>
               <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
                 <Button title="Editar" icon={Pencil} variant="ghost" onPress={() => navigation.navigate('ServiceForm', { formMode: 'edit', serviceId: service.id, formKey: Date.now() })} />
-                {isAdmin ? <Button title={service.status === 'FINALIZADO' ? 'Corrigir dados / anexar nota' : 'Finalizar / anexar nota'} icon={CheckCircle2} onPress={() => navigation.navigate('FinishService', { id: service.id })} /> : null}
+                {isAdmin && service.status !== 'CANCELADO' ? <Button title={service.status === 'FINALIZADO' ? 'Corrigir dados / anexar nota' : 'Finalizar / anexar nota'} icon={CheckCircle2} onPress={() => navigation.navigate('FinishService', { id: service.id })} /> : null}
+                {service.status !== 'FINALIZADO' && service.status !== 'CANCELADO' ? <Button title="Cancelar serviço" icon={XCircle} variant="danger" onPress={confirmCancel} /> : null}
               </Row>
               {!isAdmin ? <Label>Finalizar o serviço gera uma despesa no caixa, por isso fica com o admin.</Label> : null}
             </Card>
@@ -139,7 +162,17 @@ function DetailLine({ label, children }: { label: string; children: ReactNode })
   );
 }
 
-function DocumentCard({ document, onPress }: { document?: PortalDocument; onPress: () => void }) {
+function documentHint(status: ServiceOrder['status']) {
+  if (status === 'FINALIZADO') {
+    return 'Nenhuma nota ou recibo foi anexado a este serviço.';
+  }
+  if (status === 'CANCELADO') {
+    return 'Serviço cancelado, sem documento.';
+  }
+  return 'A nota fiscal é anexada ao finalizar o serviço.';
+}
+
+function DocumentCard({ document, status, onPress }: { document?: PortalDocument; status: ServiceOrder['status']; onPress: () => void }) {
   return (
     <Card>
       <Row>
@@ -149,7 +182,7 @@ function DocumentCard({ document, onPress }: { document?: PortalDocument; onPres
           </View>
           <View style={styles.detailTextBlock}>
             <Value>{document?.name ?? 'Nota fiscal não anexada'}</Value>
-            <Label>{document?.url ? document.url.split('/').pop() : 'Finalize o serviço para anexar PDF ou link.'}</Label>
+            <Label>{document?.url ? document.url.split('/').pop() : documentHint(status)}</Label>
           </View>
         </View>
         <Button title="" icon={ExternalLink} variant="ghost" onPress={onPress} disabled={!document?.url} />

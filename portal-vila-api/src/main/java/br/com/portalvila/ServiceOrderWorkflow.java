@@ -8,9 +8,14 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 @Service
 class ServiceOrderWorkflow {
+    private static final Set<String> VALID_STATUSES = Set.of("PLANEJADO", "APROVADO", "EM_ANDAMENTO", "FINALIZADO", "CANCELADO");
+    private static final Set<String> CLOSED_STATUSES = Set.of("FINALIZADO", "CANCELADO");
+
     private final ServiceOrderRepository services;
     private final BudgetRepository budgets;
     private final ExpenseRepository expenses;
@@ -44,13 +49,17 @@ class ServiceOrderWorkflow {
             .toList();
     }
 
+    /**
+     * A new service is always open. Finishing books the payment on the cash box and cancelling is audited, so
+     * both have their own actions: the form can no longer mark a service as paid without a payment behind it.
+     */
     @Transactional
     public ServiceOrder saveService(ServiceOrder incoming) {
         validateService(incoming);
         incoming.id = null;
-        if (incoming.status == null || incoming.status.isBlank()) {
-            incoming.status = "PLANEJADO";
-        }
+        incoming.status = openStatus(incoming.status, incoming.approvedBudgetId);
+        incoming.finalValue = null;
+        incoming.completedDate = null;
         if (incoming.priority == null || incoming.priority.isBlank()) {
             incoming.priority = "MEDIA";
         }
@@ -70,13 +79,20 @@ class ServiceOrderWorkflow {
         service.description = incoming.description;
         service.category = incoming.category;
         service.priority = incoming.priority == null || incoming.priority.isBlank() ? "MEDIA" : incoming.priority;
-        service.status = incoming.status == null || incoming.status.isBlank() ? service.status : incoming.status;
+        if (CLOSED_STATUSES.contains(service.status)) {
+            // Finished or cancelled stays that way, and the paid value and date stay as the finish action recorded them.
+            if (incoming.status != null && !incoming.status.isBlank() && !service.status.equals(normalizeStatus(incoming.status))) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Um serviço finalizado ou cancelado não muda de situação por aqui.");
+            }
+        } else {
+            service.status = openStatus(incoming.status == null || incoming.status.isBlank() ? service.status : incoming.status, incoming.approvedBudgetId);
+            service.finalValue = null;
+            service.completedDate = null;
+        }
         service.expectedValue = incoming.expectedValue;
-        service.finalValue = incoming.finalValue;
         service.supplier = incoming.supplier;
         service.supplierDocument = incoming.supplierDocument;
         service.plannedDate = incoming.plannedDate;
-        service.completedDate = incoming.completedDate;
         service.approvedBudgetId = incoming.approvedBudgetId;
         service.notes = incoming.notes;
         service.updatedAt = LocalDateTime.now();
@@ -89,6 +105,9 @@ class ServiceOrderWorkflow {
     @Transactional
     public void cancelService(Long id) {
         ServiceOrder service = services.findById(id).orElseThrow();
+        if ("FINALIZADO".equals(service.status)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Este serviço já foi finalizado e tem pagamento registrado. Corrija os dados pelo serviço em vez de cancelar.");
+        }
         service.status = "CANCELADO";
         service.updatedAt = LocalDateTime.now();
         services.save(service);
@@ -204,6 +223,29 @@ class ServiceOrderWorkflow {
                 + (request.generateExpense() ? " - despesa lançada" : " - sem despesa"));
         dashboardEvents.publishDashboardChanged();
         return service;
+    }
+
+    private static String normalizeStatus(String status) {
+        String value = status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
+        if (!VALID_STATUSES.contains(value)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Situação do serviço inválida.");
+        }
+        return value;
+    }
+
+    /** The situation a service can have while it is open. "Aprovado" follows the budget the houses approved. */
+    private static String openStatus(String requested, Long approvedBudgetId) {
+        String status = requested == null || requested.isBlank() ? "PLANEJADO" : normalizeStatus(requested);
+        if ("FINALIZADO".equals(status)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Para finalizar um serviço use a ação \"Finalizar\": é ela que lança o pagamento no caixa.");
+        }
+        if ("CANCELADO".equals(status)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Para cancelar um serviço use a ação \"Cancelar serviço\".");
+        }
+        if ("EM_ANDAMENTO".equals(status)) {
+            return status;
+        }
+        return approvedBudgetId != null ? "APROVADO" : "PLANEJADO";
     }
 
     private void validateService(ServiceOrder service) {

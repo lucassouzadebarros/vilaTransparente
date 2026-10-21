@@ -36,8 +36,10 @@ const styles = StyleSheet.create({
   backdrop: {
     position: 'absolute',
     top: 0,
-    left: -32,
-    right: -32,
+    // Exactly the width of the column: with negative offsets it stuck out 32px on each side, which on a phone made the
+    // page scroll sideways and cut the form labels when a field was focused.
+    left: 0,
+    right: 0,
     height: 270,
     alignItems: 'center',
     overflow: 'hidden'

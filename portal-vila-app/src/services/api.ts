@@ -164,6 +164,7 @@ export const api = {
   createService: (service: ServiceOrder) => requestData<ServiceOrder>(apiClient.post('/services', service)),
   updateService: (id: number, service: ServiceOrder) => requestData<ServiceOrder>(apiClient.put(`/services/${id}`, service)),
   finishService: (id: number, payload: unknown) => requestData<ServiceOrder>(apiClient.post(`/services/${id}/finish`, payload)),
+  cancelService: (id: number) => requestData<{ status: string }>(apiClient.post(`/services/${id}/cancel`)),
   budgets: () => requestData<Budget[]>(apiClient.get('/budgets')),
   serviceBudgets: (serviceId: number) => requestData<Budget[]>(apiClient.get(`/services/${serviceId}/budgets`)),
   budget: (id: number) => requestData<Budget>(apiClient.get(`/budgets/${id}`)),
