@@ -304,6 +304,14 @@ class ServiceOrderWorkflow {
     public void cancelBudget(Long id) {
         Budget budget = budgets.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Orçamento não encontrado."));
+        if ("CANCELADO".equals(budget.status)) {
+            return;
+        }
+        // A budget that backs a live service is the proof of that spending: the service has to be cancelled first.
+        if (budget.serviceId != null && services.findById(budget.serviceId)
+            .filter(service -> !"CANCELADO".equals(service.status) && budget.id.equals(service.approvedBudgetId)).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Este orçamento já virou o serviço #" + budget.serviceId + ". Cancele o serviço primeiro.");
+        }
         budget.status = "CANCELADO";
         budget.updatedAt = LocalDateTime.now();
         budgets.save(budget);
