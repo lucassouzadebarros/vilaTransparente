@@ -188,7 +188,8 @@ record BudgetVotingSummary(
     boolean canVote,
     String cannotVoteReason,
     LocalDateTime closedAt,
-    List<BudgetVoteHouse> houses
+    List<BudgetVoteHouse> houses,
+    LocalDate deadline
 ) {
 }
 

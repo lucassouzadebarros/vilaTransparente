@@ -795,6 +795,7 @@ class ProblemReportController {
     private final PortalDocumentRepository documents;
     private final DocumentStorage storage;
     private final PushService push;
+    private final ReportHistory history;
 
     private static final int MAX_PHOTOS = 3;
     private static final String PHOTO_TYPE = "PROBLEM_REPORT";
@@ -805,7 +806,8 @@ class ProblemReportController {
         CurrentUserService currentUser,
         PortalDocumentRepository documents,
         DocumentStorage storage,
-        PushService push
+        PushService push,
+        ReportHistory history
     ) {
         this.reports = reports;
         this.residents = residents;
@@ -813,6 +815,64 @@ class ProblemReportController {
         this.documents = documents;
         this.storage = storage;
         this.push = push;
+        this.history = history;
+    }
+
+    record CommentRequest(String message) {
+    }
+
+    /** The story of the report, oldest first. Every resident can read it. */
+    @GetMapping("/{id}/events")
+    List<ProblemReportEvent> events(@PathVariable Long id) {
+        reports.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Relato não encontrado."));
+        return history.of(id);
+    }
+
+    /** The person who reported, the administrator and the síndico can write on a report. */
+    @PostMapping("/{id}/comments")
+    ProblemReportEvent comment(@PathVariable Long id, @RequestBody CommentRequest request) {
+        ProblemReport report = reports.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Relato não encontrado."));
+        AppUser user = currentUser.current();
+        boolean owner = user.id.equals(report.createdBy);
+        if (!owner && !currentUser.canManageBudgets()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Só quem fez o relato, o administrador e o síndico comentam.");
+        }
+        String message = request == null || request.message() == null ? "" : request.message().trim();
+        if (message.isEmpty() || message.length() > 500) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escreva um comentário de até 500 caracteres.");
+        }
+        ProblemReportEvent saved = history.record(report.id, ProblemReportEvent.COMMENT, message);
+        report.updatedAt = LocalDateTime.now();
+        reports.save(report);
+        if (!owner) {
+            push.notifyUser(report.createdBy, "Novo comentário no seu relato", "\"" + report.title + "\": " + message,
+                Map.of("type", "REPORT", "id", report.id));
+        }
+        return saved;
+    }
+
+    /** The resident can withdraw a report nobody has started on yet; once it is under analysis the administrator decides. */
+    @PostMapping("/{id}/cancel")
+    ProblemReport cancel(@PathVariable Long id) {
+        ProblemReport report = reports.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Relato não encontrado."));
+        AppUser user = currentUser.current();
+        boolean admin = currentUser.isAdmin();
+        if (!admin && !user.id.equals(report.createdBy)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Só quem fez o relato (ou o administrador) pode cancelá-lo.");
+        }
+        if (!admin && !"ABERTO".equals(report.status)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Este relato já está sendo analisado. Escreva um comentário para a administração.");
+        }
+        if ("RESOLVIDO".equals(report.status) || "CANCELADO".equals(report.status)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Este relato já foi encerrado.");
+        }
+        report.status = "CANCELADO";
+        report.updatedAt = LocalDateTime.now();
+        ProblemReport saved = reports.save(report);
+        history.record(saved.id, ProblemReportEvent.STATUS, admin ? "Cancelado pela administração." : "Cancelado por quem fez o relato.");
+        return saved;
     }
 
     @GetMapping
@@ -894,7 +954,9 @@ class ProblemReportController {
         }
         report.createdAt = LocalDateTime.now();
         report.updatedAt = LocalDateTime.now();
-        return reports.save(report);
+        ProblemReport saved = reports.save(report);
+        history.record(saved.id, ProblemReportEvent.CREATED, "Relato registrado.");
+        return saved;
     }
 
     @PutMapping("/{id}")
@@ -913,6 +975,7 @@ class ProblemReportController {
         report.updatedAt = LocalDateTime.now();
         ProblemReport saved = reports.save(report);
         if (!previousStatus.equals(saved.status)) {
+            history.record(saved.id, ProblemReportEvent.STATUS, "Situação alterada: " + statusLabel(previousStatus) + " → " + statusLabel(saved.status) + ".");
             push.notifyUser(saved.createdBy, "Seu relato foi atualizado",
                 "\"" + saved.title + "\" agora está " + statusLabel(saved.status) + ".", Map.of("type", "REPORT", "id", saved.id));
         }

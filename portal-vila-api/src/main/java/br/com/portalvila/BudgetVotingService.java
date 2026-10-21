@@ -5,13 +5,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -36,6 +40,9 @@ class BudgetVotingService {
     private final AuditService audit;
     private final ServiceOrderRepository services;
     private final PushService push;
+    private final AppUserRepository users;
+
+    private static final ZoneId VILLAGE_ZONE = ZoneId.of("America/Sao_Paulo");
 
     BudgetVotingService(
         BudgetRepository budgets,
@@ -45,8 +52,10 @@ class BudgetVotingService {
         DashboardEventService dashboardEvents,
         AuditService audit,
         ServiceOrderRepository services,
-        PushService push
+        PushService push,
+        AppUserRepository users
     ) {
+        this.users = users;
         this.push = push;
         this.services = services;
         this.audit = audit;
@@ -57,15 +66,17 @@ class BudgetVotingService {
         this.dashboardEvents = dashboardEvents;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public BudgetVotingSummary summary(Long budgetId, AppUser viewer) {
+        expireDue(today());
         Budget budget = budgets.findById(budgetId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Orçamento não encontrado."));
         return summarize(budget, votes.findByBudgetId(budget.id), participants(), houseLabels(), viewer);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<BudgetVotingSummary> summaries(AppUser viewer) {
+        expireDue(today());
         Map<Long, Resident> participants = participants();
         Map<Long, String> labels = houseLabels();
         Map<Long, List<BudgetVote>> votesByBudget = votes.findAll().stream()
@@ -75,13 +86,19 @@ class BudgetVotingService {
             .toList();
     }
 
-    @Transactional
+    // A vote that arrives after the deadline closes the voting and is then refused: the closing must be kept.
+    @Transactional(noRollbackFor = ResponseStatusException.class)
     public BudgetVotingSummary vote(Long budgetId, String choice, AppUser voter) {
         String normalized = choice == null ? "" : choice.trim().toUpperCase();
         if (!APPROVE.equals(normalized) && !REJECT.equals(normalized)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Voto inválido. Use APROVAR ou RECUSAR.");
         }
         Budget budget = lockOpenBudget(budgetId);
+        if (budget.votingDeadline != null && budget.votingDeadline.isBefore(today())) {
+            closeByTally(budget, "o prazo terminou");
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "O prazo desta votação terminou, então ela foi encerrada: orçamento " + ("APROVADO".equals(budget.status) ? "aprovado" : "recusado") + ".");
+        }
         Map<Long, Resident> participants = participants();
         Resident resident = voterResident(voter, participants);
         if (resident == null) {
@@ -123,11 +140,73 @@ class BudgetVotingService {
     @Transactional
     public BudgetVotingSummary close(Long budgetId, AppUser admin) {
         Budget budget = lockOpenBudget(budgetId);
+        closeByTally(budget, null);
+        return summarize(budget, votes.findByBudgetId(budget.id), participants(), houseLabels(), admin);
+    }
+
+    /** Closes every voting whose deadline (the last day to vote) is before {@code today}. Returns how many were closed. */
+    @Transactional
+    public int expireDue(LocalDate today) {
+        int closed = 0;
+        for (Budget due : budgets.findByStatusAndVotingDeadlineBefore(OPEN_STATUS, today)) {
+            Budget budget = budgets.findByIdForUpdate(due.id).orElse(null);
+            if (budget != null && OPEN_STATUS.equals(budget.status)) {
+                closeByTally(budget, "o prazo terminou");
+                closed++;
+            }
+        }
+        return closed;
+    }
+
+    /**
+     * One reminder a day, on the last day and the day before, to the houses that have not voted yet. The reminder
+     * only reaches phones that registered for notices. Returns how many votings had someone to remind.
+     */
+    @Transactional
+    public int remindPending(LocalDate today) {
+        int reminded = 0;
         Map<Long, Resident> participants = participants();
-        Tally tally = tally(votes.findByBudgetId(budget.id), participants);
+        for (Budget budget : budgets.findByStatus(OPEN_STATUS)) {
+            if (budget.votingDeadline == null || today.equals(budget.remindedOn)) {
+                continue;
+            }
+            long daysLeft = ChronoUnit.DAYS.between(today, budget.votingDeadline);
+            if (daysLeft < 0 || daysLeft > 1) {
+                continue;
+            }
+            Set<Long> voted = countedVotes(votes.findByBudgetId(budget.id), participants).stream()
+                .map(vote -> vote.houseId)
+                .collect(Collectors.toSet());
+            List<Long> pendingUsers = participants.entrySet().stream()
+                .filter(entry -> !voted.contains(entry.getKey()))
+                .map(entry -> users.findByResidentId(entry.getValue().id))
+                .flatMap(Optional::stream)
+                .map(user -> user.id)
+                .toList();
+            if (!pendingUsers.isEmpty()) {
+                push.notifyUsers(pendingUsers, "Falta o voto da sua casa",
+                    budget.title + (daysLeft == 0 ? " encerra hoje." : " encerra amanhã."),
+                    Map.of("type", "BUDGET", "id", budget.id));
+                reminded++;
+            }
+            budget.remindedOn = today;
+            budgets.save(budget);
+        }
+        return reminded;
+    }
+
+    static LocalDate today() {
+        return LocalDate.now(VILLAGE_ZONE);
+    }
+
+    /** Passes when more than half of the houses voted and yes beats no; otherwise it is refused. */
+    private void closeByTally(Budget budget, String reason) {
+        Tally tally = tally(votes.findByBudgetId(budget.id), participants());
         boolean passed = tally.approve() + tally.reject() >= tally.needed() && tally.approve() > tally.reject();
+        if (reason != null) {
+            audit.record("BUDGET_EXPIRED", "BUDGET", budget.id, budget.title + " - " + reason);
+        }
         decide(budget, passed ? "APROVADO" : "REJEITADO");
-        return summarize(budget, votes.findByBudgetId(budget.id), participants, houseLabels(), admin);
     }
 
     boolean hasVotes(Long budgetId) {
@@ -244,7 +323,8 @@ class BudgetVotingService {
             cannotVoteReason == null,
             cannotVoteReason,
             budget.votingClosedAt,
-            houseList
+            houseList,
+            budget.votingDeadline
         );
     }
 

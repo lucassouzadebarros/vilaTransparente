@@ -73,6 +73,8 @@ interface ServiceOrderRepository extends JpaRepository<ServiceOrder, Long> {
 interface BudgetRepository extends JpaRepository<Budget, Long> {
     List<Budget> findByServiceIdOrderByAmountAsc(Long serviceId);
     List<Budget> findByServiceIdAndStatus(Long serviceId, String status);
+    List<Budget> findByStatus(String status);
+    List<Budget> findByStatusAndVotingDeadlineBefore(String status, java.time.LocalDate date);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select b from Budget b where b.id = :id")
@@ -108,4 +110,8 @@ interface PushTokenRepository extends JpaRepository<PushToken, Long> {
     Optional<PushToken> findByToken(String token);
     List<PushToken> findByUserIdIn(java.util.Collection<Long> userIds);
     void deleteByToken(String token);
+}
+
+interface ProblemReportEventRepository extends JpaRepository<ProblemReportEvent, Long> {
+    List<ProblemReportEvent> findByReportIdOrderByCreatedAtAscIdAsc(Long reportId);
 }

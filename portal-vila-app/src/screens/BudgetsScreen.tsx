@@ -6,7 +6,7 @@ import { Badge, Button, Card, EmptyState, Label, Money, Row, Screen, Value } fro
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { Budget, BudgetVoting, ServiceOrder } from '../types';
-import { awaitingMyVote, budgetBadgeStatus, votingScore } from '../utils/budgetVoting';
+import { awaitingMyVote, budgetBadgeStatus, deadlineLabel, votingScore } from '../utils/budgetVoting';
 
 /** Budgets still being voted on come first, then the newest. */
 function sortBudgets(budgets: Budget[]) {
@@ -85,6 +85,7 @@ export function BudgetsScreen() {
                 {awaitingMyVote(voting) ? <Badge status="AGUARDANDO SEU VOTO" /> : null}
               </Row>
             ) : null}
+            {voting?.open && voting.deadline ? <Label>{deadlineLabel(voting.deadline)}</Label> : null}
             <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
               {awaitingMyVote(voting) ? <Button title="Votar" icon={Vote} onPress={openDetails} /> : null}
               <Button title="Detalhes" icon={Eye} variant="ghost" onPress={openDetails} />

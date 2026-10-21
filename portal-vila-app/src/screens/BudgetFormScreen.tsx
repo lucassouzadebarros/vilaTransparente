@@ -50,7 +50,19 @@ function allowedStatuses(savedStatus: Budget['status'] | null): Array<Budget['st
   );
 }
 
-type FieldErrors = Partial<Record<'title' | 'scope' | 'supplier' | 'amount' | 'supplierDocument' | 'phone' | 'budgetDate' | 'validUntil' | 'expectedDate', string>>;
+type FieldErrors = Partial<Record<'votingDeadline' | 'title' | 'scope' | 'supplier' | 'amount' | 'supplierDocument' | 'phone' | 'budgetDate' | 'validUntil' | 'expectedDate', string>>;
+
+/** A new voting stays open for a week unless the person chooses another last day. */
+function defaultDeadline() {
+  const date = new Date();
+  date.setDate(date.getDate() + 7);
+  return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+}
+
+function todayISO() {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
 
 function positiveId(value: unknown) {
   const parsed = Number(value);
@@ -80,6 +92,8 @@ export function BudgetFormScreen() {
   const [budgetDate, setBudgetDate] = useState('');
   const [validUntil, setValidUntil] = useState('');
   const [expectedDate, setExpectedDate] = useState('');
+  const [votingDeadline, setVotingDeadline] = useState('');
+  const [loadedDeadline, setLoadedDeadline] = useState('');
   const [status, setStatus] = useState<Budget['status']>('EM_ANALISE');
   const [savedStatus, setSavedStatus] = useState<Budget['status'] | null>(null);
   const [notes, setNotes] = useState('');
@@ -108,6 +122,8 @@ export function BudgetFormScreen() {
     setBudgetDate('');
     setValidUntil('');
     setExpectedDate('');
+    setVotingDeadline(defaultDeadline());
+    setLoadedDeadline('');
     setStatus('EM_ANALISE');
     setSavedStatus(null);
     setNotes('');
@@ -134,6 +150,8 @@ export function BudgetFormScreen() {
     setBudgetDate(isoToDateBR(budget.budgetDate));
     setValidUntil(isoToDateBR(budget.validUntil));
     setExpectedDate(isoToDateBR(budget.expectedDate));
+    setVotingDeadline(isoToDateBR(budget.votingDeadline));
+    setLoadedDeadline(isoToDateBR(budget.votingDeadline));
     setStatus(budget.status ?? 'EM_ANALISE');
     setSavedStatus(budget.status ?? 'EM_ANALISE');
     setNotes(budget.notes ?? '');
@@ -231,6 +249,14 @@ export function BudgetFormScreen() {
     if (expectedDate.trim() && !dateBRToISO(expectedDate)) {
       next.expectedDate = dateMessage;
     }
+    if (votingDeadline.trim()) {
+      const deadline = dateBRToISO(votingDeadline);
+      if (!deadline) {
+        next.votingDeadline = dateMessage;
+      } else if (votingDeadline !== loadedDeadline && deadline < todayISO()) {
+        next.votingDeadline = 'O prazo não pode estar no passado.';
+      }
+    }
     const issued = dateBRToISO(budgetDate);
     const valid = dateBRToISO(validUntil);
     if (issued && valid && valid < issued) {
@@ -264,6 +290,7 @@ export function BudgetFormScreen() {
         budgetDate: dateBRToISO(budgetDate),
         validUntil: dateBRToISO(validUntil),
         expectedDate: dateBRToISO(expectedDate),
+        votingDeadline: dateBRToISO(votingDeadline),
         status,
         documentId: existingDocument?.id,
         notes: notes.trim() || undefined
@@ -461,6 +488,21 @@ export function BudgetFormScreen() {
         </FormSection>
 
         <FormSection icon={CalendarDays} title="Datas e observações">
+          {!isEditing || savedStatus === 'EM_ANALISE' ? (
+            <FormField
+              label="Prazo da votação"
+              value={votingDeadline}
+              onChangeText={(value) => {
+                setVotingDeadline(maskDateBR(value));
+                clearFieldError('votingDeadline');
+              }}
+              keyboardType="number-pad"
+              maxLength={10}
+              placeholder="dd/mm/aaaa"
+              hint="Último dia para as casas votarem. Depois dele a votação encerra sozinha e quem não votou é lembrado antes. Deixe em branco para não ter prazo."
+              error={fieldErrors.votingDeadline}
+            />
+          ) : null}
           <View style={styles.twoColumns}>
             <FormField
               label="Data do orçamento"

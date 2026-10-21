@@ -46,6 +46,12 @@ public class Budget {
 
     public LocalDateTime votingClosedAt;
 
+    /** Last day the houses can vote. After it the voting closes by itself. Empty means no deadline. */
+    public java.time.LocalDate votingDeadline;
+
+    /** The day the houses that had not voted were last reminded, so nobody gets the reminder twice in a day. */
+    public java.time.LocalDate remindedOn;
+
     @Column(nullable = false)
     public LocalDateTime createdAt = LocalDateTime.now();
 
