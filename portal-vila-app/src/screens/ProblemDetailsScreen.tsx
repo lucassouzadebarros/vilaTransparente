@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { ArrowLeft, Camera, ChevronRight, ImagePlus, Pencil, Plus, RefreshCw, Send, Wrench, X, XCircle } from 'lucide-react-native';
-import { Badge, Button, Card, Label, Row, Screen, Value, SectionTitle } from '../components/ui';
+import { Badge, Button, Card, Label, Row, Screen, Value, SectionTitle, BackLink } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
@@ -173,7 +173,7 @@ export function ProblemDetailsScreen() {
       subtitle="Detalhes e acompanhamento"
       right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}
     >
-      <Button title="Voltar para os problemas" icon={ArrowLeft} variant="ghost" onPress={() => navigation.navigate('ProblemReports', { refreshKey: Date.now() })} />
+      <BackLink label="Voltar para os problemas" onPress={() => navigation.navigate('ProblemReports', { refreshKey: Date.now() })} />
       {error ? (
         <Card>
           <Value>Erro</Value>

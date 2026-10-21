@@ -571,12 +571,11 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   refreshButton: {
-    width: 42,
+    width: 44,
     height: 44,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderRadius: 10,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#16202A',
@@ -608,7 +607,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 8,
-    backgroundColor: colors.blueSoft,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -832,10 +831,10 @@ const styles = StyleSheet.create({
     gap: 10
   },
   expenseIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 8,
-    backgroundColor: colors.redSoft,
+    width: 36,
+    height: 36,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center'
   },

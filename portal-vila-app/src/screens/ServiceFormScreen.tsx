@@ -820,7 +820,7 @@ const styles = StyleSheet.create({
     width: 31,
     height: 31,
     borderRadius: 999,
-    backgroundColor: colors.blueSoft,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center'
   },

@@ -395,12 +395,12 @@ function DocumentCard({ document, status, onPress }: { document?: PortalDocument
 
 const styles = StyleSheet.create({
   detailLine: {
-    minHeight: 54,
+    minHeight: 48,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingTop: spacing.md,
+    paddingVertical: spacing.xs,
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md
   },

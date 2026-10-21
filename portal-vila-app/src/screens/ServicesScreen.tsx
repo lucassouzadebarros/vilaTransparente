@@ -279,12 +279,11 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   refreshButton: {
-    width: 40,
+    width: 44,
     height: 44,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderRadius: 10,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#16202A',
