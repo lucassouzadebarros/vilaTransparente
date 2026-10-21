@@ -1,8 +1,8 @@
 import { View } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { NavigationContainer, getFocusedRouteNameFromRoute } from '@react-navigation/native';
+import { BottomTabBar, BottomTabBarProps, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { FileText, Home, MoreHorizontal, WalletCards, Wrench } from 'lucide-react-native';
+import { ClipboardList, FileText, Home, MoreHorizontal, WalletCards } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { colors } from '../theme';
 import { AdminPixChargesScreen } from '../screens/AdminPixChargesScreen';
@@ -71,6 +71,40 @@ function tabIcon(Icon: LucideIcon) {
   );
 }
 
+/** Screens that are not a tab of their own still belong to one, so the bar always shows where you are. */
+const tabOf: Record<string, string> = {
+  Budgets: 'Servicos',
+  BudgetForm: 'Servicos',
+  BudgetDetails: 'Servicos',
+  ServiceForm: 'Servicos',
+  ServiceDetails: 'Servicos',
+  FinishService: 'Servicos',
+  ProblemReports: 'Servicos',
+  ProblemDetails: 'Servicos',
+  ReportProblem: 'Servicos',
+  Contributions: 'Caixa',
+  PixPayment: 'Caixa',
+  Expenses: 'Caixa',
+  Reports: 'Caixa',
+  AdminPixCharges: 'Caixa',
+  Residents: 'Mais',
+  ReleaseHouse: 'Mais',
+  WebhookEvents: 'Mais',
+  AuditLog: 'Mais',
+  Settings: 'Mais',
+  ChangePassword: 'Mais'
+};
+
+/** The bottom bar, with the tab of the current screen marked even when the screen is not one of the five. */
+function PortalTabBar(props: BottomTabBarProps) {
+  const current = props.state.routes[props.state.index];
+  // The "Mais" tab holds its own stack: Problemas lives there but belongs to the Demandas tab.
+  const name = current.name === 'Mais' ? getFocusedRouteNameFromRoute(current) ?? 'MoreMenu' : current.name;
+  const tab = tabOf[name];
+  const index = tab ? props.state.routes.findIndex((route) => route.name === tab) : props.state.index;
+  return <BottomTabBar {...props} state={{ ...props.state, index: index >= 0 ? index : props.state.index }} />;
+}
+
 const Tabs = createBottomTabNavigator();
 const MoreStack = createNativeStackNavigator();
 const hiddenTabOptions = {
@@ -92,6 +126,7 @@ function MoreStackNavigator() {
 function PortalTabs() {
   return (
     <Tabs.Navigator
+      tabBar={(props) => <PortalTabBar {...props} />}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.blue,
@@ -122,7 +157,7 @@ function PortalTabs() {
     >
       <Tabs.Screen name="Inicio" component={HomeScreen} options={{ tabBarLabel: 'Início', tabBarIcon: tabIcon(Home) }} />
       <Tabs.Screen name="Caixa" component={CashBoxScreen} options={{ tabBarIcon: tabIcon(WalletCards) }} />
-      <Tabs.Screen name="Servicos" component={ServicesScreen} options={{ tabBarLabel: 'Serviços', tabBarIcon: tabIcon(Wrench) }} />
+      <Tabs.Screen name="Servicos" component={ServicesScreen} options={{ tabBarLabel: 'Demandas', tabBarIcon: tabIcon(ClipboardList) }} />
       <Tabs.Screen name="Docs" component={DocumentsScreen} options={{ tabBarIcon: tabIcon(FileText) }} />
       <Tabs.Screen name="Mais" component={MoreStackNavigator} options={{ tabBarIcon: tabIcon(MoreHorizontal) }} />
       <Tabs.Screen name="Contributions" component={ContributionsScreen} options={hiddenTabOptions} />

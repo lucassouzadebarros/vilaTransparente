@@ -348,7 +348,7 @@ function TransparencyOpenCard({ dashboard, navigation }) {
 
 function MetricCard({ icon: Icon, tone, label, value, caption }) {
   const color = tone === 'red' ? colors.red : tone === 'lilac' ? colors.lilac : colors.blue;
-  const backgroundColor = tone === 'red' ? colors.redSoft : tone === 'lilac' ? '#EFE9FF' : colors.blueSoft;
+  const backgroundColor = 'transparent';
   return (
     <View style={styles.metricCard}>
       <View style={[styles.metricIcon, { backgroundColor }]}>
@@ -365,7 +365,7 @@ function SectionTitle({ icon: Icon, title }) {
   return (
     <View style={styles.sectionHeading}>
       <View style={styles.sectionHeadingIcon}>
-        <Icon color={colors.surface} size={18} />
+        <Icon color={colors.blue} size={20} />
       </View>
       <Text style={styles.sectionTitle}>{title}</Text>
     </View>
@@ -794,7 +794,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: colors.blue,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -825,7 +825,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 10,
-    backgroundColor: colors.blueSoft,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0
