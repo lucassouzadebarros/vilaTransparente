@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import {
   BadgeDollarSign,
@@ -21,6 +21,7 @@ import { DemandTabs } from '../components/DemandTabs';
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
+import { EmptyFilter, FilterBar } from '../components/FilterBar';
 import { colors } from '../theme';
 import { ServiceOrder } from '../types';
 
@@ -55,10 +56,10 @@ export function ServicesScreen() {
   const [items, setItems] = useState<ServiceOrder[]>([]);
   const [loading, setLoading] = useState(false);
 
-  async function load(nextStatus = status) {
+  async function load() {
     setLoading(true);
     try {
-      setItems(await api.services(nextStatus === 'TODOS' ? undefined : nextStatus));
+      setItems(await api.services());
     } finally {
       setLoading(false);
     }
@@ -67,15 +68,21 @@ export function ServicesScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [status])
+    }, [])
   );
 
+  const options = useMemo(
+    () => filters.map((filter) => ({ key: filter.key, label: filter.label, count: filter.key === 'TODOS' ? items.length : items.filter((item) => item.status === filter.key).length })),
+    [items]
+  );
+  const visible = status === 'TODOS' ? items : items.filter((item) => item.status === status);
+
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView role="main" style={styles.screen} contentContainerStyle={styles.content}>
       <SoftBackdrop compact />
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Serviços</Text>
+          <Text role="heading" style={styles.title}>Serviços</Text>
           <Text style={styles.subtitle}>Manutenções e melhorias</Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Atualizar serviços" onPress={() => load()} style={styles.refreshButton}>
@@ -96,22 +103,14 @@ export function ServicesScreen() {
         </Pressable>
       ) : null}
 
-      <View style={styles.filterGrid}>
-        {filters.map((filter) => (
-          <FilterButton
-            key={filter.key}
-            filterKey={filter.key}
-            label={filter.label}
-            icon={filter.icon}
-            selected={filter.key === status}
-            onPress={() => setStatus(filter.key)}
-          />
-        ))}
-      </View>
+      <FilterBar label="Situação do serviço" options={options} value={status} onChange={setStatus} />
 
       <View style={styles.list}>
+        {items.length > 0 && visible.length === 0 ? (
+          <EmptyFilter message="Nenhum serviço nesta situação." onClear={() => setStatus('TODOS')} />
+        ) : null}
         {items.length > 0 ? (
-          items.map((item) => (
+          visible.map((item) => (
             <ServiceCard
               key={item.id}
               item={item}
@@ -128,27 +127,6 @@ export function ServicesScreen() {
         )}
       </View>
     </ScrollView>
-  );
-}
-
-function FilterButton({
-  filterKey,
-  label,
-  icon: Icon,
-  selected,
-  onPress
-}: {
-  filterKey: string;
-  label: string;
-  icon?: LucideIcon;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.filterButton, filterWidth(filterKey), selected ? styles.filterSelected : null]}>
-      {Icon ? <Icon color={selected ? colors.surface : colors.blue} size={14} /> : null}
-      <Text style={[styles.filterText, selected ? styles.filterTextSelected : null]}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -295,14 +273,14 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     color: colors.muted,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 15,
     fontWeight: '600',
     marginTop: 2
   },
   refreshButton: {
     width: 40,
-    height: 40,
+    height: 44,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
@@ -373,8 +351,8 @@ const styles = StyleSheet.create({
   },
   filterText: {
     color: colors.ink,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '700'
   },
   filterTextSelected: {
@@ -436,8 +414,8 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     color: colors.muted,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '600'
   },
   statusPill: {
@@ -456,8 +434,8 @@ const styles = StyleSheet.create({
     borderRadius: 999
   },
   statusText: {
-    fontSize: 10,
-    lineHeight: 13,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '800'
   },
   noVotePill: {
@@ -470,8 +448,8 @@ const styles = StyleSheet.create({
   },
   noVoteText: {
     color: colors.amber,
-    fontSize: 10,
-    lineHeight: 13,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '800'
   },
   serviceDivider: {
@@ -496,13 +474,13 @@ const styles = StyleSheet.create({
   },
   metaLabel: {
     color: colors.muted,
-    fontSize: 9,
-    lineHeight: 12,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '600'
   },
   metaValue: {
     color: colors.ink,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 15,
     fontWeight: '900',
     textAlign: 'center'

@@ -238,7 +238,7 @@ export function ReportProblemScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-    <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={[styles.content, compact ? styles.contentCompact : null]} keyboardShouldPersistTaps="handled">
+    <ScrollView role="main" ref={scrollRef} style={styles.screen} contentContainerStyle={[styles.content, compact ? styles.contentCompact : null]} keyboardShouldPersistTaps="handled">
       <SoftBackdrop />
       {compact ? null : <PortalBrandHeader compact={compact} />}
 
@@ -248,7 +248,7 @@ export function ReportProblemScreen() {
             <ArrowLeft color={colors.muted} size={compact ? 22 : 28} />
           </Pressable>
           <View style={styles.formHeaderCopy}>
-            <Text style={[styles.title, compact ? styles.titleCompact : null]}>{isEditing ? 'Editar problema' : 'Relatar problema'}</Text>
+            <Text role="heading" style={[styles.title, compact ? styles.titleCompact : null]}>{isEditing ? 'Editar problema' : 'Relatar problema'}</Text>
             <Text style={[styles.subtitle, compact ? styles.subtitleCompact : null]}>
               {isEditing ? 'Atualize status, prioridade e detalhes para acompanhamento.' : 'Descreva o problema encontrado para a administração analisar.'}
             </Text>
@@ -828,7 +828,7 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   chipTextCompact: {
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 15
   },
   textareaFrame: {

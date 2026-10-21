@@ -402,14 +402,14 @@ export function BudgetFormScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView role="main" ref={scrollRef} style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <SoftBackdrop compact />
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={cancel} style={styles.backButton}>
             <ArrowLeft color={colors.ink} size={20} />
           </Pressable>
           <View style={styles.headerCopy}>
-            <Text style={styles.title}>{isEditing ? 'Editar orçamento' : 'Novo orçamento'}</Text>
+            <Text role="heading" style={styles.title}>{isEditing ? 'Editar orçamento' : 'Novo orçamento'}</Text>
             <Text style={styles.subtitle}>{isEditing ? `Orçamento #${budgetId}` : 'Cotação de fornecedor'}</Text>
           </View>
         </View>
@@ -824,7 +824,7 @@ const styles = StyleSheet.create({
   },
   statusChoiceText: {
     color: colors.muted,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '900',
     textAlign: 'center',
     textTransform: 'uppercase'

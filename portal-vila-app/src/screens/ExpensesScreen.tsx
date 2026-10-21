@@ -4,6 +4,7 @@ import { Alert } from '../utils/alert';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { CheckCircle2, Eye, FileText, Plus, ReceiptText, RefreshCw, Trash2, Upload, WalletCards } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
+import { EmptyFilter, FilterBar, FilterOption } from '../components/FilterBar';
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
@@ -20,6 +21,14 @@ const EXPENSE_CATEGORIES = ['Energia', 'Água', 'Limpeza', 'Manutenção', 'Segu
 /** Routine bills that never need a vote (the same list the server uses). */
 const ROUTINE_CATEGORIES = ['Energia', 'Água', 'Taxas'];
 const MIN_REASON_LETTERS = 20;
+
+type ExpenseFilter = 'TODAS' | 'SEM_COMPROVANTE' | 'SEM_VOTACAO';
+
+/** Money that did not go through a voted budget: not tied to one and not a routine bill (energy, water, fees). */
+function isUnvoted(expense: Expense) {
+  const category = (expense.category ?? '').toLowerCase();
+  return !expense.budgetId && !ROUTINE_CATEGORIES.some((name) => name.toLowerCase() === category);
+}
 
 const documentTypeLabels: Record<DocumentType, string> = {
   RECIBO: 'Recibo',
@@ -46,6 +55,7 @@ export function ExpensesScreen() {
   // Largest expense that can be typed in without a voted budget (null: the rule is off).
   const [limit, setLimit] = useState<number | null>(null);
   const [exceptionReason, setExceptionReason] = useState('');
+  const [filter, setFilter] = useState<ExpenseFilter>('TODAS');
 
   const documentsById = useMemo(() => {
     return documents.reduce<Record<number, PortalDocument>>((acc, item) => {
@@ -55,6 +65,20 @@ export function ExpensesScreen() {
       return acc;
     }, {});
   }, [documents]);
+
+  const filterOptions = useMemo<Array<FilterOption<ExpenseFilter>>>(
+    () => [
+      { key: 'TODAS', label: 'Todas', count: items.length },
+      { key: 'SEM_COMPROVANTE', label: 'Sem comprovante', count: items.filter((item) => !item.documentId).length },
+      { key: 'SEM_VOTACAO', label: 'Sem votação', count: items.filter(isUnvoted).length }
+    ],
+    [items]
+  );
+  const visibleItems = useMemo(
+    () =>
+      filter === 'SEM_COMPROVANTE' ? items.filter((item) => !item.documentId) : filter === 'SEM_VOTACAO' ? items.filter(isUnvoted) : items,
+    [items, filter]
+  );
 
   const load = useCallback(async () => {
     const [expenseList, documentList, settings] = await Promise.all([api.expenses(), api.documents(), api.settings().catch(() => null)]);
@@ -220,11 +244,11 @@ export function ExpensesScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView role="main" style={styles.screen} contentContainerStyle={styles.content}>
       <SoftBackdrop compact />
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Despesas</Text>
+          <Text role="heading" style={styles.title}>Despesas</Text>
           <Text style={styles.subtitle}>Saídas da caixinha</Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Atualizar despesas" onPress={load} style={styles.refreshButton}>
@@ -357,7 +381,12 @@ export function ExpensesScreen() {
         </View>
       ) : null}
 
-      {items.map((item) => {
+      {items.length > 0 ? <FilterBar label="Filtro das despesas" options={filterOptions} value={filter} onChange={setFilter} /> : null}
+      {items.length > 0 && visibleItems.length === 0 ? (
+        <EmptyFilter message="Nenhuma despesa neste filtro." onClear={() => setFilter('TODAS')} />
+      ) : null}
+
+      {visibleItems.map((item) => {
         const portalDocument = item.documentId ? documentsById[item.documentId] : undefined;
         return (
           <View key={item.id} style={styles.expenseCard}>
@@ -543,7 +572,7 @@ const styles = StyleSheet.create({
   },
   refreshButton: {
     width: 42,
-    height: 42,
+    height: 44,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
@@ -609,7 +638,7 @@ const styles = StyleSheet.create({
     fontWeight: '900'
   },
   inputFrame: {
-    minHeight: 42,
+    minHeight: 44,
     borderWidth: 1,
     borderColor: '#C9D6E8',
     borderRadius: 7,
@@ -631,7 +660,7 @@ const styles = StyleSheet.create({
   },
   fieldHint: {
     color: colors.muted,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 15,
     fontWeight: '600'
   },
@@ -688,7 +717,7 @@ const styles = StyleSheet.create({
   },
   choiceButton: {
     flex: 1,
-    minHeight: 36,
+    minHeight: 44,
     borderRadius: 7,
     borderWidth: 1,
     borderColor: colors.border,
@@ -722,7 +751,7 @@ const styles = StyleSheet.create({
     gap: 7
   },
   documentActionButton: {
-    minHeight: 38,
+    minHeight: 44,
     borderRadius: 7,
     borderWidth: 1,
     borderColor: colors.blue,
@@ -746,7 +775,7 @@ const styles = StyleSheet.create({
     color: colors.red
   },
   primaryButton: {
-    minHeight: 42,
+    minHeight: 44,
     borderRadius: 7,
     backgroundColor: colors.blue,
     alignItems: 'center',
@@ -834,7 +863,7 @@ const styles = StyleSheet.create({
     fontWeight: '900'
   },
   documentLinkButton: {
-    minHeight: 36,
+    minHeight: 44,
     borderRadius: 7,
     borderWidth: 1,
     borderColor: colors.border,
@@ -863,7 +892,7 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   },
   closeFormButton: {
-    minHeight: 40,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -886,7 +915,7 @@ const styles = StyleSheet.create({
     gap: 8
   },
   categoryChip: {
-    minHeight: 34,
+    minHeight: 44,
     borderRadius: 17,
     borderWidth: 1,
     borderColor: colors.border,

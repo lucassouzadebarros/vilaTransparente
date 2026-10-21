@@ -145,14 +145,14 @@ export function FinishServiceScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView role="main" style={styles.screen} contentContainerStyle={styles.content}>
       <SoftBackdrop compact />
       <View style={styles.header}>
         <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={() => navigation.goBack()} style={styles.backButton}>
           <ArrowLeft color={colors.blue} size={22} strokeWidth={2.6} />
         </Pressable>
         <View style={styles.headerCopy}>
-          <Text style={styles.title}>Finalizar serviço</Text>
+          <Text role="heading" style={styles.title}>Finalizar serviço</Text>
           <Text style={styles.subtitle}>Pagamento, nota fiscal e despesa</Text>
         </View>
       </View>
@@ -512,7 +512,7 @@ const styles = StyleSheet.create({
     gap: 8
   },
   documentActionButton: {
-    minHeight: 40,
+    minHeight: 44,
     borderRadius: 7,
     borderWidth: 1,
     borderColor: colors.blue,

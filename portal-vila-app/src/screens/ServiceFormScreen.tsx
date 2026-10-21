@@ -413,14 +413,14 @@ Local: ${found.location}.` : found.description);
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView role="main" ref={scrollRef} style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <SoftBackdrop compact />
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={cancel} style={styles.backButton}>
             <ArrowLeft color={colors.ink} size={20} />
           </Pressable>
           <View style={styles.headerCopy}>
-            <Text style={styles.title}>{isEditing ? 'Editar serviço' : 'Novo serviço'}</Text>
+            <Text role="heading" style={styles.title}>{isEditing ? 'Editar serviço' : 'Novo serviço'}</Text>
             <Text style={styles.subtitle}>{isEditing ? `Serviço #${serviceId}` : 'Cadastro operacional'}</Text>
           </View>
         </View>
@@ -992,7 +992,7 @@ const styles = StyleSheet.create({
   },
   selectedText: {
     color: colors.blue,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '900'
   },
   budgetRight: {

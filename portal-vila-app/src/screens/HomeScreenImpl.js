@@ -115,12 +115,12 @@ export function HomeScreen() {
   const transparencyUnlocked = isAdmin || dashboard?.transparencyEnabled === true || hasPaidContribution || hasVisibleFinancialData;
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView role="main" style={styles.screen} contentContainerStyle={styles.content}>
       <SoftBackdrop compact />
 
       <View style={styles.topBar}>
         <View style={styles.topSpacer} />
-        <Text style={styles.screenTitle}>Início</Text>
+        <Text role="heading" style={styles.screenTitle}>Início</Text>
         <Pressable accessibilityLabel="Atualizar início" style={styles.headerIcon} onPress={load} disabled={refreshing}>
           {isAdmin ? <RefreshCw color={refreshing ? colors.muted : colors.ink} size={18} /> : <Bell color={colors.ink} size={21} />}
         </Pressable>
@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
   },
   headerIcon: {
     width: 40,
-    height: 40,
+    height: 44,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center'
@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
     elevation: 4
   },
   logoutMenuItem: {
-    minHeight: 38,
+    minHeight: 44,
     borderRadius: 8,
     paddingHorizontal: spacing.sm,
     flexDirection: 'row',
@@ -635,7 +635,7 @@ const styles = StyleSheet.create({
     fontWeight: '900'
   },
   primaryAction: {
-    minHeight: 39,
+    minHeight: 44,
     borderRadius: 8,
     backgroundColor: colors.blue,
     alignItems: 'center',
@@ -670,8 +670,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.redSoft
   },
   statusText: {
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '900'
   },
   statusTextPaid: {
@@ -718,8 +718,8 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     color: colors.ink,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '900',
     textAlign: 'center'
   },
@@ -732,8 +732,8 @@ const styles = StyleSheet.create({
   },
   metricCaption: {
     color: colors.muted,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '800',
     textAlign: 'center'
   },
@@ -842,8 +842,8 @@ const styles = StyleSheet.create({
   },
   shortcutStatus: {
     color: colors.blue,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '900',
     marginTop: 2
   },

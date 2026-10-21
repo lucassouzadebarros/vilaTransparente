@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, TextStyle, View, ViewStyle } from 'react-native';
 import { LucideIcon } from 'lucide-react-native';
-import { colors, spacing } from '../theme';
+import { colors, spacing, TOUCH_TARGET } from '../theme';
 import { SoftBackdrop } from './SoftBackdrop';
 
 type ScreenProps = {
@@ -13,12 +13,12 @@ type ScreenProps = {
 
 export function Screen({ children, title, subtitle, right }: ScreenProps) {
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
+    <ScrollView role="main" style={styles.screen} contentContainerStyle={styles.screenContent}>
       <SoftBackdrop compact />
       {(title || right) && (
         <View style={styles.header}>
           <View style={styles.headerText}>
-            {title ? <Text style={styles.title}>{title}</Text> : null}
+            {title ? <Text role="heading" {...HEADING_LEVEL_1} style={styles.title}>{title}</Text> : null}
             {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
           </View>
           {right}
@@ -43,6 +43,19 @@ export function Stack({ children, gap = spacing.md }: { children: ReactNode; gap
 
 export function Label({ children }: { children: ReactNode }) {
   return <Text style={styles.label}>{children}</Text>;
+}
+
+// `aria-level` is read by the web build to pick h1..h6; React Native's types do not list it.
+const HEADING_LEVEL_1 = { 'aria-level': 1 } as object;
+const HEADING_LEVEL_2 = { 'aria-level': 2 } as object;
+
+/** A section title inside a screen. Same look as <Value>, but screen readers can jump between sections. */
+export function SectionTitle({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
+  return (
+    <Text role="heading" {...HEADING_LEVEL_2} style={[styles.value, style]}>
+      {children}
+    </Text>
+  );
 }
 
 export function Value({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
@@ -73,6 +86,7 @@ export function Badge({ status }: { status: string }) {
     .replace('INACTIVE', 'INATIVO')
     .replace('ACTIVE', 'ATIVO')
     .replace('PAID', 'PAGO')
+    .replace('CANCELLED', 'CANCELADO')
     .replace('PENDING', 'PENDENTE')
     .replace('OVERDUE', 'VENCIDA')
     .replace('VOTACAO', 'VOTAÇÃO')
@@ -90,21 +104,25 @@ type ButtonProps = {
   icon?: LucideIcon;
   variant?: 'primary' | 'ghost' | 'danger';
   disabled?: boolean;
+  /** Name read by screen readers. Only needed for icon-only buttons; those default to "Atualizar". */
+  accessibilityLabel?: string;
 };
 
-export function Button({ title, onPress, icon: Icon, variant = 'primary', disabled }: ButtonProps) {
+export function Button({ title, onPress, icon: Icon, variant = 'primary', disabled, accessibilityLabel }: ButtonProps) {
   const bg = variant === 'danger' ? colors.red : variant === 'ghost' ? 'transparent' : colors.blue;
   const fg = variant === 'ghost' ? colors.blue : colors.surface;
   const iconOnly = !title;
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? (iconOnly ? 'Atualizar' : undefined)}
+      accessibilityState={disabled ? { disabled: true } : undefined}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
         iconOnly ? styles.buttonIconOnly : null,
-        { backgroundColor: bg, opacity: disabled ? 0.5 : pressed ? 0.82 : 1, borderColor: variant === 'ghost' ? colors.border : bg }
+        { backgroundColor: bg, opacity: disabled ? 0.5 : pressed ? 0.82 : 1, borderColor: variant === 'ghost' ? colors.borderStrong : bg }
       ]}
     >
       {Icon ? <Icon color={fg} size={iconOnly ? 18 : 16} /> : null}
@@ -151,6 +169,9 @@ export function Field({
       <Text style={styles.fieldLabel}>{label}</Text>
       <View style={[styles.inputFrame, errorText ? styles.inputFrameError : null, multiline ? styles.inputFrameMultiline : null]}>
         <TextInput
+          accessibilityLabel={label}
+          accessibilityHint={errorText ?? helpText}
+          {...(errorText ? ({ 'aria-invalid': true } as object) : null)}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -268,11 +289,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm
   },
   badgeText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800'
   },
   button: {
-    minHeight: 41,
+    minHeight: TOUCH_TARGET,
     borderRadius: 8,
     borderWidth: 1,
     paddingHorizontal: spacing.md,
@@ -282,8 +303,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm
   },
   buttonIconOnly: {
-    width: 42,
-    minHeight: 42,
+    width: TOUCH_TARGET,
+    minHeight: TOUCH_TARGET,
     paddingHorizontal: 0
   },
   buttonText: {
@@ -292,11 +313,11 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   },
   iconButton: {
-    width: 40,
-    height: 40,
+    width: TOUCH_TARGET,
+    height: TOUCH_TARGET,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center'
@@ -311,9 +332,9 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   },
   inputFrame: {
-    minHeight: 42,
+    minHeight: TOUCH_TARGET,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
     backgroundColor: colors.surface,
     borderRadius: 8,
     flexDirection: 'row',
@@ -340,20 +361,20 @@ const styles = StyleSheet.create({
   },
   inputAction: {
     minWidth: 40,
-    height: 40,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingRight: spacing.xs
   },
   fieldError: {
     color: colors.red,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 16,
     fontWeight: '700'
   },
   fieldHelp: {
     color: colors.muted,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 16
   },
   empty: {
