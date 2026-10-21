@@ -4,6 +4,26 @@ import { EmptyFilter, FilterBar } from '../components/FilterBar';
 import { Badge, Button, Card, EmptyState, Label, Row, Screen, Value } from '../components/ui';
 import { api } from '../services/api';
 import { WebhookEvent } from '../types';
+import { formatDateTimeBR } from '../utils/format';
+
+/** What Asaas calls each event, in plain words. */
+const eventNames: Record<string, string> = {
+  PAYMENT_CREATED: 'Cobrança criada',
+  PAYMENT_UPDATED: 'Cobrança atualizada',
+  PAYMENT_CONFIRMED: 'Pagamento confirmado',
+  PAYMENT_RECEIVED: 'Pagamento recebido',
+  PAYMENT_OVERDUE: 'Cobrança vencida',
+  PAYMENT_DELETED: 'Cobrança removida',
+  PAYMENT_REFUNDED: 'Pagamento estornado'
+};
+
+function eventName(code: string) {
+  if (eventNames[code]) {
+    return eventNames[code];
+  }
+  const text = code.replace(/_/g, ' ').toLowerCase();
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 
 export function WebhookEventsScreen() {
   const [events, setEvents] = useState<WebhookEvent[]>([]);
@@ -41,14 +61,13 @@ export function WebhookEventsScreen() {
       {visible.map((event) => (
         <Card key={event.id}>
           <Row>
-            <Value>{event.eventType}</Value>
+            <Value>{eventName(event.eventType)}</Value>
             <Badge status={event.processed ? 'PROCESSADO' : 'ERRO'} />
           </Row>
-          <Row>
-            <Label>Pagamento</Label>
-            <Value>{event.gatewayPaymentId ?? '-'}</Value>
-          </Row>
-          <Label>{event.createdAt}</Label>
+          <Label>
+            {formatDateTimeBR(event.createdAt)}
+            {event.gatewayPaymentId ? ` · Pagamento ${event.gatewayPaymentId}` : ''}
+          </Label>
           {event.errorMessage ? <Label>{event.errorMessage}</Label> : null}
         </Card>
       ))}

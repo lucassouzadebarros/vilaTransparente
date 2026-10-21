@@ -841,15 +841,17 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   documentActions: {
-    gap: spacing.sm
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8
   },
   documentActionButton: {
     minHeight: 44,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
