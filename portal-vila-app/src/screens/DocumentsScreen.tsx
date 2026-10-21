@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, RefreshCw } from 'lucide-react-native';
 import { EmptyFilter, FilterBar, FilterOption } from '../components/FilterBar';
-import { Button, Card, EmptyState, Label, Row, Screen, Value } from '../components/ui';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Button, EmptyState, Screen } from '../components/ui';
+import { colors, spacing } from '../theme';
 import { api } from '../services/api';
 import { PortalDocument } from '../types';
 import { Alert } from '../utils/alert';
@@ -38,20 +40,59 @@ export function DocumentsScreen() {
       {loaded && items.length === 0 ? <EmptyState title="Nenhum documento cadastrado." /> : null}
       {items.length > 0 && visible.length === 0 ? <EmptyFilter message="Nenhum documento deste tipo." onClear={() => setFilter('TODOS')} /> : null}
       {visible.map((item) => (
-        <Card key={item.id}>
-          <Row>
-            <Value>{item.name}</Value>
-            <Label>{documentTypeLabel(item.type)}</Label>
-          </Row>
-          {item.description ? <Label>{item.description}</Label> : null}
-          <Button
-            title="Abrir"
-            icon={ExternalLink}
-            variant="ghost"
-            onPress={() => api.openDocument(item.url).catch(() => Alert.alert('Documento', 'Não foi possível abrir o documento.'))}
-          />
-        </Card>
+        <Pressable
+          key={item.id}
+          accessibilityRole="link"
+          accessibilityLabel={`Abrir ${item.name}, ${documentTypeLabel(item.type)}`}
+          onPress={() => api.openDocument(item.url).catch(() => Alert.alert('Documento', 'Não foi possível abrir o documento.'))}
+          style={({ pressed }) => [styles.card, pressed ? styles.cardPressed : null]}
+        >
+          <View style={styles.copy}>
+            <Text style={styles.name}>{item.name}</Text>
+            <Text style={styles.type}>{documentTypeLabel(item.type)}</Text>
+            {item.description ? <Text style={styles.description}>{item.description}</Text> : null}
+          </View>
+          <ExternalLink color={colors.muted} size={18} />
+        </Pressable>
       ))}
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md
+  },
+  cardPressed: {
+    backgroundColor: colors.blueSoft
+  },
+  copy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2
+  },
+  name: {
+    color: colors.ink,
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '600'
+  },
+  type: {
+    color: colors.blue,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600'
+  },
+  description: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18
+  }
+});

@@ -9,8 +9,10 @@ import { LoginScreen } from './src/screens/LoginScreen';
 import { colors } from './src/theme';
 import { useWideLayout } from './src/utils/layout';
 import { setupWebAccessibility } from './src/utils/webAccessibility';
+import { setupWebFont } from './src/utils/webFont';
 
 setupWebAccessibility();
+setupWebFont();
 
 function Entry() {
   const { session } = useAuth();

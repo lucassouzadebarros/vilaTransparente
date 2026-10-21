@@ -1002,17 +1002,15 @@ const styles = StyleSheet.create({
   documentActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm
+    gap: 8
   },
   documentActionButton: {
-    flex: 1,
-    minWidth: 132,
     minHeight: 44,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

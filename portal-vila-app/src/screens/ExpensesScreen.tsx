@@ -747,22 +747,24 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   documentActions: {
-    gap: 7
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8
   },
   documentActionButton: {
     minHeight: 44,
-    borderRadius: 7,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.blue,
+    borderColor: colors.border,
     backgroundColor: colors.surface,
-    paddingHorizontal: 10,
+    paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 8
   },
   documentActionButtonDanger: {
-    borderColor: colors.red
+    borderColor: '#F0C4BF'
   },
   documentActionText: {
     color: colors.blue,
