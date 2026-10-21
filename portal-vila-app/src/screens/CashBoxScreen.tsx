@@ -356,15 +356,15 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: colors.border },
   segmented: {
     flexDirection: 'row',
-    backgroundColor: colors.blueSoft,
+    backgroundColor: '#E8EBE9',
     borderRadius: 10,
-    padding: 4,
-    gap: 4
+    padding: 3,
+    gap: 2
   },
-  segment: { flex: 1, minHeight: 44, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  segmentActive: { backgroundColor: colors.blue },
-  segmentText: { color: colors.blue, fontSize: 13, fontWeight: '700' },
-  segmentTextActive: { color: colors.surface, fontWeight: '700' },
+  segment: { flex: 1, minHeight: 40, borderRadius: 8, borderWidth: 1, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  segmentActive: { backgroundColor: colors.surface, borderColor: colors.border },
+  segmentText: { color: colors.muted, fontSize: 14, fontWeight: '600' },
+  segmentTextActive: { color: colors.ink, fontWeight: '700' },
   entry: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md, paddingVertical: 6 },
   entryText: { flex: 1, minWidth: 0, gap: 2 },
   entryTitle: { color: colors.ink, fontSize: 15, fontWeight: '700' },

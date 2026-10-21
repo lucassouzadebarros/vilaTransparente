@@ -110,6 +110,15 @@ const menuItems: MenuItem[] = [
   }
 ];
 
+/** The menu is read in groups, so a long list does not have to be scanned from top to bottom. */
+const menuGroups: Array<{ title: string; routes: string[] }> = [
+  { title: 'Financeiro', routes: ['Contributions', 'Expenses', 'Reports', 'AdminPixCharges'] },
+  { title: 'Demandas', routes: ['ProblemReports', 'Budgets'] },
+  { title: 'Moradores', routes: ['Residents', 'ReleaseHouse'] },
+  { title: 'Administração', routes: ['Settings', 'AuditLog', 'WebhookEvents'] },
+  { title: 'Minha conta', routes: ['ChangePassword'] }
+];
+
 export function MoreScreen() {
   const navigation = useNavigation<any>();
   const { isAdmin } = useAuth();
@@ -125,18 +134,33 @@ export function MoreScreen() {
           <Text role="heading" style={[styles.title, compact ? styles.titleCompact : null]}>Menu</Text>
           <Text style={[styles.subtitle, compact ? styles.subtitleCompact : null]}>Acesse as principais funcionalidades do sistema.</Text>
         </View>
-        <View style={styles.list}>
-          {visibleItems.map((item, index) => (
-            <MenuRow
-              key={item.route}
-              item={item}
-              first={index === 0}
-              last={index === visibleItems.length - 1}
-              compact={compact}
-              onPress={() => navigation.navigate(item.route)}
-            />
-          ))}
-        </View>
+        {menuGroups.map((group) => {
+          const items = group.routes
+            .map((route) => visibleItems.find((item) => item.route === route))
+            .filter((item): item is MenuItem => Boolean(item));
+          if (items.length === 0) {
+            return null;
+          }
+          return (
+            <View key={group.title} style={styles.group}>
+              <Text role="heading" aria-level={2} style={styles.groupTitle}>
+                {group.title}
+              </Text>
+              <View style={styles.list}>
+                {items.map((item, index) => (
+                  <MenuRow
+                    key={item.route}
+                    item={item}
+                    first={index === 0}
+                    last={index === items.length - 1}
+                    compact={compact}
+                    onPress={() => navigation.navigate(item.route)}
+                  />
+                ))}
+              </View>
+            </View>
+          );
+        })}
       </View>
     </ScrollView>
   );
@@ -198,16 +222,12 @@ const styles = StyleSheet.create({
     position: 'relative'
   },
   contentCompact: {
-    paddingHorizontal: 10,
-    paddingTop: 12
+    paddingHorizontal: 16,
+    paddingTop: 24
   },
   menuCard: {
     width: '100%',
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 30,
+    padding: 0,
     gap: 24,
     shadowColor: '#16202A',
     shadowOpacity: 0,
@@ -217,42 +237,42 @@ const styles = StyleSheet.create({
     zIndex: 1
   },
   menuCardCompact: {
-    padding: 12,
-    gap: 12
+    padding: 0,
+    gap: 20
   },
   header: {
     gap: spacing.xs
   },
   title: {
     color: colors.ink,
-    fontSize: 31,
-    lineHeight: 38,
+    fontSize: 26,
+    lineHeight: 32,
     fontWeight: '700',
     letterSpacing: 0
   },
   titleCompact: {
-    fontSize: 30,
-    lineHeight: 36
+    fontSize: 26,
+    lineHeight: 32
   },
   subtitle: {
     color: colors.muted,
-    fontSize: 18,
-    lineHeight: 26,
-    fontWeight: '600'
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500'
   },
   subtitleCompact: {
-    fontSize: 15,
-    lineHeight: 21
+    fontSize: 14,
+    lineHeight: 20
   },
   list: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: colors.surface
   },
   menuRow: {
-    minHeight: 102,
+    minHeight: 72,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     backgroundColor: colors.surface,
@@ -276,6 +296,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
     borderBottomLeftRadius: 8,
     borderBottomRightRadius: 8
+  },
+  group: {
+    gap: 8
+  },
+  groupTitle: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    paddingHorizontal: 4
   },
   rowPressed: {
     backgroundColor: colors.blueSoft
