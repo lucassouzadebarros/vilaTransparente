@@ -542,7 +542,7 @@ const styles = StyleSheet.create({
   },
   content: {
     width: '100%',
-    maxWidth: 430,
+    maxWidth: 760,
     alignSelf: 'center',
     paddingHorizontal: 14,
     paddingTop: 16,
