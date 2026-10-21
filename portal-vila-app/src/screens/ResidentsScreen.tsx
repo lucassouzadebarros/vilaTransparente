@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../utils/alert';
 import { Edit3, KeyRound, Plus, RefreshCw, Save, ShieldCheck, UserMinus, X } from 'lucide-react-native';
 import { EmptyFilter, FilterBar, FilterOption } from '../components/FilterBar';
-import { Badge, Button, Card, Field, Label, Row, Screen, Stack, Value } from '../components/ui';
+import { Badge, Button, Card, Field, Label, Row, Screen, Stack, Value, Facts } from '../components/ui';
 import { api, apiErrorMessage } from '../services/api';
 import { Resident, Sindico } from '../types';
 import { colors, spacing } from '../theme';
@@ -320,48 +320,46 @@ export function ResidentsScreen() {
             </Stack>
           ) : (
             <Stack>
-              <Label>{item.email}</Label>
-              <Label>{item.phone}</Label>
-              <Label>
-                {item.documentRegistered
-                  ? `CPF/CNPJ cadastrado (${item.documentMasked ?? 'documento protegido'})`
-                  : 'CPF/CNPJ pendente'}
-              </Label>
-              <Label>
-                {item.gatewayCustomerId
-                  ? `Cliente sincronizado (${item.gatewayCustomerId})`
-                  : 'Cliente ainda não sincronizado'}
-              </Label>
+              <Facts
+                items={[
+                  { label: 'E-mail', value: item.email || '-' },
+                  { label: 'Telefone', value: item.phone || '-' },
+                  { label: 'CPF/CNPJ', value: item.documentRegistered ? (item.documentMasked ?? 'Cadastrado') : 'Pendente' },
+                  { label: 'Cadastro no Asaas', value: item.gatewayCustomerId ? 'Sincronizado' : 'Ainda não sincronizado' }
+                ]}
+              />
               {message && message.residentId === item.id ? <Label>{message.text}</Label> : null}
-              <Button
-                title="Editar dados"
-                icon={Edit3}
-                variant="ghost"
-                onPress={() => startEdit(item)}
-              />
-              <Button
-                title={resettingPasswordId === item.id ? 'Enviando...' : 'Enviar senha temporária'}
-                icon={KeyRound}
-                variant="ghost"
-                onPress={() => confirmPasswordReset(item)}
-                disabled={resettingPasswordId === item.id || item.status !== 'ACTIVE'}
-              />
-              <Button
-                title={syncingId === item.id ? 'Sincronizando...' : 'Sincronizar cadastro'}
-                icon={RefreshCw}
-                variant="ghost"
-                onPress={() => syncAsaas(item)}
-                disabled={syncingId === item.id || saving || !item.documentRegistered}
-              />
-              {item.status === 'ACTIVE' && sindico?.residentId !== item.id ? (
+              <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
                 <Button
-                  title={savingSindico ? 'Salvando...' : 'Definir como síndico'}
-                  icon={ShieldCheck}
+                  title="Editar dados"
+                  icon={Edit3}
                   variant="ghost"
-                  onPress={() => chooseSindico(item)}
-                  disabled={savingSindico}
+                  onPress={() => startEdit(item)}
                 />
-              ) : null}
+                <Button
+                  title={resettingPasswordId === item.id ? 'Enviando...' : 'Enviar senha temporária'}
+                  icon={KeyRound}
+                  variant="ghost"
+                  onPress={() => confirmPasswordReset(item)}
+                  disabled={resettingPasswordId === item.id || item.status !== 'ACTIVE'}
+                />
+                <Button
+                  title={syncingId === item.id ? 'Sincronizando...' : 'Sincronizar cadastro'}
+                  icon={RefreshCw}
+                  variant="ghost"
+                  onPress={() => syncAsaas(item)}
+                  disabled={syncingId === item.id || saving || !item.documentRegistered}
+                />
+                {item.status === 'ACTIVE' && sindico?.residentId !== item.id ? (
+                  <Button
+                    title={savingSindico ? 'Salvando...' : 'Definir como síndico'}
+                    icon={ShieldCheck}
+                    variant="ghost"
+                    onPress={() => chooseSindico(item)}
+                    disabled={savingSindico}
+                  />
+                ) : null}
+              </Row>
             </Stack>
           )}
         </Card>

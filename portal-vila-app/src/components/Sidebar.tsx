@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRightWidth: 1,
     borderRightColor: colors.border,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.lg,
     paddingHorizontal: spacing.md
   },
@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.sm,
-    paddingBottom: spacing.lg
+    paddingBottom: spacing.md
   },
   brandText: {
     color: colors.ink,
@@ -173,8 +173,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2
   },
   list: {
-    gap: spacing.lg,
-    paddingBottom: spacing.lg
+    gap: spacing.md,
+    paddingBottom: spacing.md
   },
   section: {
     gap: 2
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     paddingBottom: 4
   },
   item: {
-    minHeight: TOUCH_TARGET - 4,
+    minHeight: 36,
     borderRadius: radius.control,
     paddingHorizontal: spacing.sm,
     flexDirection: 'row',

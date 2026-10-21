@@ -1,5 +1,5 @@
 import { StyleSheet, View } from 'react-native';
-import { Copy, Eye, Home, RefreshCw, XCircle } from 'lucide-react-native';
+import { Copy, Eye, RefreshCw, XCircle } from 'lucide-react-native';
 import { Badge, Button, Card, IconButton, Label, Money, Row, Value } from '../ui';
 import { PixCharge } from '../../types';
 import { formatDateBR } from '../../utils/format';
@@ -21,9 +21,6 @@ export function PixChargeCard({
   return (
     <Card>
       <View style={styles.header}>
-        <View style={styles.iconBox}>
-          <Home color={colors.blue} size={22} />
-        </View>
         <View style={styles.info}>
           <Row>
             <Value>{charge.houseLabel}</Value>
