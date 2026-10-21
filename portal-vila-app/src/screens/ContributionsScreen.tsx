@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { CheckCircle2, QrCode, RefreshCw } from 'lucide-react-native';
 import { EmptyFilter, FilterBar, FilterOption } from '../components/FilterBar';
 import { Badge, Button, Card, EmptyState, Label, Money, Row, Screen, Value } from '../components/ui';
+import { StyleSheet, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { Contribution } from '../types';
@@ -83,22 +84,44 @@ export function ContributionsScreen() {
       {visible.map((item) => (
         <Card key={item.id}>
           <Row>
-            <Value>{item.houseLabel}</Value>
-            <Badge status={item.status} />
+            <View style={styles.who}>
+              <Value>{item.houseLabel}</Value>
+              <Label>{item.residentName}</Label>
+            </View>
+            <View style={styles.amount}>
+              <Money value={item.amount} />
+              <Badge status={item.status} />
+            </View>
           </Row>
-          <Label>{item.residentName}</Label>
-          <Money value={item.amount} />
-          <Button
+          <Row style={styles.actions}>
+            <Button
               title={item.pixChargeId ? 'Ver Pix' : 'Pix não gerado'}
-            icon={QrCode}
-            onPress={() => item.pixChargeId ? navigation.navigate('PixPayment', { id: item.pixChargeId }) : undefined}
-            disabled={!item.pixChargeId}
-          />
-          {isAdmin && item.status !== 'PAID' && item.status !== 'CANCELLED' ? (
-            <Button title="Marcar pago" icon={CheckCircle2} variant="ghost" onPress={() => manualPayment(item)} />
-          ) : null}
+              icon={QrCode}
+              variant={item.status === 'PAID' ? 'ghost' : 'primary'}
+              onPress={() => item.pixChargeId ? navigation.navigate('PixPayment', { id: item.pixChargeId }) : undefined}
+              disabled={!item.pixChargeId}
+            />
+            {isAdmin && item.status !== 'PAID' && item.status !== 'CANCELLED' ? (
+              <Button title="Marcar pago" icon={CheckCircle2} variant="ghost" onPress={() => manualPayment(item)} />
+            ) : null}
+          </Row>
         </Card>
       ))}
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  who: {
+    flex: 1,
+    minWidth: 0
+  },
+  amount: {
+    alignItems: 'flex-end',
+    gap: 4
+  },
+  actions: {
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start'
+  }
+});

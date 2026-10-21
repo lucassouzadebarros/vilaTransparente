@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw, Save } from 'lucide-react-native';
-import { Button, Card, Label, Row, Screen, Value, formatMoney } from '../components/ui';
+import { Button, Card, Label, Row, Screen, Value, formatMoney, Facts } from '../components/ui';
 import { FormField } from '../components/FormField';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
@@ -51,10 +51,14 @@ export function SettingsScreen() {
   return (
     <Screen title="Configurações" subtitle="Parâmetros da vila" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       <Card>
-        <Row><Label>Nome</Label><Value>{settings?.villageName}</Value></Row>
-        <Row><Label>Mensalidade</Label><Value>{formatMoney(settings?.monthlyAmount ?? 0)}</Value></Row>
-        <Row><Label>Vencimento</Label><Value>dia {settings?.paymentDueDay}</Value></Row>
-        <Row><Label>Gateway</Label><Value>{settings?.gatewayProvider}</Value></Row>
+        <Facts
+          items={[
+            { label: 'Nome', value: settings?.villageName ?? '-' },
+            { label: 'Mensalidade', value: formatMoney(settings?.monthlyAmount ?? 0) },
+            { label: 'Vencimento', value: `dia ${settings?.paymentDueDay ?? '-'}` },
+            { label: 'Gateway', value: settings?.gatewayProvider ?? '-' }
+          ]}
+        />
       </Card>
 
       <Card>
