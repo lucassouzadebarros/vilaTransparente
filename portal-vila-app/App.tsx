@@ -7,15 +7,19 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { ChangePasswordScreen } from './src/screens/ChangePasswordScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { colors } from './src/theme';
+import { useWideLayout } from './src/utils/layout';
 import { setupWebAccessibility } from './src/utils/webAccessibility';
 
 setupWebAccessibility();
 
 function Entry() {
   const { session } = useAuth();
+  const wide = useWideLayout();
+  // The side-menu layout is only for a signed-in session; the login stays a narrow card.
+  const useWideFrame = wide && Boolean(session) && !session?.mustChangePassword;
   return (
     <View style={styles.host}>
-      <View style={styles.appFrame}>
+      <View style={[styles.appFrame, useWideFrame ? styles.appFrameWide : null]}>
         <StatusBar style="dark" />
         {session?.mustChangePassword ? <ChangePasswordScreen forced /> : session ? <AppNavigator /> : <LoginScreen />}
         <AlertHost />
@@ -55,5 +59,8 @@ const styles = StyleSheet.create({
           overflow: 'hidden'
         }
       : null)
+  },
+  appFrameWide: {
+    maxWidth: 1280
   }
 });

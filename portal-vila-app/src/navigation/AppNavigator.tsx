@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import { View } from 'react-native';
-import { NavigationContainer, getFocusedRouteNameFromRoute } from '@react-navigation/native';
+import { NavigationContainer, ParamListBase, createNavigationContainerRef, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { BottomTabBar, BottomTabBarProps, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ClipboardList, FileText, Home, MoreHorizontal, WalletCards } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
+import { Sidebar } from '../components/Sidebar';
 import { colors } from '../theme';
+import { useWideLayout } from '../utils/layout';
 import { AdminPixChargesScreen } from '../screens/AdminPixChargesScreen';
 import { AuditLogScreen } from '../screens/AuditLogScreen';
 import { BudgetDetailsScreen } from '../screens/BudgetDetailsScreen';
@@ -123,10 +126,13 @@ function MoreStackNavigator() {
   );
 }
 
-function PortalTabs() {
+const navigationRef = createNavigationContainerRef<ParamListBase>();
+
+function PortalTabs({ wide }: { wide: boolean }) {
   return (
     <Tabs.Navigator
-      tabBar={(props) => <PortalTabBar {...props} />}
+      // On a wide window the side menu replaces the bottom bar.
+      tabBar={(props) => (wide ? null : <PortalTabBar {...props} />)}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.blue,
@@ -182,11 +188,23 @@ function PortalTabs() {
 }
 
 export function AppNavigator() {
+  const wide = useWideLayout();
+  const [current, setCurrent] = useState('Inicio');
+  const syncCurrent = () => setCurrent(navigationRef.getCurrentRoute()?.name ?? 'Inicio');
+
   return (
-    <NavigationContainer
-      documentTitle={{ formatter: (_options, route) => (route && screenTitles[route.name] ? `${screenTitles[route.name]} · Portal da Vila` : 'Portal da Vila') }}
-    >
-      <PortalTabs />
-    </NavigationContainer>
+    <View style={{ flex: 1, flexDirection: 'row' }}>
+      {wide ? <Sidebar navigationRef={navigationRef} current={current} /> : null}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <NavigationContainer
+          ref={navigationRef}
+          onReady={syncCurrent}
+          onStateChange={syncCurrent}
+          documentTitle={{ formatter: (_options, route) => (route && screenTitles[route.name] ? `${screenTitles[route.name]} · Portal da Vila` : 'Portal da Vila') }}
+        >
+          <PortalTabs wide={wide} />
+        </NavigationContainer>
+      </View>
+    </View>
   );
 }

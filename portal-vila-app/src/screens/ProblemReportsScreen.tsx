@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
   },
   content: {
     width: '100%',
-    maxWidth: 375,
+    maxWidth: 760,
     alignSelf: 'center',
     paddingHorizontal: 13,
     paddingTop: 18,

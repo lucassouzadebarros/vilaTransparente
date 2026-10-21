@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, TextStyle, View, ViewStyle } from 'react-native';
 import { Circle, CheckCircle2, CircleAlert, Clock3, LucideIcon } from 'lucide-react-native';
 import { colors, radius, spacing, TOUCH_TARGET } from '../theme';
+import { CONTENT_MAX_WIDTH } from '../utils/layout';
 import { SoftBackdrop } from './SoftBackdrop';
 
 type ScreenProps = {
@@ -258,7 +259,7 @@ const styles = StyleSheet.create({
   },
   screenContent: {
     width: '100%',
-    maxWidth: 430,
+    maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: 'center',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,
