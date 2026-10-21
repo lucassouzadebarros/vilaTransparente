@@ -1,14 +1,28 @@
-import { ReactNode, useCallback, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
+import { ReactNode, useCallback, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../utils/alert';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { ArrowLeft, CalendarDays, CheckCircle2, ExternalLink, FileText, Flag, Save, Trash2, Upload, UserRound, X } from 'lucide-react-native';
+import { ArrowLeft, CalendarDays, CheckCircle2, ExternalLink, FileText, Flag, Info, Save, Trash2, Upload, UserRound, X } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { Card, Label } from '../components/ui';
+import { FormField } from '../components/FormField';
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
 import { Budget, PortalDocument } from '../types';
+import {
+  currencyFromNumber,
+  dateBRToISO,
+  finishCurrency,
+  isValidDocument,
+  isValidPhoneBR,
+  isoToDateBR,
+  maskCurrency,
+  maskDateBR,
+  maskDocument,
+  maskPhoneBR,
+  parseCurrency
+} from '../utils/inputMasks';
 
 const statusOptions: Array<Budget['status']> = ['EM_ANALISE', 'APROVADO', 'REJEITADO', 'CANCELADO'];
 
@@ -34,24 +48,11 @@ function allowedStatuses(savedStatus: Budget['status'] | null): Array<Budget['st
   );
 }
 
+type FieldErrors = Partial<Record<'title' | 'supplier' | 'amount' | 'supplierDocument' | 'phone' | 'budgetDate' | 'validUntil' | 'expectedDate', string>>;
+
 function positiveId(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function parseAmount(value: string) {
-  const normalized = value.trim().replace(/\s/g, '');
-  if (!normalized) {
-    return 0;
-  }
-  if (normalized.includes(',')) {
-    return Number(normalized.replace(/\./g, '').replace(',', '.'));
-  }
-  return Number(normalized);
-}
-
-function formatAmount(value?: number | null) {
-  return value ? String(value).replace('.', ',') : '';
 }
 
 function resetDocumentName(file?: File | null) {
@@ -61,6 +62,7 @@ function resetDocumentName(file?: File | null) {
 export function BudgetFormScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const scrollRef = useRef<ScrollView>(null);
   const formMode = route.params?.formMode as 'create' | 'edit' | undefined;
   const routeBudgetId = positiveId(route.params?.budgetId ?? route.params?.budget?.id);
   const editingBudgetId = formMode === 'create' ? null : routeBudgetId;
@@ -70,7 +72,9 @@ export function BudgetFormScreen() {
   const [title, setTitle] = useState('');
   const [supplier, setSupplier] = useState('');
   const [supplierDocument, setSupplierDocument] = useState('');
+  const [loadedSupplierDocument, setLoadedSupplierDocument] = useState('');
   const [phone, setPhone] = useState('');
+  const [loadedPhone, setLoadedPhone] = useState('');
   const [amount, setAmount] = useState('');
   const [budgetDate, setBudgetDate] = useState('');
   const [validUntil, setValidUntil] = useState('');
@@ -85,17 +89,18 @@ export function BudgetFormScreen() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
-  const amountValue = parseAmount(amount);
   const isEditing = Boolean(budgetId);
-  const canSave = Boolean(title.trim() && supplier.trim() && amountValue > 0 && !saving && !loading);
 
   function resetForm() {
     setBudgetId(null);
     setTitle('');
     setSupplier('');
     setSupplierDocument('');
+    setLoadedSupplierDocument('');
     setPhone('');
+    setLoadedPhone('');
     setAmount('');
     setBudgetDate('');
     setValidUntil('');
@@ -107,19 +112,24 @@ export function BudgetFormScreen() {
     setDocumentUrl('');
     setDocumentFile(null);
     setExistingDocument(null);
+    setFieldErrors({});
   }
 
   function fillForm(budget: Budget, documents: PortalDocument[]) {
     const document = documents.find((item) => item.type === 'ORCAMENTO') ?? documents[0] ?? null;
+    const maskedDocument = maskDocument(budget.supplierDocument ?? '');
+    const maskedPhone = maskPhoneBR(budget.phone ?? '');
     setBudgetId(budget.id ?? null);
     setTitle(budget.title ?? '');
     setSupplier(budget.supplier ?? '');
-    setSupplierDocument(budget.supplierDocument ?? '');
-    setPhone(budget.phone ?? '');
-    setAmount(formatAmount(budget.amount));
-    setBudgetDate(budget.budgetDate ?? '');
-    setValidUntil(budget.validUntil ?? '');
-    setExpectedDate(budget.expectedDate ?? '');
+    setSupplierDocument(maskedDocument);
+    setLoadedSupplierDocument(maskedDocument);
+    setPhone(maskedPhone);
+    setLoadedPhone(maskedPhone);
+    setAmount(currencyFromNumber(budget.amount));
+    setBudgetDate(isoToDateBR(budget.budgetDate));
+    setValidUntil(isoToDateBR(budget.validUntil));
+    setExpectedDate(isoToDateBR(budget.expectedDate));
     setStatus(budget.status ?? 'EM_ANALISE');
     setSavedStatus(budget.status ?? 'EM_ANALISE');
     setNotes(budget.notes ?? '');
@@ -127,6 +137,7 @@ export function BudgetFormScreen() {
     setDocumentUrl(document?.url ?? '');
     setDocumentFile(null);
     setExistingDocument(document);
+    setFieldErrors({});
   }
 
   useFocusEffect(
@@ -165,22 +176,55 @@ export function BudgetFormScreen() {
     }, [editingBudgetId, formKey])
   );
 
-  function showError(message: string) {
-    setError(message);
-    Alert.alert('Orçamento', message);
+  function clearFieldError(field: keyof FieldErrors) {
+    setFieldErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
+  }
+
+  function validate() {
+    const next: FieldErrors = {};
+    const amountValue = parseCurrency(amount);
+    if (!title.trim()) {
+      next.title = 'Informe o título do orçamento.';
+    }
+    if (!supplier.trim()) {
+      next.supplier = 'Informe o nome do fornecedor.';
+    }
+    if (amountValue === undefined || amountValue <= 0) {
+      next.amount = 'Informe o valor do orçamento, maior que zero.';
+    }
+    // Numbers already on file are not re-checked unless they were changed.
+    if (supplierDocument.trim() && supplierDocument !== loadedSupplierDocument && !isValidDocument(supplierDocument)) {
+      next.supplierDocument = 'CPF ou CNPJ inválido. Confira os números ou deixe em branco.';
+    }
+    if (phone.trim() && phone !== loadedPhone && !isValidPhoneBR(phone)) {
+      next.phone = 'Telefone incompleto. Use o DDD e o número.';
+    }
+    const dateMessage = 'Data inválida. Use dia/mês/ano, por exemplo 25/12/2026.';
+    if (budgetDate.trim() && !dateBRToISO(budgetDate)) {
+      next.budgetDate = dateMessage;
+    }
+    if (validUntil.trim() && !dateBRToISO(validUntil)) {
+      next.validUntil = dateMessage;
+    }
+    if (expectedDate.trim() && !dateBRToISO(expectedDate)) {
+      next.expectedDate = dateMessage;
+    }
+    const issued = dateBRToISO(budgetDate);
+    const valid = dateBRToISO(validUntil);
+    if (issued && valid && valid < issued) {
+      next.validUntil = 'A validade não pode ser antes da data do orçamento.';
+    }
+    setFieldErrors(next);
+    return Object.keys(next).length === 0;
   }
 
   async function save() {
-    if (!title.trim()) {
-      showError('Informe o título do orçamento.');
+    if (saving || loading) {
       return;
     }
-    if (!supplier.trim()) {
-      showError('Informe o fornecedor do orçamento.');
-      return;
-    }
-    if (!Number.isFinite(amountValue) || amountValue <= 0) {
-      showError('Informe um valor válido para o orçamento.');
+    if (!validate()) {
+      setError('Corrija os campos destacados em vermelho.');
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
     setSaving(true);
@@ -192,10 +236,10 @@ export function BudgetFormScreen() {
         supplier: supplier.trim(),
         supplierDocument: supplierDocument.trim() || undefined,
         phone: phone.trim() || undefined,
-        amount: amountValue,
-        budgetDate: budgetDate.trim() || undefined,
-        validUntil: validUntil.trim() || undefined,
-        expectedDate: expectedDate.trim() || undefined,
+        amount: parseCurrency(amount) ?? 0,
+        budgetDate: dateBRToISO(budgetDate),
+        validUntil: dateBRToISO(validUntil),
+        expectedDate: dateBRToISO(expectedDate),
         status,
         documentId: existingDocument?.id,
         notes: notes.trim() || undefined
@@ -234,6 +278,7 @@ export function BudgetFormScreen() {
       }
     } catch (err) {
       setError(apiErrorMessage(err, 'Não consegui salvar o orçamento.'));
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
     } finally {
       setSaving(false);
     }
@@ -275,76 +320,176 @@ export function BudgetFormScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <SoftBackdrop compact />
-      <View style={styles.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={cancel} style={styles.backButton}>
-          <ArrowLeft color={colors.ink} size={20} />
-        </Pressable>
-        <View style={styles.headerCopy}>
-          <Text style={styles.title}>{isEditing ? 'Editar orçamento' : 'Novo orçamento'}</Text>
-          <Text style={styles.subtitle}>{isEditing ? `Orçamento #${budgetId}` : 'Cotação de fornecedor'}</Text>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <SoftBackdrop compact />
+        <View style={styles.header}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={cancel} style={styles.backButton}>
+            <ArrowLeft color={colors.ink} size={20} />
+          </Pressable>
+          <View style={styles.headerCopy}>
+            <Text style={styles.title}>{isEditing ? 'Editar orçamento' : 'Novo orçamento'}</Text>
+            <Text style={styles.subtitle}>{isEditing ? `Orçamento #${budgetId}` : 'Cotação de fornecedor'}</Text>
+          </View>
         </View>
-      </View>
 
-      {error ? (
-        <Card style={styles.errorCard}>
-          <Label>{error}</Label>
-        </Card>
-      ) : null}
+        {error ? (
+          <Card style={styles.errorCard}>
+            <Label>{error}</Label>
+          </Card>
+        ) : null}
 
-      <FormSection icon={Flag} title="Status">
-        {loading ? <Text style={styles.sectionHelp}>Carregando...</Text> : null}
-        <View style={styles.statusGrid}>
-          {allowedStatuses(savedStatus).map((item) => (
-            <StatusChoice key={item} label={statusLabels[item]} selected={item === status} onPress={() => setStatus(item)} />
-          ))}
+        {isEditing ? (
+          <FormSection icon={Flag} title="Situação">
+            {loading ? <Text style={styles.sectionHelp}>Carregando...</Text> : null}
+            <View style={styles.statusGrid}>
+              {allowedStatuses(savedStatus).map((item) => (
+                <StatusChoice key={item} label={statusLabels[item]} selected={item === status} onPress={() => setStatus(item)} />
+              ))}
+            </View>
+            <Text style={styles.sectionHelp}>
+              {savedStatus === 'EM_ANALISE'
+                ? 'Aprovar ou recusar é decidido pela votação das casas. Mudar título, fornecedor ou valor zera os votos já dados.'
+                : 'Aprovar ou recusar é decidido pela votação das casas.'}
+            </Text>
+          </FormSection>
+        ) : (
+          <View style={styles.infoBox}>
+            <Info color={colors.blue} size={18} />
+            <Text style={styles.infoText}>Todo orçamento novo vai para a votação das casas. Ele é aprovado quando a maioria das casas votar "Aprovar".</Text>
+          </View>
+        )}
+
+        <FormSection icon={UserRound} title="Fornecedor e valor">
+          <FormField
+            label="Título do orçamento"
+            required
+            value={title}
+            onChangeText={(value) => {
+              setTitle(value);
+              clearFieldError('title');
+            }}
+            placeholder="Ex.: Pintura do muro externo"
+            error={fieldErrors.title}
+          />
+          <FormField
+            label="Fornecedor"
+            required
+            value={supplier}
+            onChangeText={(value) => {
+              setSupplier(value);
+              clearFieldError('supplier');
+            }}
+            placeholder="Nome da empresa ou do prestador"
+            error={fieldErrors.supplier}
+          />
+          <FormField
+            label="CPF ou CNPJ do fornecedor"
+            value={supplierDocument}
+            onChangeText={(value) => {
+              setSupplierDocument(maskDocument(value));
+              clearFieldError('supplierDocument');
+            }}
+            keyboardType="number-pad"
+            maxLength={18}
+            placeholder="Só os números"
+            error={fieldErrors.supplierDocument}
+          />
+          <FormField
+            label="Telefone"
+            value={phone}
+            onChangeText={(value) => {
+              setPhone(maskPhoneBR(value));
+              clearFieldError('phone');
+            }}
+            keyboardType="phone-pad"
+            maxLength={15}
+            placeholder="(00) 00000-0000"
+            error={fieldErrors.phone}
+          />
+          <FormField
+            label="Valor"
+            required
+            value={amount}
+            onChangeText={(value) => {
+              setAmount(maskCurrency(value));
+              clearFieldError('amount');
+            }}
+            onBlur={() => setAmount((value) => finishCurrency(value))}
+            keyboardType="decimal-pad"
+            placeholder="R$ 0,00"
+            error={fieldErrors.amount}
+          />
+        </FormSection>
+
+        <FormSection icon={CalendarDays} title="Datas e observações">
+          <View style={styles.twoColumns}>
+            <FormField
+              label="Data do orçamento"
+              value={budgetDate}
+              onChangeText={(value) => {
+                setBudgetDate(maskDateBR(value));
+                clearFieldError('budgetDate');
+              }}
+              keyboardType="number-pad"
+              maxLength={10}
+              placeholder="dd/mm/aaaa"
+              error={fieldErrors.budgetDate}
+              style={styles.columnField}
+            />
+            <FormField
+              label="Validade"
+              value={validUntil}
+              onChangeText={(value) => {
+                setValidUntil(maskDateBR(value));
+                clearFieldError('validUntil');
+              }}
+              keyboardType="number-pad"
+              maxLength={10}
+              placeholder="dd/mm/aaaa"
+              error={fieldErrors.validUntil}
+              style={styles.columnField}
+            />
+          </View>
+          <FormField
+            label="Previsão de execução"
+            value={expectedDate}
+            onChangeText={(value) => {
+              setExpectedDate(maskDateBR(value));
+              clearFieldError('expectedDate');
+            }}
+            keyboardType="number-pad"
+            maxLength={10}
+            placeholder="dd/mm/aaaa"
+            error={fieldErrors.expectedDate}
+          />
+          <FormField
+            label="Observações"
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="O que está incluso, forma de pagamento, garantia..."
+            multiline
+          />
+        </FormSection>
+
+        <FormSection icon={FileText} title="Documento do orçamento">
+          <FormField label="Nome do documento" value={documentName} onChangeText={setDocumentName} placeholder="Orçamento" />
+          <FormField label="Link do PDF" value={documentUrl} onChangeText={setDocumentUrl} placeholder="https://.../orcamento.pdf" />
+          {documentFile ? <Text style={styles.sectionHelp}>Arquivo selecionado: {documentFile.name}</Text> : null}
+          {existingDocument && !documentFile ? <Text style={styles.sectionHelp}>Documento atual: {existingDocument.name}</Text> : null}
+          <View style={styles.documentActions}>
+            <DocumentActionButton title="Selecionar PDF" icon={Upload} onPress={selectPdf} />
+            <DocumentActionButton title="Visualizar PDF" icon={ExternalLink} onPress={previewDocument} />
+            <DocumentActionButton title="Limpar documento" icon={Trash2} danger onPress={() => { setDocumentUrl(''); setDocumentFile(null); setExistingDocument(null); }} />
+          </View>
+        </FormSection>
+
+        <View style={styles.footerActions}>
+          <FooterActionButton title="Cancelar" icon={X} onPress={cancel} />
+          <FooterActionButton title={saving ? 'Salvando...' : isEditing ? 'Atualizar orçamento' : 'Salvar orçamento'} icon={Save} onPress={save} primary disabled={saving || loading} />
         </View>
-        <Text style={styles.sectionHelp}>
-          {!isEditing
-            ? 'Todo orçamento novo vai para a votação das casas. Ele é aprovado quando a maioria das casas votar "Aprovar".'
-            : savedStatus === 'EM_ANALISE'
-              ? 'Aprovar ou recusar é decidido pela votação das casas. Mudar título, fornecedor ou valor zera os votos já dados.'
-              : 'Aprovar ou recusar é decidido pela votação das casas.'}
-        </Text>
-      </FormSection>
-
-      <FormSection icon={UserRound} title="Fornecedor">
-        <FormField label="Título" value={title} onChangeText={setTitle} placeholder="Digite o título do serviço" />
-        <FormField label="Fornecedor" value={supplier} onChangeText={setSupplier} placeholder="Nome do fornecedor" />
-        <View style={styles.twoColumns}>
-          <FormField label="CNPJ do fornecedor" value={supplierDocument} onChangeText={setSupplierDocument} placeholder="12.345.678/0001-90" style={styles.columnField} />
-          <FormField label="Telefone" value={phone} onChangeText={setPhone} placeholder="(00) 00000-0000" style={styles.columnField} />
-        </View>
-        <FormField label="Valor" value={amount} onChangeText={setAmount} keyboardType="numeric" placeholder="R$ 0,00" />
-      </FormSection>
-
-      <FormSection icon={CalendarDays} title="Datas e observações">
-        <View style={styles.threeColumns}>
-          <FormField label="Data do orçamento" value={budgetDate} onChangeText={setBudgetDate} placeholder="AAAA-MM-DD" right={<CalendarDays color={colors.muted} size={15} />} style={styles.columnField} />
-          <FormField label="Validade" value={validUntil} onChangeText={setValidUntil} placeholder="AAAA-MM-DD" right={<CalendarDays color={colors.muted} size={15} />} style={styles.columnField} />
-          <FormField label="Previsão de execução" value={expectedDate} onChangeText={setExpectedDate} placeholder="AAAA-MM-DD" right={<CalendarDays color={colors.muted} size={15} />} style={styles.columnField} />
-        </View>
-        <FormField label="Observações" value={notes} onChangeText={setNotes} placeholder="Informações adicionais, observações, instruções..." multiline />
-      </FormSection>
-
-      <FormSection icon={FileText} title="Documento do orçamento">
-        <FormField label="Nome do documento" value={documentName} onChangeText={setDocumentName} placeholder="Orçamento" />
-        <FormField label="Link do PDF" value={documentUrl} onChangeText={setDocumentUrl} placeholder="https://.../orcamento.pdf" />
-        {documentFile ? <Text style={styles.sectionHelp}>Arquivo selecionado: {documentFile.name}</Text> : null}
-        {existingDocument && !documentFile ? <Text style={styles.sectionHelp}>Documento atual: {existingDocument.name}</Text> : null}
-        <View style={styles.documentActions}>
-          <DocumentActionButton title="Selecionar PDF" icon={Upload} onPress={selectPdf} />
-          <DocumentActionButton title="Visualizar PDF" icon={ExternalLink} onPress={previewDocument} />
-          <DocumentActionButton title="Limpar documento" icon={Trash2} danger onPress={() => { setDocumentUrl(''); setDocumentFile(null); setExistingDocument(null); }} />
-        </View>
-      </FormSection>
-
-      <View style={styles.footerActions}>
-        <FooterActionButton title="Cancelar" icon={X} onPress={cancel} />
-        <FooterActionButton title={saving ? 'Salvando...' : isEditing ? 'Atualizar orçamento' : 'Salvar orçamento'} icon={Save} onPress={save} primary disabled={!canSave} />
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -358,44 +503,6 @@ function FormSection({ icon: Icon, title, children }: { icon: LucideIcon; title:
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
       {children}
-    </View>
-  );
-}
-
-function FormField({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  keyboardType,
-  multiline,
-  right,
-  style
-}: {
-  label: string;
-  value: string;
-  onChangeText: (value: string) => void;
-  placeholder?: string;
-  keyboardType?: 'default' | 'numeric' | 'email-address';
-  multiline?: boolean;
-  right?: ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) {
-  return (
-    <View style={[styles.field, style]}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <View style={[styles.inputFrame, multiline ? styles.inputFrameMultiline : null]}>
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          keyboardType={keyboardType}
-          multiline={multiline}
-          style={[styles.input, multiline ? styles.inputMultiline : null]}
-          placeholderTextColor={colors.muted}
-        />
-        {right ? <View style={styles.inputAction}>{right}</View> : null}
-      </View>
     </View>
   );
 }
@@ -472,8 +579,8 @@ const styles = StyleSheet.create({
     zIndex: 1
   },
   backButton: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
@@ -500,6 +607,24 @@ const styles = StyleSheet.create({
   errorCard: {
     borderColor: colors.red,
     zIndex: 1
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#C9DAF2',
+    backgroundColor: colors.blueSoft,
+    padding: spacing.md,
+    zIndex: 1
+  },
+  infoText: {
+    flex: 1,
+    color: colors.ink,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600'
   },
   sectionCard: {
     backgroundColor: colors.surface,
@@ -538,8 +663,8 @@ const styles = StyleSheet.create({
   },
   sectionHelp: {
     color: colors.muted,
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 12,
+    lineHeight: 17,
     fontWeight: '600'
   },
   statusGrid: {
@@ -548,9 +673,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm
   },
   statusChoice: {
-    minHeight: 40,
+    minHeight: 44,
     flex: 1,
-    minWidth: 108,
+    minWidth: 100,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
@@ -575,66 +700,19 @@ const styles = StyleSheet.create({
   statusChoiceTextSelected: {
     color: colors.surface
   },
-  field: {
-    gap: 5
-  },
-  fieldLabel: {
-    color: colors.ink,
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: '900'
-  },
-  inputFrame: {
-    minHeight: 42,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    backgroundColor: colors.surface,
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  inputFrameMultiline: {
-    minHeight: 76,
-    alignItems: 'flex-start'
-  },
-  input: {
-    flex: 1,
-    minHeight: 40,
-    paddingHorizontal: spacing.md,
-    color: colors.ink,
-    fontSize: 13,
-    fontWeight: '600'
-  },
-  inputMultiline: {
-    minHeight: 74,
-    paddingTop: 11,
-    textAlignVertical: 'top'
-  },
-  inputAction: {
-    minWidth: 38,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingRight: spacing.sm
-  },
   twoColumns: {
     flexDirection: 'row',
     gap: spacing.sm
   },
-  threeColumns: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm
-  },
   columnField: {
     flex: 1,
-    minWidth: 130
+    minWidth: 0
   },
   documentActions: {
     gap: spacing.sm
   },
   documentActionButton: {
-    minHeight: 38,
+    minHeight: 44,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
@@ -663,7 +741,7 @@ const styles = StyleSheet.create({
     zIndex: 1
   },
   footerButton: {
-    minHeight: 42,
+    minHeight: 46,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
@@ -681,7 +759,7 @@ const styles = StyleSheet.create({
   },
   footerButtonText: {
     color: colors.blue,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '900'
   },
   footerButtonTextPrimary: {

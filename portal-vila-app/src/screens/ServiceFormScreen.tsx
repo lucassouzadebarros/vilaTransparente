@@ -1,17 +1,35 @@
-import { ReactNode, useCallback, useMemo, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
+import { ReactNode, useCallback, useMemo, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../utils/alert';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { ArrowLeft, CalendarDays, Check, ChevronDown, ClipboardList, ExternalLink, FileText, Flag, Link2, Save, Trash2, Upload, UserRound, X } from 'lucide-react-native';
+import { ArrowLeft, CalendarDays, Check, ClipboardList, ExternalLink, FileText, Flag, Link2, Save, Trash2, Upload, UserRound, X } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { Badge, Card, Label, Money } from '../components/ui';
+import { FormField } from '../components/FormField';
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
 import { Budget, PortalDocument, ServiceOrder } from '../types';
+import { formatMoneyBR } from '../utils/format';
+import {
+  currencyFromNumber,
+  dateBRToISO,
+  finishCurrency,
+  isValidDocument,
+  isoToDateBR,
+  maskCurrency,
+  maskDateBR,
+  maskDocument,
+  parseCurrency
+} from '../utils/inputMasks';
 
 const priorityOptions: Array<ServiceOrder['priority']> = ['BAIXA', 'MEDIA', 'ALTA', 'URGENTE'];
-const statusOptions: Array<ServiceOrder['status']> = ['PLANEJADO', 'APROVADO', 'EM_ANDAMENTO', 'FINALIZADO', 'CANCELADO'];
+
+// Finishing and cancelling are their own actions on the service screen (finishing books the payment on the cash box).
+const openStatusOptions: Array<{ value: 'PLANEJADO' | 'EM_ANDAMENTO'; label: string }> = [
+  { value: 'PLANEJADO', label: 'Planejado' },
+  { value: 'EM_ANDAMENTO', label: 'Em andamento' }
+];
 
 const statusLabels: Record<ServiceOrder['status'], string> = {
   PLANEJADO: 'Planejado',
@@ -35,31 +53,19 @@ const priorityColors: Record<ServiceOrder['priority'], string> = {
   URGENTE: colors.red
 };
 
+const categorySuggestions = ['Manutenção', 'Limpeza', 'Segurança', 'Jardinagem', 'Iluminação', 'Elétrica', 'Hidráulica', 'Pintura'];
+
+type FieldErrors = Partial<Record<'title' | 'description' | 'supplierDocument' | 'plannedDate', string>>;
+
 function positiveId(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-function parseAmount(value: string) {
-  const normalized = value.trim().replace(/\s/g, '');
-  if (!normalized) {
-    return undefined;
-  }
-  if (normalized.includes(',')) {
-    const parsed = Number(normalized.replace(/\./g, '').replace(',', '.'));
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function formatAmount(value?: number | null) {
-  return value ? String(value).replace('.', ',') : '';
-}
-
 export function ServiceFormScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const scrollRef = useRef<ScrollView>(null);
   const formMode = route.params?.formMode as 'create' | 'edit' | undefined;
   const routeServiceId = positiveId(route.params?.serviceId ?? route.params?.service?.id);
   const editingServiceId = formMode === 'create' ? null : routeServiceId;
@@ -73,11 +79,11 @@ export function ServiceFormScreen() {
   const [priority, setPriority] = useState<ServiceOrder['priority']>('MEDIA');
   const [status, setStatus] = useState<ServiceOrder['status']>('PLANEJADO');
   const [expectedValue, setExpectedValue] = useState('');
-  const [finalValue, setFinalValue] = useState('');
+  const [paidSummary, setPaidSummary] = useState('');
   const [supplier, setSupplier] = useState('');
   const [supplierDocument, setSupplierDocument] = useState('');
+  const [loadedSupplierDocument, setLoadedSupplierDocument] = useState('');
   const [plannedDate, setPlannedDate] = useState('');
-  const [completedDate, setCompletedDate] = useState('');
   const [notes, setNotes] = useState('');
   const [documentName, setDocumentName] = useState('Nota Fiscal');
   const [documentUrl, setDocumentUrl] = useState('');
@@ -88,6 +94,7 @@ export function ServiceFormScreen() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   const selectedBudget = useMemo(() => {
     return budgets.find((budget) => budget.id === selectedBudgetId);
@@ -101,7 +108,8 @@ export function ServiceFormScreen() {
   }, [budgets, serviceId]);
 
   const isEditing = Boolean(serviceId);
-  const canSave = Boolean(title.trim() && description.trim() && !saving && !loading);
+  const isClosed = status === 'FINALIZADO' || status === 'CANCELADO';
+  const showFiscalDocument = isEditing && status === 'FINALIZADO';
 
   function resetForm(nextBudgetId: number | null) {
     setServiceId(null);
@@ -111,39 +119,46 @@ export function ServiceFormScreen() {
     setPriority('MEDIA');
     setStatus('PLANEJADO');
     setExpectedValue('');
-    setFinalValue('');
+    setPaidSummary('');
     setSupplier('');
     setSupplierDocument('');
+    setLoadedSupplierDocument('');
     setPlannedDate('');
-    setCompletedDate('');
     setNotes('');
     setDocumentName('Nota Fiscal');
     setDocumentUrl('');
     setDocumentFile(null);
     setExistingDocument(null);
     setSelectedBudgetId(nextBudgetId);
+    setFieldErrors({});
   }
 
   function fillForm(service: ServiceOrder, documents: PortalDocument[]) {
     const document = documents.find((item) => item.type === 'NOTA_FISCAL' || item.type === 'RECIBO') ?? documents[0] ?? null;
+    const maskedDocument = maskDocument(service.supplierDocument ?? '');
     setServiceId(service.id ?? null);
     setTitle(service.title ?? '');
     setDescription(service.description ?? '');
     setCategory(service.category ?? '');
     setPriority(service.priority ?? 'MEDIA');
     setStatus(service.status ?? 'PLANEJADO');
-    setExpectedValue(formatAmount(service.expectedValue));
-    setFinalValue(formatAmount(service.finalValue));
+    setExpectedValue(currencyFromNumber(service.expectedValue));
+    setPaidSummary(
+      service.finalValue != null
+        ? `Pago ${formatMoneyBR(service.finalValue)}${service.completedDate ? ` em ${isoToDateBR(service.completedDate)}` : ''}`
+        : ''
+    );
     setSupplier(service.supplier ?? '');
-    setSupplierDocument(service.supplierDocument ?? '');
-    setPlannedDate(service.plannedDate ?? '');
-    setCompletedDate(service.completedDate ?? '');
+    setSupplierDocument(maskedDocument);
+    setLoadedSupplierDocument(maskedDocument);
+    setPlannedDate(isoToDateBR(service.plannedDate));
     setNotes(service.notes ?? '');
     setDocumentName(document?.name ?? 'Nota Fiscal');
     setDocumentUrl(document?.url ?? '');
     setDocumentFile(null);
     setExistingDocument(document);
     setSelectedBudgetId(service.approvedBudgetId ?? seedBudgetId ?? null);
+    setFieldErrors({});
   }
 
   useFocusEffect(
@@ -174,10 +189,12 @@ export function ServiceFormScreen() {
           const seeded = nextBudgets.find((budget) => budget.id === seedBudgetId && budget.status === 'APROVADO' && !budget.serviceId);
           resetForm(seeded?.id ?? null);
           if (seeded) {
+            const maskedDocument = maskDocument(seeded.supplierDocument ?? '');
             setTitle(seeded.title ?? '');
-            setExpectedValue(formatAmount(seeded.amount));
+            setExpectedValue(currencyFromNumber(seeded.amount));
             setSupplier(seeded.supplier ?? '');
-            setSupplierDocument(seeded.supplierDocument ?? '');
+            setSupplierDocument(maskedDocument);
+            setLoadedSupplierDocument(maskedDocument);
           }
         } catch (err) {
           if (active) {
@@ -197,29 +214,52 @@ export function ServiceFormScreen() {
     }, [editingServiceId, seedBudgetId, formKey])
   );
 
+  function clearFieldError(field: keyof FieldErrors) {
+    setFieldErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
+  }
+
   function chooseBudget(budget: Budget | null) {
     setSelectedBudgetId(budget?.id ?? null);
     if (!budget) {
       return;
     }
     if (!expectedValue.trim()) {
-      setExpectedValue(formatAmount(budget.amount));
+      setExpectedValue(currencyFromNumber(budget.amount));
     }
     if (!supplier.trim()) {
       setSupplier(budget.supplier ?? '');
     }
     if (!supplierDocument.trim()) {
-      setSupplierDocument(budget.supplierDocument ?? '');
+      setSupplierDocument(maskDocument(budget.supplierDocument ?? ''));
     }
   }
 
-  async function save() {
+  function validate() {
+    const next: FieldErrors = {};
     if (!title.trim()) {
-      setError('Informe o título do serviço.');
-      return;
+      next.title = 'Informe o título do serviço.';
     }
     if (!description.trim()) {
-      setError('Informe a descrição do serviço.');
+      next.description = 'Descreva o serviço para as casas entenderem o que será feito.';
+    }
+    if (plannedDate.trim() && !dateBRToISO(plannedDate)) {
+      next.plannedDate = 'Data inválida. Use dia/mês/ano, por exemplo 25/12/2026.';
+    }
+    // A number already on file is not re-checked unless it was changed.
+    if (supplierDocument.trim() && supplierDocument !== loadedSupplierDocument && !isValidDocument(supplierDocument)) {
+      next.supplierDocument = 'CPF ou CNPJ inválido. Confira os números ou deixe em branco.';
+    }
+    setFieldErrors(next);
+    return Object.keys(next).length === 0;
+  }
+
+  async function save() {
+    if (saving || loading) {
+      return;
+    }
+    if (!validate()) {
+      setError('Corrija os campos destacados em vermelho.');
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
 
@@ -232,13 +272,12 @@ export function ServiceFormScreen() {
         description: description.trim(),
         category: category.trim() || undefined,
         priority,
-        status,
-        expectedValue: parseAmount(expectedValue) ?? selectedBudget?.amount,
-        finalValue: parseAmount(finalValue),
+        // "Aprovado" follows the linked budget on the server; finished and cancelled never change from this form.
+        status: isClosed ? status : status === 'EM_ANDAMENTO' ? 'EM_ANDAMENTO' : 'PLANEJADO',
+        expectedValue: parseCurrency(expectedValue) ?? selectedBudget?.amount,
         supplier: supplier.trim() || selectedBudget?.supplier || undefined,
         supplierDocument: supplierDocument.trim() || selectedBudget?.supplierDocument || undefined,
-        plannedDate: plannedDate.trim() || undefined,
-        completedDate: completedDate.trim() || undefined,
+        plannedDate: dateBRToISO(plannedDate),
         approvedBudgetId: selectedBudgetId,
         notes: notes.trim() || undefined
       };
@@ -248,7 +287,7 @@ export function ServiceFormScreen() {
         : await api.createService(payload);
       const savedServiceId = savedService.id ?? serviceId;
 
-      if (documentFile && savedServiceId) {
+      if (showFiscalDocument && documentFile && savedServiceId) {
         await api.uploadDocument(documentFile, {
           name: documentName.trim() || documentFile.name,
           type: 'NOTA_FISCAL',
@@ -256,7 +295,7 @@ export function ServiceFormScreen() {
           relatedId: savedServiceId,
           description: 'Documento fiscal vinculado ao cadastro do serviço.'
         });
-      } else if (documentUrl.trim() && savedServiceId && existingDocument?.url !== documentUrl.trim()) {
+      } else if (showFiscalDocument && documentUrl.trim() && savedServiceId && existingDocument?.url !== documentUrl.trim()) {
         await api.createDocument({
           name: documentName.trim() || 'Nota Fiscal',
           type: 'NOTA_FISCAL',
@@ -275,6 +314,7 @@ export function ServiceFormScreen() {
       }
     } catch (err) {
       setError(apiErrorMessage(err, 'Não consegui salvar o serviço.'));
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
     } finally {
       setSaving(false);
     }
@@ -316,123 +356,199 @@ export function ServiceFormScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <SoftBackdrop compact />
-      <View style={styles.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={cancel} style={styles.backButton}>
-          <ArrowLeft color={colors.ink} size={20} />
-        </Pressable>
-        <View style={styles.headerCopy}>
-          <Text style={styles.title}>{isEditing ? 'Editar serviço' : 'Novo serviço'}</Text>
-          <Text style={styles.subtitle}>{isEditing ? `Serviço #${serviceId}` : 'Cadastro operacional'}</Text>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <SoftBackdrop compact />
+        <View style={styles.header}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={cancel} style={styles.backButton}>
+            <ArrowLeft color={colors.ink} size={20} />
+          </Pressable>
+          <View style={styles.headerCopy}>
+            <Text style={styles.title}>{isEditing ? 'Editar serviço' : 'Novo serviço'}</Text>
+            <Text style={styles.subtitle}>{isEditing ? `Serviço #${serviceId}` : 'Cadastro operacional'}</Text>
+          </View>
         </View>
-      </View>
-      {error ? (
-        <Card style={styles.errorCard}>
-          <Label>{error}</Label>
-        </Card>
-      ) : null}
+        {error ? (
+          <Card style={styles.errorCard}>
+            <Label>{error}</Label>
+          </Card>
+        ) : null}
 
-      <FormSection icon={ClipboardList} title="Identificação">
-        <FormField label="Título" value={title} onChangeText={setTitle} placeholder="Digite o título do serviço" />
-        <FormField
-          label="Descrição"
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Descreva o serviço, objetivo, detalhes importantes..."
-          multiline
-        />
-        <FormField
-          label="Categoria"
-          value={category}
-          onChangeText={setCategory}
-          placeholder="Portaria, limpeza, iluminação..."
-          right={<ChevronDown color={colors.muted} size={17} />}
-        />
-      </FormSection>
+        <FormSection icon={ClipboardList} title="Identificação">
+          <FormField
+            label="Título"
+            required
+            value={title}
+            onChangeText={(value) => {
+              setTitle(value);
+              clearFieldError('title');
+            }}
+            placeholder="Ex.: Troca das lâmpadas do corredor"
+            error={fieldErrors.title}
+          />
+          <FormField
+            label="Descrição"
+            required
+            value={description}
+            onChangeText={(value) => {
+              setDescription(value);
+              clearFieldError('description');
+            }}
+            placeholder="O que será feito, onde e por quê."
+            multiline
+            error={fieldErrors.description}
+          />
+          <FormField label="Categoria" value={category} onChangeText={setCategory} placeholder="Escolha abaixo ou digite" />
+          <View style={styles.suggestionRow}>
+            {categorySuggestions.map((name) => (
+              <Pressable
+                key={name}
+                accessibilityRole="button"
+                onPress={() => setCategory(name)}
+                style={[styles.suggestionChip, category.trim().toLowerCase() === name.toLowerCase() ? styles.suggestionChipSelected : null]}
+              >
+                <Text style={[styles.suggestionText, category.trim().toLowerCase() === name.toLowerCase() ? styles.suggestionTextSelected : null]}>{name}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </FormSection>
 
-      <FormSection icon={Flag} title="Status e prioridade">
-        <Text style={styles.groupLabel}>Status</Text>
-        <View style={styles.statusGrid}>
-          {statusOptions.map((item) => (
-            <StatusChoice key={item} label={statusLabels[item]} selected={item === status} onPress={() => setStatus(item)} />
-          ))}
+        <FormSection icon={Flag} title="Situação e prioridade">
+          <Text style={styles.groupLabel}>Situação</Text>
+          {isClosed ? (
+            <View style={styles.closedBox}>
+              <View style={styles.closedRow}>
+                <Badge status={status} />
+                <Text style={styles.closedTitle}>{statusLabels[status]}</Text>
+              </View>
+              {paidSummary ? <Text style={styles.closedText}>{paidSummary}</Text> : null}
+              <Text style={styles.sectionHelp}>
+                {status === 'FINALIZADO'
+                  ? 'O pagamento (valor e data) só muda em "Corrigir dados / anexar nota", na tela do serviço.'
+                  : 'Um serviço cancelado não muda de situação.'}
+              </Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.statusGrid}>
+                {openStatusOptions.map((item) => (
+                  <StatusChoice
+                    key={item.value}
+                    label={item.label}
+                    selected={(status === 'EM_ANDAMENTO' ? 'EM_ANDAMENTO' : 'PLANEJADO') === item.value}
+                    onPress={() => setStatus(item.value)}
+                  />
+                ))}
+              </View>
+              <Text style={styles.sectionHelp}>
+                Vira "Aprovado" sozinho quando você vincula um orçamento aprovado pelas casas. Para finalizar ou cancelar, use os botões na tela do serviço.
+              </Text>
+            </>
+          )}
+          <Text style={styles.groupLabel}>Prioridade</Text>
+          <View style={styles.priorityGrid}>
+            {priorityOptions.map((item) => (
+              <PriorityChoice
+                key={item}
+                label={priorityLabels[item]}
+                color={priorityColors[item]}
+                selected={item === priority}
+                onPress={() => setPriority(item)}
+              />
+            ))}
+          </View>
+        </FormSection>
+
+        <FormSection icon={UserRound} title="Fornecedor e valor previsto">
+          <FormField label="Fornecedor" value={supplier} onChangeText={setSupplier} placeholder="Nome do fornecedor ou prestador" />
+          <FormField
+            label="CPF ou CNPJ do fornecedor"
+            value={supplierDocument}
+            onChangeText={(value) => {
+              setSupplierDocument(maskDocument(value));
+              clearFieldError('supplierDocument');
+            }}
+            keyboardType="number-pad"
+            maxLength={18}
+            placeholder="Só os números"
+            error={fieldErrors.supplierDocument}
+          />
+          <FormField
+            label="Valor previsto"
+            value={expectedValue}
+            onChangeText={(value) => setExpectedValue(maskCurrency(value))}
+            onBlur={() => setExpectedValue((value) => finishCurrency(value))}
+            keyboardType="decimal-pad"
+            placeholder="R$ 0,00"
+            hint="O valor pago é informado ao finalizar o serviço."
+          />
+        </FormSection>
+
+        <FormSection icon={CalendarDays} title="Data e observações">
+          <FormField
+            label="Data planejada"
+            value={plannedDate}
+            onChangeText={(value) => {
+              setPlannedDate(maskDateBR(value));
+              clearFieldError('plannedDate');
+            }}
+            keyboardType="number-pad"
+            maxLength={10}
+            placeholder="dd/mm/aaaa"
+            error={fieldErrors.plannedDate}
+          />
+          <FormField label="Observações" value={notes} onChangeText={setNotes} placeholder="Informações adicionais, instruções..." multiline compactMultiline />
+        </FormSection>
+
+        <FormSection icon={Link2} title="Orçamento vinculado">
+          <Text style={styles.sectionHelp}>Aparecem aqui os orçamentos aprovados pela votação das casas que ainda não estão em outro serviço.</Text>
+          <BudgetChoice
+            selected={selectedBudgetId === null}
+            title="Sem orçamento vinculado"
+            subtitle="Serviço sem cotação base"
+            onPress={() => chooseBudget(null)}
+          />
+          {budgetOptions.length === 0 ? <Text style={styles.sectionHelp}>Nenhum orçamento aprovado disponível.</Text> : null}
+          {budgetOptions.map((budget) => {
+            const selected = budget.id === selectedBudgetId;
+            return (
+              <BudgetChoice
+                key={budget.id}
+                selected={selected}
+                title={budget.title}
+                subtitle={`${budget.supplier} · ${budget.serviceId ? 'vinculado a este serviço' : 'disponível'}`}
+                onPress={() => chooseBudget(budget)}
+                right={
+                  <View style={styles.budgetRight}>
+                    <Badge status={budget.status} />
+                    <Money value={budget.amount} />
+                  </View>
+                }
+              />
+            );
+          })}
+        </FormSection>
+
+        {showFiscalDocument ? (
+          <FormSection icon={FileText} title="Documento fiscal">
+            <FormField label="Nome do documento" value={documentName} onChangeText={setDocumentName} placeholder="Nota Fiscal" />
+            <FormField label="Link do PDF da nota fiscal/recibo" value={documentUrl} onChangeText={setDocumentUrl} placeholder="https://.../nota-fiscal.pdf" />
+            {documentFile ? <Text style={styles.sectionHelp}>Arquivo selecionado: {documentFile.name}</Text> : null}
+            {existingDocument && !documentFile ? <Text style={styles.sectionHelp}>Documento atual: {existingDocument.name}</Text> : null}
+            <View style={styles.documentActions}>
+              <DocumentActionButton title="Selecionar PDF" icon={Upload} onPress={selectPdf} />
+              <DocumentActionButton title="Visualizar PDF" icon={ExternalLink} onPress={previewDocument} />
+              <DocumentActionButton title="Limpar documento" icon={Trash2} danger onPress={() => { setDocumentUrl(''); setDocumentFile(null); setExistingDocument(null); }} />
+            </View>
+          </FormSection>
+        ) : null}
+
+        <View style={styles.footerActions}>
+          <FooterActionButton title="Cancelar" icon={X} onPress={cancel} />
+          <FooterActionButton title={saving ? 'Salvando...' : isEditing ? 'Atualizar serviço' : 'Salvar serviço'} icon={Save} onPress={save} primary disabled={saving || loading} />
         </View>
-        <Text style={styles.groupLabel}>Prioridade</Text>
-        <View style={styles.priorityGrid}>
-          {priorityOptions.map((item) => (
-            <PriorityChoice
-              key={item}
-              label={priorityLabels[item]}
-              color={priorityColors[item]}
-              selected={item === priority}
-              onPress={() => setPriority(item)}
-            />
-          ))}
-        </View>
-      </FormSection>
-
-      <FormSection icon={UserRound} title="Fornecedor e valores">
-        <FormField label="Fornecedor" value={supplier} onChangeText={setSupplier} placeholder="Nome do fornecedor" />
-        <FormField label="CNPJ do fornecedor" value={supplierDocument} onChangeText={setSupplierDocument} placeholder="12.345.678/0001-90" />
-        <View style={styles.twoColumns}>
-          <FormField label="Valor previsto" value={expectedValue} onChangeText={setExpectedValue} keyboardType="numeric" placeholder="R$ 0,00" style={styles.columnField} />
-          <FormField label="Valor final" value={finalValue} onChangeText={setFinalValue} keyboardType="numeric" placeholder="R$ 0,00" style={styles.columnField} />
-        </View>
-      </FormSection>
-
-      <FormSection icon={CalendarDays} title="Datas">
-        <FormField label="Data planejada" value={plannedDate} onChangeText={setPlannedDate} placeholder="AAAA-MM-DD" right={<CalendarDays color={colors.muted} size={16} />} />
-        <FormField label="Data de conclusão" value={completedDate} onChangeText={setCompletedDate} placeholder="AAAA-MM-DD" right={<CalendarDays color={colors.muted} size={16} />} />
-        <FormField label="Observações" value={notes} onChangeText={setNotes} placeholder="Informações adicionais, observações, instruções..." multiline compactMultiline />
-      </FormSection>
-
-      <FormSection icon={Link2} title="Orçamento vinculado">
-        <Text style={styles.sectionHelp}>Aparecem aqui os orçamentos aprovados pela votação das casas que ainda não estão em outro serviço.</Text>
-        <BudgetChoice
-          selected={selectedBudgetId === null}
-          title="Sem orçamento vinculado"
-          subtitle="Serviço sem cotação base"
-          onPress={() => chooseBudget(null)}
-        />
-        {budgetOptions.length === 0 ? <Text style={styles.sectionHelp}>Nenhum orçamento aprovado disponível.</Text> : null}
-        {budgetOptions.map((budget) => {
-          const selected = budget.id === selectedBudgetId;
-          return (
-            <BudgetChoice
-              key={budget.id}
-              selected={selected}
-              title={budget.title}
-              subtitle={`${budget.supplier} · ${budget.serviceId ? 'vinculado a este serviço' : 'disponível'}`}
-              onPress={() => chooseBudget(budget)}
-              right={
-                <View style={styles.budgetRight}>
-                  <Badge status={budget.status} />
-                  <Money value={budget.amount} />
-                </View>
-              }
-            />
-          );
-        })}
-      </FormSection>
-
-      <FormSection icon={FileText} title="Documento fiscal">
-        <FormField label="Nome do documento" value={documentName} onChangeText={setDocumentName} placeholder="Nota Fiscal" />
-        <FormField label="Link do PDF da nota fiscal/recibo" value={documentUrl} onChangeText={setDocumentUrl} placeholder="https://.../nota-fiscal.pdf" />
-        {documentFile ? <Text style={styles.sectionHelp}>Arquivo selecionado: {documentFile.name}</Text> : null}
-        {existingDocument && !documentFile ? <Text style={styles.sectionHelp}>Documento atual: {existingDocument.name}</Text> : null}
-        <View style={styles.documentActions}>
-          <DocumentActionButton title="Selecionar PDF" icon={Upload} onPress={selectPdf} />
-          <DocumentActionButton title="Visualizar PDF" icon={ExternalLink} onPress={previewDocument} />
-          <DocumentActionButton title="Limpar documento" icon={Trash2} danger onPress={() => { setDocumentUrl(''); setDocumentFile(null); setExistingDocument(null); }} />
-        </View>
-      </FormSection>
-
-      <View style={styles.footerActions}>
-        <FooterActionButton title="Cancelar" icon={X} onPress={cancel} />
-        <FooterActionButton title={saving ? 'Salvando...' : isEditing ? 'Atualizar serviço' : 'Salvar serviço'} icon={Save} onPress={save} primary disabled={!canSave} />
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -446,46 +562,6 @@ function FormSection({ icon: Icon, title, children }: { icon: LucideIcon; title:
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
       {children}
-    </View>
-  );
-}
-
-function FormField({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  keyboardType,
-  multiline,
-  compactMultiline,
-  right,
-  style
-}: {
-  label: string;
-  value: string;
-  onChangeText: (value: string) => void;
-  placeholder?: string;
-  keyboardType?: 'default' | 'numeric' | 'email-address';
-  multiline?: boolean;
-  compactMultiline?: boolean;
-  right?: ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) {
-  return (
-    <View style={[styles.field, style]}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <View style={[styles.inputFrame, multiline ? styles.inputFrameMultiline : null, compactMultiline ? styles.inputFrameCompactMultiline : null]}>
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          keyboardType={keyboardType}
-          multiline={multiline}
-          style={[styles.input, multiline ? styles.inputMultiline : null, compactMultiline ? styles.inputCompactMultiline : null]}
-          placeholderTextColor={colors.muted}
-        />
-        {right ? <View style={styles.inputAction}>{right}</View> : null}
-      </View>
     </View>
   );
 }
@@ -595,8 +671,8 @@ const styles = StyleSheet.create({
     zIndex: 1
   },
   backButton: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
@@ -661,8 +737,8 @@ const styles = StyleSheet.create({
   },
   sectionHelp: {
     color: colors.muted,
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 12,
+    lineHeight: 17,
     fontWeight: '600'
   },
   groupLabel: {
@@ -672,71 +748,64 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     marginTop: 2
   },
-  field: {
-    gap: 5
+  suggestionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6
   },
-  fieldLabel: {
-    color: colors.ink,
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: '900'
-  },
-  inputFrame: {
-    minHeight: 42,
+  suggestionChip: {
+    minHeight: 34,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
     backgroundColor: colors.surface,
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  inputFrameMultiline: {
-    minHeight: 70,
-    alignItems: 'flex-start'
-  },
-  inputFrameCompactMultiline: {
-    minHeight: 58
-  },
-  input: {
-    flex: 1,
-    minHeight: 40,
     paddingHorizontal: spacing.md,
-    color: colors.ink,
-    fontSize: 13,
-    fontWeight: '600'
-  },
-  inputMultiline: {
-    minHeight: 68,
-    paddingTop: 11,
-    textAlignVertical: 'top'
-  },
-  inputCompactMultiline: {
-    minHeight: 56
-  },
-  inputAction: {
-    minWidth: 38,
-    height: 40,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingRight: spacing.sm
+    justifyContent: 'center'
   },
-  twoColumns: {
+  suggestionChipSelected: {
+    borderColor: colors.blue,
+    backgroundColor: colors.blueSoft
+  },
+  suggestionText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  suggestionTextSelected: {
+    color: colors.blue
+  },
+  closedBox: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+    padding: spacing.md,
+    gap: 6
+  },
+  closedRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm
   },
-  columnField: {
-    flex: 1,
-    minWidth: 0
+  closedTitle: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: '900'
+  },
+  closedText: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: '700'
   },
   statusGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.sm
   },
   statusChoice: {
-    minHeight: 38,
-    width: '31%',
-    minWidth: 96,
+    minHeight: 44,
+    flex: 1,
+    minWidth: 0,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
@@ -753,7 +822,7 @@ const styles = StyleSheet.create({
   },
   statusChoiceText: {
     color: colors.blue,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     textAlign: 'center'
   },
@@ -762,22 +831,21 @@ const styles = StyleSheet.create({
   },
   priorityGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.sm
   },
   priorityChoice: {
-    minHeight: 38,
-    width: '22.5%',
-    minWidth: 70,
+    minHeight: 44,
+    flex: 1,
+    minWidth: 0,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.xs,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm
+    gap: 5
   },
   priorityChoiceSelected: {
     borderColor: colors.blue,
@@ -790,7 +858,7 @@ const styles = StyleSheet.create({
   },
   priorityChoiceText: {
     color: colors.ink,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700'
   },
   budgetChoice: {
@@ -822,8 +890,8 @@ const styles = StyleSheet.create({
   },
   budgetSubtitle: {
     color: colors.muted,
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '600'
   },
   selectedText: {
@@ -843,7 +911,7 @@ const styles = StyleSheet.create({
   documentActionButton: {
     flex: 1,
     minWidth: 132,
-    minHeight: 40,
+    minHeight: 44,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
@@ -856,7 +924,7 @@ const styles = StyleSheet.create({
   },
   documentActionText: {
     color: colors.blue,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '900',
     textAlign: 'center'
   },
@@ -872,7 +940,7 @@ const styles = StyleSheet.create({
     zIndex: 1
   },
   footerButton: {
-    minHeight: 42,
+    minHeight: 46,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
@@ -890,7 +958,7 @@ const styles = StyleSheet.create({
   },
   footerButtonText: {
     color: colors.blue,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '900'
   },
   footerButtonTextPrimary: {
