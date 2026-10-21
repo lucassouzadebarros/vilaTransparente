@@ -511,7 +511,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 23,
     lineHeight: 28,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0,
     textAlign: 'center'
   },
@@ -537,11 +537,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
     padding: spacing.xs,
-    shadowColor: '#163052',
-    shadowOpacity: 0.12,
+    shadowColor: '#16202A',
+    shadowOpacity: 0,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
-    elevation: 4
+    elevation: 0
   },
   logoutMenuItem: {
     minHeight: 44,
@@ -554,11 +554,11 @@ const styles = StyleSheet.create({
   logoutMenuText: {
     color: colors.red,
     fontSize: 13,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   greetingText: {
     color: colors.ink,
-    fontWeight: '900',
+    fontWeight: '700',
     fontSize: 23,
     lineHeight: 29
   },
@@ -571,11 +571,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: 14,
-    shadowColor: '#163052',
-    shadowOpacity: 0.06,
+    shadowColor: '#16202A',
+    shadowOpacity: 0,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 5 },
-    elevation: 2,
+    elevation: 0,
     zIndex: 1
   },
   monthlyCard: {
@@ -608,13 +608,13 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 18,
     lineHeight: 22,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   cardMonth: {
     color: colors.muted,
     fontSize: 14,
     lineHeight: 18,
-    fontWeight: '800',
+    fontWeight: '700',
     marginTop: 2
   },
   cardSubtitle: {
@@ -632,7 +632,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 31,
     lineHeight: 36,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   primaryAction: {
     minHeight: 44,
@@ -648,7 +648,7 @@ const styles = StyleSheet.create({
     color: colors.surface,
     fontSize: 13,
     lineHeight: 17,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   disabledAction: {
     opacity: 0.5
@@ -672,13 +672,13 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   statusTextPaid: {
     color: colors.green
   },
   statusTextPending: {
-    color: '#D85B00'
+    color: '#B45309'
   },
   statusTextOverdue: {
     color: colors.red
@@ -690,7 +690,7 @@ const styles = StyleSheet.create({
     color: colors.green,
     fontSize: 32,
     lineHeight: 37,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   metricGrid: {
     flexDirection: 'row',
@@ -720,21 +720,21 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '900',
+    fontWeight: '700',
     textAlign: 'center'
   },
   metricValue: {
     color: colors.ink,
     fontSize: 13,
     lineHeight: 17,
-    fontWeight: '900',
+    fontWeight: '700',
     textAlign: 'center'
   },
   metricCaption: {
     color: colors.muted,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '800',
+    fontWeight: '700',
     textAlign: 'center'
   },
   lockedBody: {
@@ -761,18 +761,18 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 15,
     lineHeight: 20,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   lockedText: {
     color: colors.muted,
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   disabledInfo: {
     minHeight: 40,
     borderRadius: 8,
-    backgroundColor: '#E8ECF2',
+    backgroundColor: '#E3E8E5',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.md
@@ -780,7 +780,7 @@ const styles = StyleSheet.create({
   disabledInfoText: {
     color: colors.muted,
     fontSize: 13,
-    fontWeight: '900',
+    fontWeight: '700',
     textAlign: 'center'
   },
   sectionHeading: {
@@ -802,7 +802,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 20,
     lineHeight: 24,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   listCard: {
     padding: 0,
@@ -838,13 +838,13 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 14,
     lineHeight: 18,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   shortcutStatus: {
     color: colors.blue,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '900',
+    fontWeight: '700',
     marginTop: 2
   },
   emptyRow: {
@@ -858,14 +858,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 9,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: '#EEF1EF',
     alignItems: 'center',
     justifyContent: 'center'
   },
   emptyList: {
     flex: 1,
     color: colors.muted,
-    fontWeight: '900',
+    fontWeight: '700',
     fontSize: 13,
     lineHeight: 18
   },
@@ -905,19 +905,19 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 14,
     lineHeight: 18,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   movementDate: {
     color: colors.muted,
     fontSize: 12,
     lineHeight: 16,
     marginTop: 2,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   movementValue: {
     fontSize: 14,
     lineHeight: 18,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   incomeValue: {
     color: colors.green
@@ -927,7 +927,7 @@ const styles = StyleSheet.create({
   },
   empty: {
     color: colors.muted,
-    fontWeight: '700',
+    fontWeight: '600',
     padding: spacing.lg
   },
   adminBalanceCard: {
@@ -952,12 +952,12 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 13,
     lineHeight: 17,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   balanceValue: {
     color: colors.ink,
     fontSize: 32,
     lineHeight: 37,
-    fontWeight: '900'
+    fontWeight: '700'
   }
 });

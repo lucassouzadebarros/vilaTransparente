@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 14,
     lineHeight: 19,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   stepDetail: {
     color: colors.muted,
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
   },
   stepWarn: {
     color: colors.red,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   stepMuted: {
     color: colors.muted
@@ -480,13 +480,13 @@ const styles = StyleSheet.create({
     color: colors.red,
     fontSize: 14,
     lineHeight: 18,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   emergencyText: {
     color: colors.ink,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   emergencyHint: {
     color: colors.muted,
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
   emergencyPillText: {
     color: colors.red,
     fontSize: 12,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   quoteRow: {
     minHeight: 60,
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 14,
     lineHeight: 18,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   quoteTags: {
     flexDirection: 'row',
@@ -541,7 +541,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 12,
     lineHeight: 15,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   quoteRight: {
     flexDirection: 'row',

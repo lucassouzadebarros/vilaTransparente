@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   scopeText: {
     color: colors.ink,
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
   },
   quoteRowCurrent: {
     borderColor: colors.blue,
-    backgroundColor: '#F4F8FF'
+    backgroundColor: '#F2F4F2'
   },
   quoteCopy: {
     flex: 1,
@@ -386,12 +386,12 @@ const styles = StyleSheet.create({
   scoreValue: {
     fontSize: 22,
     lineHeight: 27,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   scoreLabel: {
     fontSize: 12,
     lineHeight: 15,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   houseList: {
     gap: spacing.xs
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '800',
+    fontWeight: '700',
     flexShrink: 1
   },
   confirmBox: {
@@ -415,13 +415,13 @@ const styles = StyleSheet.create({
     color: colors.red,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   confirmText: {
     color: colors.ink,
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   successCard: {
     borderColor: colors.green,
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
     color: colors.green,
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   errorCard: {
     borderColor: colors.red,
@@ -441,6 +441,6 @@ const styles = StyleSheet.create({
     color: colors.red,
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: '900'
+    fontWeight: '700'
   }
 });

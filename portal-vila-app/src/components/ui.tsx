@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, TextStyle, View, ViewStyle } from 'react-native';
-import { LucideIcon } from 'lucide-react-native';
-import { colors, spacing, TOUCH_TARGET } from '../theme';
+import { Circle, CheckCircle2, CircleAlert, Clock3, LucideIcon } from 'lucide-react-native';
+import { colors, radius, spacing, TOUCH_TARGET } from '../theme';
 import { SoftBackdrop } from './SoftBackdrop';
 
 type ScreenProps = {
@@ -10,6 +10,10 @@ type ScreenProps = {
   subtitle?: string;
   right?: ReactNode;
 };
+
+// `aria-level` is read by the web build to pick h1..h6; React Native's types do not list it.
+const HEADING_LEVEL_1 = { 'aria-level': 1 } as object;
+const HEADING_LEVEL_2 = { 'aria-level': 2 } as object;
 
 export function Screen({ children, title, subtitle, right }: ScreenProps) {
   return (
@@ -45,14 +49,10 @@ export function Label({ children }: { children: ReactNode }) {
   return <Text style={styles.label}>{children}</Text>;
 }
 
-// `aria-level` is read by the web build to pick h1..h6; React Native's types do not list it.
-const HEADING_LEVEL_1 = { 'aria-level': 1 } as object;
-const HEADING_LEVEL_2 = { 'aria-level': 2 } as object;
-
 /** A section title inside a screen. Same look as <Value>, but screen readers can jump between sections. */
 export function SectionTitle({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
   return (
-    <Text role="heading" {...HEADING_LEVEL_2} style={[styles.value, style]}>
+    <Text role="heading" {...HEADING_LEVEL_2} style={[styles.value, styles.sectionTitle, style]}>
       {children}
     </Text>
   );
@@ -70,30 +70,73 @@ export function formatMoney(value?: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value ?? 0);
 }
 
+type Tone = 'ok' | 'wait' | 'bad' | 'off' | 'info';
+
+const toneStyle: Record<Tone, { bg: string; fg: string; Icon: LucideIcon }> = {
+  ok: { bg: colors.greenSoft, fg: colors.green, Icon: CheckCircle2 },
+  wait: { bg: colors.amberSoft, fg: colors.amber, Icon: Clock3 },
+  bad: { bg: colors.redSoft, fg: colors.red, Icon: CircleAlert },
+  off: { bg: '#ECEFED', fg: colors.muted, Icon: Circle },
+  info: { bg: colors.blueSoft, fg: colors.blue, Icon: Circle }
+};
+
+/** What each status code means for the reader: how it is written and which tone it takes. */
+const statusInfo: Record<string, { label: string; tone: Tone }> = {
+  ACTIVE: { label: 'Ativo', tone: 'ok' },
+  INACTIVE: { label: 'Inativo', tone: 'off' },
+  LIBERADA: { label: 'Liberada', tone: 'ok' },
+  PAID: { label: 'Pago', tone: 'ok' },
+  PENDING: { label: 'Pendente', tone: 'wait' },
+  OVERDUE: { label: 'Vencida', tone: 'bad' },
+  CANCELLED: { label: 'Cancelado', tone: 'off' },
+  CANCELADO: { label: 'Cancelado', tone: 'off' },
+  EM_VOTACAO: { label: 'Em votação', tone: 'wait' },
+  EM_ANALISE: { label: 'Em análise', tone: 'wait' },
+  APROVADO: { label: 'Aprovado', tone: 'ok' },
+  REJEITADO: { label: 'Recusado', tone: 'bad' },
+  PLANEJADO: { label: 'Planejado', tone: 'wait' },
+  EM_ANDAMENTO: { label: 'Em andamento', tone: 'info' },
+  FINALIZADO: { label: 'Finalizado', tone: 'ok' },
+  RESOLVIDO: { label: 'Resolvido', tone: 'ok' },
+  ABERTO: { label: 'Aberto', tone: 'wait' },
+  PROCESSADO: { label: 'Processado', tone: 'ok' },
+  ERRO: { label: 'Com erro', tone: 'bad' },
+  VOTOU: { label: 'Votou', tone: 'ok' },
+  'AGUARDANDO SEU VOTO': { label: 'Aguardando seu voto', tone: 'wait' },
+  'MENOR VALOR': { label: 'Menor valor', tone: 'info' },
+  'OUTRO TRABALHO': { label: 'Outro trabalho', tone: 'info' },
+  CONCORRE: { label: 'Concorre', tone: 'info' },
+  'DESTE SERVIÇO': { label: 'Deste serviço', tone: 'info' }
+};
+
+function describeStatus(status: string): { label: string; tone: Tone } {
+  const known = statusInfo[status.toUpperCase()];
+  if (known) {
+    return known;
+  }
+  // A status that is not in the table: write it as a sentence and pick a tone from its words.
+  const upper = status.toUpperCase();
+  const tone: Tone = /CANCEL|INATIV/.test(upper)
+    ? 'off'
+    : /REJEIT|ERRO|VENC|OVERDUE/.test(upper)
+      ? 'bad'
+      : /APROV|FINALIZ|RESOLV|PAGO|ATIV/.test(upper)
+        ? 'ok'
+        : /ANALISE|VOTA|PEND|PLANEJ/.test(upper)
+          ? 'wait'
+          : 'info';
+  const text = status.replace(/_/g, ' ').toLowerCase();
+  return { label: text.charAt(0).toUpperCase() + text.slice(1), tone };
+}
+
+/** A status in words, with an icon, so the meaning never depends on color alone. */
 export function Badge({ status }: { status: string }) {
-  const normalized = status.toUpperCase();
-  const palette =
-    normalized.includes('INACTIVE') || normalized.includes('INATIVO')
-      ? { bg: colors.redSoft, fg: colors.red }
-      : normalized.includes('ACTIVE') || normalized.includes('ATIVO') || normalized.includes('LIBERADA') || normalized.includes('PAID') || normalized.includes('APROVADO') || normalized.includes('FINALIZADO') || normalized.includes('RESOLVIDO')
-      ? { bg: colors.greenSoft, fg: colors.green }
-      : normalized.includes('PENDING') || normalized.includes('ANALISE') || normalized.includes('PLANEJADO') || normalized.includes('VOTACAO')
-        ? { bg: colors.amberSoft, fg: colors.amber }
-        : normalized.includes('OVERDUE') || normalized.includes('REJEITADO') || normalized.includes('CANCEL')
-          ? { bg: colors.redSoft, fg: colors.red }
-          : { bg: colors.blueSoft, fg: colors.blue };
-  const label = normalized
-    .replace('INACTIVE', 'INATIVO')
-    .replace('ACTIVE', 'ATIVO')
-    .replace('PAID', 'PAGO')
-    .replace('CANCELLED', 'CANCELADO')
-    .replace('PENDING', 'PENDENTE')
-    .replace('OVERDUE', 'VENCIDA')
-    .replace('VOTACAO', 'VOTAÇÃO')
-    .replace('_', ' ');
+  const { label, tone } = describeStatus(status);
+  const { bg, fg, Icon } = toneStyle[tone];
   return (
-    <View style={[styles.badge, { backgroundColor: palette.bg }]}>
-      <Text style={[styles.badgeText, { color: palette.fg }]}>{label}</Text>
+    <View style={[styles.badge, { backgroundColor: bg }]}>
+      <Icon color={fg} size={13} strokeWidth={2.4} />
+      <Text style={[styles.badgeText, { color: fg }]}>{label}</Text>
     </View>
   );
 }
@@ -109,9 +152,11 @@ type ButtonProps = {
 };
 
 export function Button({ title, onPress, icon: Icon, variant = 'primary', disabled, accessibilityLabel }: ButtonProps) {
-  const bg = variant === 'danger' ? colors.red : variant === 'ghost' ? 'transparent' : colors.blue;
-  const fg = variant === 'ghost' ? colors.blue : colors.surface;
   const iconOnly = !title;
+  // Primary is the one filled action of a screen; the rest are quiet. An icon-only button has no frame at all.
+  const bg = variant === 'danger' ? colors.red : variant === 'ghost' ? colors.surface : colors.blue;
+  const fg = variant === 'ghost' ? colors.blue : colors.surface;
+  const border = iconOnly ? 'transparent' : variant === 'ghost' ? colors.border : bg;
   return (
     <Pressable
       accessibilityRole="button"
@@ -122,10 +167,14 @@ export function Button({ title, onPress, icon: Icon, variant = 'primary', disabl
       style={({ pressed }) => [
         styles.button,
         iconOnly ? styles.buttonIconOnly : null,
-        { backgroundColor: bg, opacity: disabled ? 0.5 : pressed ? 0.82 : 1, borderColor: variant === 'ghost' ? colors.borderStrong : bg }
+        {
+          backgroundColor: iconOnly ? (pressed ? colors.blueSoft : 'transparent') : bg,
+          borderColor: border,
+          opacity: disabled ? 0.5 : pressed && !iconOnly ? 0.86 : 1
+        }
       ]}
     >
-      {Icon ? <Icon color={fg} size={iconOnly ? 18 : 16} /> : null}
+      {Icon ? <Icon color={iconOnly ? colors.muted : fg} size={iconOnly ? 20 : 16} /> : null}
       {title ? <Text style={[styles.buttonText, { color: fg }]}>{title}</Text> : null}
     </Pressable>
   );
@@ -133,8 +182,13 @@ export function Button({ title, onPress, icon: Icon, variant = 'primary', disabl
 
 export function IconButton({ icon: Icon, onPress, label, danger }: { icon: LucideIcon; onPress?: () => void; label: string; danger?: boolean }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={styles.iconButton}>
-      <Icon color={danger ? colors.red : colors.ink} size={20} />
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [styles.iconButton, pressed ? { backgroundColor: colors.blueSoft } : null]}
+    >
+      <Icon color={danger ? colors.red : colors.muted} size={20} />
     </Pressable>
   );
 }
@@ -207,16 +261,15 @@ const styles = StyleSheet.create({
     maxWidth: 430,
     alignSelf: 'center',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.xl,
     paddingBottom: 104,
-    gap: spacing.md
+    gap: spacing.lg
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: spacing.md,
-    marginBottom: 2
+    gap: spacing.md
   },
   headerText: {
     flex: 1,
@@ -224,29 +277,24 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.ink,
-    fontSize: 24,
-    lineHeight: 29,
-    fontWeight: '800',
-    letterSpacing: 0
+    fontSize: 26,
+    lineHeight: 32,
+    fontWeight: '700',
+    letterSpacing: -0.3
   },
   subtitle: {
     color: colors.muted,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
     marginTop: 2
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 10,
+    borderRadius: radius.card,
     borderColor: colors.border,
     borderWidth: 1,
-    padding: spacing.md,
-    gap: spacing.sm,
-    shadowColor: '#1D2939',
-    shadowOpacity: 0.05,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 2
+    padding: spacing.lg,
+    gap: spacing.sm
   },
   row: {
     flexDirection: 'row',
@@ -257,46 +305,57 @@ const styles = StyleSheet.create({
   },
   label: {
     color: colors.muted,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 13,
+    lineHeight: 18,
     flexShrink: 1
   },
   value: {
     color: colors.ink,
     fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '800',
+    lineHeight: 21,
+    fontWeight: '600',
     flexShrink: 1
+  },
+  sectionTitle: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '700'
   },
   money: {
     color: colors.ink,
-    fontSize: 17,
+    fontSize: 16,
     lineHeight: 22,
-    fontWeight: '800',
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
     flexShrink: 0
   },
   moneyStrong: {
     color: colors.ink,
-    fontSize: 29,
-    lineHeight: 35,
-    fontWeight: '900'
+    fontSize: 30,
+    lineHeight: 36,
+    fontWeight: '700',
+    letterSpacing: -0.4,
+    fontVariant: ['tabular-nums']
   },
   badge: {
     minHeight: 26,
-    borderRadius: 8,
+    borderRadius: 999,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.sm
+    gap: 5,
+    paddingHorizontal: 9
   },
   badgeText: {
     fontSize: 12,
-    fontWeight: '800'
+    lineHeight: 16,
+    fontWeight: '600'
   },
   button: {
     minHeight: TOUCH_TARGET,
-    borderRadius: 8,
+    borderRadius: radius.control,
     borderWidth: 1,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -308,17 +367,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0
   },
   buttonText: {
-    fontSize: 13,
-    lineHeight: 17,
-    fontWeight: '800'
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600'
   },
   iconButton: {
     width: TOUCH_TARGET,
     height: TOUCH_TARGET,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.surface,
+    borderRadius: radius.control,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -327,32 +383,32 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     color: colors.ink,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '800'
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600'
   },
   inputFrame: {
     minHeight: TOUCH_TARGET,
     borderWidth: 1,
     borderColor: colors.borderStrong,
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: radius.control,
     flexDirection: 'row',
     alignItems: 'center'
   },
   inputFrameError: {
     borderColor: colors.red,
-    backgroundColor: '#FFF8F8'
+    backgroundColor: colors.redSoft
   },
   inputFrameMultiline: {
     alignItems: 'flex-start'
   },
   input: {
     flex: 1,
-    minHeight: 40,
-    paddingHorizontal: spacing.sm,
+    minHeight: 42,
+    paddingHorizontal: spacing.md,
     color: colors.ink,
-    fontSize: 14
+    fontSize: 15
   },
   inputMultiline: {
     minHeight: 88,
@@ -361,7 +417,7 @@ const styles = StyleSheet.create({
   },
   inputAction: {
     minWidth: 40,
-    height: 44,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
     paddingRight: spacing.xs
@@ -370,7 +426,7 @@ const styles = StyleSheet.create({
     color: colors.red,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   fieldHelp: {
     color: colors.muted,
@@ -380,6 +436,6 @@ const styles = StyleSheet.create({
   empty: {
     color: colors.muted,
     textAlign: 'center',
-    fontWeight: '700'
+    fontWeight: '600'
   }
 });

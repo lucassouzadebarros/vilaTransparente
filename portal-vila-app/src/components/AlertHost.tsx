@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
   title: {
     color: colors.ink,
     fontSize: 18,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   message: {
     color: colors.muted,
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   buttonGhostText: {
     color: colors.ink

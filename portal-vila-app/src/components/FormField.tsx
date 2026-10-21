@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   required: {
     color: colors.red
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
     color: colors.red,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   hintText: {
     color: colors.muted,

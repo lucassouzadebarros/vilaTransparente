@@ -423,13 +423,13 @@ const styles = StyleSheet.create({
   toggleTitle: {
     color: colors.ink,
     fontSize: 13,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   toggleDescription: {
     color: colors.muted,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   switchTrack: {
     width: 74,
@@ -460,7 +460,7 @@ const styles = StyleSheet.create({
   },
   switchText: {
     fontSize: 12,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   switchTextActive: {
     color: colors.surface,

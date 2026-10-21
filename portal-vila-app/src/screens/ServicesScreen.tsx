@@ -132,7 +132,7 @@ export function ServicesScreen() {
 
 function ServiceCard({ item, onPress }: { item: ServiceOrder; onPress: () => void }) {
   const Icon = serviceIcon(item.category);
-  const priorityColor = item.priority === 'URGENTE' || item.priority === 'ALTA' ? colors.red : item.priority === 'MEDIA' ? '#D98A10' : colors.green;
+  const priorityColor = item.priority === 'URGENTE' || item.priority === 'ALTA' ? colors.red : item.priority === 'MEDIA' ? '#8A5200' : colors.green;
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.serviceCard}>
       <View style={styles.serviceTop}>
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 22,
     lineHeight: 26,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0
   },
   subtitle: {
@@ -287,11 +287,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#163052',
-    shadowOpacity: 0.06,
+    shadowColor: '#16202A',
+    shadowOpacity: 0,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
-    elevation: 2
+    elevation: 0
   },
   newButton: {
     minHeight: 38,
@@ -302,17 +302,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 9,
     shadowColor: colors.blue,
-    shadowOpacity: 0.14,
+    shadowOpacity: 0,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 5 },
-    elevation: 2,
+    elevation: 0,
     zIndex: 1
   },
   newButtonText: {
     color: colors.surface,
     fontSize: 13,
     lineHeight: 17,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   filterGrid: {
     flexDirection: 'row',
@@ -353,11 +353,11 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   filterTextSelected: {
     color: colors.surface,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   list: {
     gap: 14,
@@ -370,11 +370,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: 14,
     gap: 13,
-    shadowColor: '#163052',
-    shadowOpacity: 0.06,
+    shadowColor: '#16202A',
+    shadowOpacity: 0,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 5 },
-    elevation: 2
+    elevation: 0
   },
   serviceTop: {
     flexDirection: 'row',
@@ -382,10 +382,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start'
   },
   serviceIconBox: {
-    width: 54,
-    height: 54,
-    borderRadius: 9,
-    backgroundColor: colors.blueSoft,
+    width: 32,
+    height: 32,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 15,
     lineHeight: 19,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   categoryRow: {
     flexDirection: 'row',
@@ -436,7 +436,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   noVotePill: {
     alignSelf: 'flex-start',
@@ -450,7 +450,7 @@ const styles = StyleSheet.create({
     color: colors.amber,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   serviceDivider: {
     height: 1,
@@ -482,7 +482,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 12,
     lineHeight: 15,
-    fontWeight: '900',
+    fontWeight: '700',
     textAlign: 'center'
   },
   emptyCard: {
@@ -495,17 +495,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    shadowColor: '#163052',
-    shadowOpacity: 0.06,
+    shadowColor: '#16202A',
+    shadowOpacity: 0,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
-    elevation: 2
+    elevation: 0
   },
   emptyIcon: {
     width: 42,
     height: 42,
     borderRadius: 10,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: '#EEF1EF',
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -514,6 +514,6 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '900'
+    fontWeight: '700'
   }
 });

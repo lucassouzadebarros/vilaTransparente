@@ -669,35 +669,9 @@ export function LoginScreen() {
   );
 }
 
+/** The login used to draw clouds, leaves and houses behind the logo; it is plain now. */
 function LoginBackdrop() {
-  return (
-    <View pointerEvents="none" style={styles.loginBackdrop}>
-      <View style={styles.backdropGlow} />
-      <View style={[styles.backdropCloud, styles.backdropCloudLeft]} />
-      <View style={[styles.backdropCloud, styles.backdropCloudRight]} />
-
-      <View style={styles.backdropLeafGroupLeft}>
-        <View style={[styles.backdropLeaf, styles.backdropLeafOne]} />
-        <View style={[styles.backdropLeaf, styles.backdropLeafTwo]} />
-        <View style={[styles.backdropLeaf, styles.backdropLeafThree]} />
-      </View>
-      <View style={styles.backdropLeafGroupRight}>
-        <View style={[styles.backdropLeaf, styles.backdropLeafOne]} />
-        <View style={[styles.backdropLeaf, styles.backdropLeafTwo]} />
-        <View style={[styles.backdropLeaf, styles.backdropLeafThree]} />
-      </View>
-
-      <View style={styles.backdropVillage}>
-        <View style={[styles.backdropHouse, styles.backdropHouseMuted, { height: 46, width: 45 }]} />
-        <View style={[styles.backdropHouse, { height: 68, width: 58 }]} />
-        <View style={[styles.backdropHouse, styles.backdropHouseSoft, { height: 52, width: 48 }]} />
-        <View style={[styles.backdropHouse, { height: 76, width: 64 }]} />
-        <View style={[styles.backdropHouse, styles.backdropHouseSoft, { height: 58, width: 52 }]} />
-        <View style={[styles.backdropHouse, { height: 62, width: 56 }]} />
-        <View style={[styles.backdropHouse, styles.backdropHouseMuted, { height: 44, width: 46 }]} />
-      </View>
-    </View>
-  );
+  return null;
 }
 
 function RegisterField({
@@ -974,7 +948,7 @@ const styles = StyleSheet.create({
     width: 430,
     height: 220,
     borderRadius: 220,
-    backgroundColor: '#EDF7FC',
+    backgroundColor: '#EEF1EF',
     opacity: 0.78
   },
   backdropCloud: {
@@ -982,7 +956,7 @@ const styles = StyleSheet.create({
     width: 54,
     height: 15,
     borderRadius: 999,
-    backgroundColor: '#E3EDF7',
+    backgroundColor: '#EEF1EF',
     opacity: 0.45
   },
   backdropCloudLeft: {
@@ -1049,13 +1023,13 @@ const styles = StyleSheet.create({
   backdropHouse: {
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
-    backgroundColor: '#DCE9F4'
+    backgroundColor: '#E3E8E5'
   },
   backdropHouseSoft: {
-    backgroundColor: '#E6F0F8'
+    backgroundColor: '#EEF1EF'
   },
   backdropHouseMuted: {
-    backgroundColor: '#D4E3F0'
+    backgroundColor: '#DCE1DE'
   },
   brand: {
     alignItems: 'center',
@@ -1082,13 +1056,13 @@ const styles = StyleSheet.create({
   title: {
     color: colors.ink,
     fontSize: 30,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0,
     lineHeight: 36
   },
   subtitle: {
     color: colors.muted,
-    fontWeight: '700',
+    fontWeight: '600',
     textAlign: 'center',
     fontSize: 15,
     lineHeight: 20
@@ -1102,18 +1076,18 @@ const styles = StyleSheet.create({
   },
   raisedCard: {
     borderRadius: 14,
-    borderColor: '#E4EAF2',
+    borderColor: '#E3E8E5',
     padding: 14,
-    shadowColor: '#163052',
-    shadowOpacity: 0.1,
+    shadowColor: '#16202A',
+    shadowOpacity: 0,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
-    elevation: 6
+    elevation: 0
   },
   cardTitle: {
     color: colors.ink,
     fontSize: 18,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0
   },
   loginCard: {
@@ -1142,7 +1116,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 18,
     lineHeight: 22,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0
   },
   loginCardSubtitle: {
@@ -1159,7 +1133,7 @@ const styles = StyleSheet.create({
   error: {
     color: colors.red,
     fontSize: 13,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   errorBanner: {
     borderRadius: 8,
@@ -1172,13 +1146,13 @@ const styles = StyleSheet.create({
   errorBannerTitle: {
     color: colors.red,
     fontSize: 13,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   errorBannerText: {
     color: colors.red,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   pendingBox: {
     borderRadius: 8,
@@ -1191,7 +1165,7 @@ const styles = StyleSheet.create({
     color: colors.amber,
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   readyBox: {
     flexDirection: 'row',
@@ -1205,7 +1179,7 @@ const styles = StyleSheet.create({
     color: colors.green,
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   passwordToggle: {
     width: 34,
@@ -1220,7 +1194,7 @@ const styles = StyleSheet.create({
   loginFieldLabel: {
     color: colors.ink,
     fontSize: 12,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   loginInputFrame: {
     minHeight: 44,
@@ -1265,7 +1239,7 @@ const styles = StyleSheet.create({
     color: colors.red,
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   shortcut: {
     flexDirection: 'row',
@@ -1296,12 +1270,12 @@ const styles = StyleSheet.create({
   loginHint: {
     color: colors.muted,
     fontSize: 12,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   inlineAction: {
     color: colors.blue,
     fontSize: 13,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   loginPrimaryButton: {
     minHeight: 44,
@@ -1312,15 +1286,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
     shadowColor: colors.blue,
-    shadowOpacity: 0.22,
+    shadowOpacity: 0,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 7 },
-    elevation: 4
+    elevation: 0
   },
   loginPrimaryButtonText: {
     color: colors.surface,
     fontSize: 15,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0
   },
   loginFooterModern: {
@@ -1351,7 +1325,7 @@ const styles = StyleSheet.create({
   loginGhostButtonText: {
     color: colors.blue,
     fontSize: 15,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0
   },
   loginGhostButtonTextCompact: {
@@ -1370,7 +1344,7 @@ const styles = StyleSheet.create({
   supportTitle: {
     color: colors.ink,
     fontSize: 15,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   signupCard: {
     gap: 12
@@ -1396,7 +1370,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 18,
     lineHeight: 22,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   signupText: {
     color: colors.muted,
@@ -1425,14 +1399,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E4EAF2',
+    borderColor: '#E3E8E5',
     padding: 14,
     gap: 10,
-    shadowColor: '#163052',
-    shadowOpacity: 0.1,
+    shadowColor: '#16202A',
+    shadowOpacity: 0,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
-    elevation: 6
+    elevation: 0
   },
   registerHeaderModern: {
     flexDirection: 'row',
@@ -1454,7 +1428,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 22,
     lineHeight: 26,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0
   },
   registerSubtitle: {
@@ -1483,11 +1457,11 @@ const styles = StyleSheet.create({
   },
   houseSelectedModern: {
     borderColor: colors.blue,
-    backgroundColor: '#F4F8FF'
+    backgroundColor: '#F2F4F2'
   },
   houseDisabledModern: {
     opacity: 0.72,
-    backgroundColor: '#F8FAFC'
+    backgroundColor: '#F8F9F8'
   },
   houseIconBox: {
     width: 38,
@@ -1501,7 +1475,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.blueSoft
   },
   houseIconBoxDisabled: {
-    backgroundColor: '#EEF1F5'
+    backgroundColor: '#EEF1EF'
   },
   houseCopy: {
     gap: 2
@@ -1519,7 +1493,7 @@ const styles = StyleSheet.create({
   },
   houseLabelModern: {
     color: colors.ink,
-    fontWeight: '900',
+    fontWeight: '700',
     fontSize: 14,
     lineHeight: 18
   },
@@ -1527,7 +1501,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 12,
     lineHeight: 15,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   registerField: {
     gap: 4
@@ -1536,7 +1510,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   registerInputFrame: {
     minHeight: 44,
@@ -1584,7 +1558,7 @@ const styles = StyleSheet.create({
     color: colors.amber,
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   readyBoxModern: {
     minHeight: 46,
@@ -1599,7 +1573,7 @@ const styles = StyleSheet.create({
     color: colors.green,
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   signupNoticeModern: {
     minHeight: 58,
@@ -1617,7 +1591,7 @@ const styles = StyleSheet.create({
     color: colors.teal,
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   calloutHeader: {
     flexDirection: 'row',
@@ -1660,7 +1634,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: colors.ink,
     fontSize: 13,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   houseGrid: {
     flexDirection: 'row',
@@ -1689,7 +1663,7 @@ const styles = StyleSheet.create({
   },
   houseLabel: {
     color: colors.ink,
-    fontWeight: '900',
+    fontWeight: '700',
     fontSize: 14
   },
   houseLabelSelected: {
@@ -1698,7 +1672,7 @@ const styles = StyleSheet.create({
   houseStatus: {
     color: colors.muted,
     fontSize: 12,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   houseStatusSelected: {
     color: colors.blue
@@ -1735,7 +1709,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   infoBanner: {
     minHeight: 48,
@@ -1753,7 +1727,7 @@ const styles = StyleSheet.create({
     color: colors.blue,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   debugCodeBox: {
     borderRadius: 8,
@@ -1766,12 +1740,12 @@ const styles = StyleSheet.create({
   debugLabel: {
     color: colors.amber,
     fontSize: 12,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   debugCode: {
     color: colors.ink,
     fontSize: 30,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0
   },
   centerCard: {
@@ -1791,7 +1765,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
-    fontWeight: '700'
+    fontWeight: '600'
   },
   signupNotice: {
     flexDirection: 'row',
@@ -1806,6 +1780,6 @@ const styles = StyleSheet.create({
     color: colors.green,
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: '700'
+    fontWeight: '600'
   }
 });

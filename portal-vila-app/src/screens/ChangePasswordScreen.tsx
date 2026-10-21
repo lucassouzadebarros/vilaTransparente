@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   successText: {
     color: colors.green
@@ -231,6 +231,6 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '700'
+    fontWeight: '600'
   }
 });

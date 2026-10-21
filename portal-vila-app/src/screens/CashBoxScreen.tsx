@@ -352,7 +352,7 @@ function HouseCard({
 }
 
 const styles = StyleSheet.create({
-  balance: { color: colors.ink, fontSize: 32, lineHeight: 38, fontWeight: '900' },
+  balance: { color: colors.ink, fontSize: 32, lineHeight: 38, fontWeight: '700' },
   divider: { height: 1, backgroundColor: colors.border },
   segmented: {
     flexDirection: 'row',
@@ -363,16 +363,16 @@ const styles = StyleSheet.create({
   },
   segment: { flex: 1, minHeight: 44, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   segmentActive: { backgroundColor: colors.blue },
-  segmentText: { color: colors.blue, fontSize: 13, fontWeight: '800' },
-  segmentTextActive: { color: colors.surface, fontWeight: '900' },
+  segmentText: { color: colors.blue, fontSize: 13, fontWeight: '700' },
+  segmentTextActive: { color: colors.surface, fontWeight: '700' },
   entry: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md, paddingVertical: 6 },
   entryText: { flex: 1, minWidth: 0, gap: 2 },
-  entryTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  entryTitle: { color: colors.ink, fontSize: 15, fontWeight: '700' },
   documentLink: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingTop: 2 },
-  documentLinkText: { color: colors.blue, fontSize: 12, fontWeight: '800' },
-  noDocument: { color: colors.amber, fontSize: 12, fontWeight: '800' },
+  documentLinkText: { color: colors.blue, fontSize: 12, fontWeight: '700' },
+  noDocument: { color: colors.amber, fontSize: 12, fontWeight: '700' },
   warningCard: { backgroundColor: colors.amberSoft, borderColor: colors.amber },
-  warningText: { color: colors.ink, fontSize: 14, fontWeight: '700' },
+  warningText: { color: colors.ink, fontSize: 14, fontWeight: '600' },
   houseTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   houseIcon: { width: 42, height: 42, borderRadius: 9, backgroundColor: colors.blueSoft, alignItems: 'center', justifyContent: 'center' },
   houseRight: { alignItems: 'flex-end', gap: 6 }

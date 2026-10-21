@@ -1,7 +1,9 @@
+import { View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { FileText, Home, MoreHorizontal, WalletCards, Wrench } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
 import { colors } from '../theme';
 import { AdminPixChargesScreen } from '../screens/AdminPixChargesScreen';
 import { AuditLogScreen } from '../screens/AuditLogScreen';
@@ -35,6 +37,7 @@ const screenTitles: Record<string, string> = {
   Caixa: 'Caixa',
   Servicos: 'Serviços',
   Docs: 'Documentos',
+  Mais: 'Menu',
   MoreMenu: 'Menu',
   ProblemReports: 'Problemas',
   ProblemDetails: 'Detalhe do problema',
@@ -57,6 +60,16 @@ const screenTitles: Record<string, string> = {
   Settings: 'Configurações',
   ChangePassword: 'Alterar senha'
 };
+
+/** A tab icon with a short bar above it on the current tab, so the place you are in does not depend on color alone. */
+function tabIcon(Icon: LucideIcon) {
+  return ({ color, size, focused }: { color: string; size: number; focused: boolean }) => (
+    <View style={{ alignItems: 'center' }}>
+      <View style={{ position: 'absolute', top: -12, width: 28, height: 3, borderRadius: 2, backgroundColor: focused ? colors.blue : 'transparent' }} />
+      <Icon color={color} size={size} />
+    </View>
+  );
+}
 
 const Tabs = createBottomTabNavigator();
 const MoreStack = createNativeStackNavigator();
@@ -89,7 +102,7 @@ function PortalTabs() {
           paddingBottom: 12,
           borderTopColor: colors.border
         },
-        tabBarActiveBackgroundColor: colors.blueSoft,
+        tabBarActiveBackgroundColor: 'transparent',
         tabBarItemStyle: {
           height: 58,
           paddingVertical: 2,
@@ -107,11 +120,11 @@ function PortalTabs() {
         }
       }}
     >
-      <Tabs.Screen name="Inicio" component={HomeScreen} options={{ tabBarLabel: 'Início', tabBarIcon: ({ color, size }) => <Home color={color} size={size} /> }} />
-      <Tabs.Screen name="Caixa" component={CashBoxScreen} options={{ tabBarIcon: ({ color, size }) => <WalletCards color={color} size={size} /> }} />
-      <Tabs.Screen name="Servicos" component={ServicesScreen} options={{ tabBarLabel: 'Serviços', tabBarIcon: ({ color, size }) => <Wrench color={color} size={size} /> }} />
-      <Tabs.Screen name="Docs" component={DocumentsScreen} options={{ tabBarIcon: ({ color, size }) => <FileText color={color} size={size} /> }} />
-      <Tabs.Screen name="Mais" component={MoreStackNavigator} options={{ tabBarIcon: ({ color, size }) => <MoreHorizontal color={color} size={size} /> }} />
+      <Tabs.Screen name="Inicio" component={HomeScreen} options={{ tabBarLabel: 'Início', tabBarIcon: tabIcon(Home) }} />
+      <Tabs.Screen name="Caixa" component={CashBoxScreen} options={{ tabBarIcon: tabIcon(WalletCards) }} />
+      <Tabs.Screen name="Servicos" component={ServicesScreen} options={{ tabBarLabel: 'Serviços', tabBarIcon: tabIcon(Wrench) }} />
+      <Tabs.Screen name="Docs" component={DocumentsScreen} options={{ tabBarIcon: tabIcon(FileText) }} />
+      <Tabs.Screen name="Mais" component={MoreStackNavigator} options={{ tabBarIcon: tabIcon(MoreHorizontal) }} />
       <Tabs.Screen name="Contributions" component={ContributionsScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="PixPayment" component={PixPaymentScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="Expenses" component={ExpensesScreen} options={hiddenTabOptions} />
@@ -136,7 +149,7 @@ function PortalTabs() {
 export function AppNavigator() {
   return (
     <NavigationContainer
-      documentTitle={{ formatter: (_options, route) => `${(route && screenTitles[route.name]) ?? 'Portal da Vila'} · Portal da Vila` }}
+      documentTitle={{ formatter: (_options, route) => (route && screenTitles[route.name] ? `${screenTitles[route.name]} · Portal da Vila` : 'Portal da Vila') }}
     >
       <PortalTabs />
     </NavigationContainer>
