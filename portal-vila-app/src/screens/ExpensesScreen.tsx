@@ -9,6 +9,8 @@ import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors } from '../theme';
 import { Expense, PortalDocument } from '../types';
+import { Camera as CameraIcon } from 'lucide-react-native';
+import { PickedFile, choosePhoto, nameWithoutExtension, pickPdf, pickerErrorMessage, previewPickedFile } from '../utils/filePicker';
 
 type DocumentType = 'RECIBO' | 'NOTA_FISCAL';
 
@@ -35,7 +37,7 @@ export function ExpensesScreen() {
   const [documentType, setDocumentType] = useState<DocumentType>('RECIBO');
   const [documentName, setDocumentName] = useState('Recibo');
   const [documentUrl, setDocumentUrl] = useState('');
-  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentFile, setDocumentFile] = useState<PickedFile | null>(null);
   const [saving, setSaving] = useState(false);
 
   const documentsById = useMemo(() => {
@@ -153,35 +155,33 @@ export function ExpensesScreen() {
     }
   }
 
-  function selectPdf() {
-    if (typeof document === 'undefined') {
-      Alert.alert('Documento', 'Seleção de arquivo disponível no app web.');
+  function previewDraftDocument() {
+    if (documentFile) {
+      previewPickedFile(documentFile).catch(() => Alert.alert('Documento', 'Não consegui abrir o arquivo escolhido.'));
       return;
     }
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'application/pdf';
-    input.onchange = () => {
-      const file = input.files?.[0];
+    const previewUrl = documentUrl.trim();
+    if (!previewUrl) {
+      Alert.alert('Documento', 'Selecione um PDF ou informe o link do documento.');
+      return;
+    }
+    api.openDocument(previewUrl).catch(() => Alert.alert('Documento', 'Não foi possível abrir o documento.'));
+  }
+
+  async function attachFile(pick: () => Promise<PickedFile | null>) {
+    try {
+      const file = await pick();
       if (!file) {
         return;
       }
       setDocumentFile(file);
       setDocumentUrl('');
       if (!documentName.trim() || documentName === 'Recibo' || documentName === 'Nota fiscal') {
-        setDocumentName(file.name.replace(/\.pdf$/i, ''));
+        setDocumentName(nameWithoutExtension(file.name));
       }
-    };
-    input.click();
-  }
-
-  function previewDraftDocument() {
-    const previewUrl = documentFile ? URL.createObjectURL(documentFile) : documentUrl.trim();
-    if (!previewUrl) {
-      Alert.alert('Documento', 'Selecione um PDF ou informe o link do documento.');
-      return;
+    } catch (err) {
+      Alert.alert('Documento', pickerErrorMessage(err));
     }
-    api.openDocument(previewUrl).catch(() => Alert.alert('Documento', 'Não foi possível abrir o documento.'));
   }
 
   function clearDocument() {
@@ -287,7 +287,8 @@ export function ExpensesScreen() {
             <FormField label="Link do PDF" value={documentUrl} onChangeText={setDocumentUrl} placeholder="https://.../recibo.pdf" />
             {documentFile ? <Text style={styles.fileSelected}>Arquivo selecionado: {documentFile.name}</Text> : null}
             <View style={styles.documentActions}>
-              <DocumentActionButton title="Selecionar PDF" icon={Upload} onPress={selectPdf} />
+              <DocumentActionButton title="Selecionar PDF" icon={Upload} onPress={() => attachFile(pickPdf)} />
+              <DocumentActionButton title="Enviar foto" icon={CameraIcon} onPress={() => attachFile(choosePhoto)} />
               <DocumentActionButton title="Visualizar PDF" icon={Eye} onPress={previewDraftDocument} />
               <DocumentActionButton title="Limpar documento" icon={Trash2} danger onPress={clearDocument} />
             </View>

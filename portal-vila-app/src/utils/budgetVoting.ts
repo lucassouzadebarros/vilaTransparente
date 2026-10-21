@@ -5,6 +5,12 @@ export function budgetBadgeStatus(status: Budget['status']) {
   return status === 'EM_ANALISE' ? 'EM_VOTACAO' : status;
 }
 
+/** The cheapest quote still in the race (refused and cancelled ones do not count). */
+export function lowestQuoteId(quotes: Budget[]) {
+  const live = quotes.filter((quote) => quote.status === 'EM_ANALISE' || quote.status === 'APROVADO');
+  return [...live].sort((a, b) => a.amount - b.amount)[0]?.id;
+}
+
 export function voteLabel(vote?: BudgetVoteChoice | null) {
   return vote === 'APROVAR' ? 'Aprovar' : vote === 'RECUSAR' ? 'Recusar' : '';
 }

@@ -35,6 +35,10 @@ public class Budget {
 
     public Long documentId;
 
+    /** What the supplier will do, so the houses know what they are voting on. */
+    @Column(columnDefinition = "text")
+    public String scope;
+
     @Column(columnDefinition = "text")
     public String notes;
 

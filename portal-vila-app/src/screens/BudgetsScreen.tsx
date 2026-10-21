@@ -1,10 +1,11 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Eye, Pencil, Plus, RefreshCw, Vote } from 'lucide-react-native';
+import { DemandTabs } from '../components/DemandTabs';
 import { Badge, Button, Card, EmptyState, Label, Money, Row, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
-import { Budget, BudgetVoting } from '../types';
+import { Budget, BudgetVoting, ServiceOrder } from '../types';
 import { awaitingMyVote, budgetBadgeStatus, votingScore } from '../utils/budgetVoting';
 
 /** Budgets still being voted on come first, then the newest. */
@@ -21,6 +22,7 @@ export function BudgetsScreen() {
   const { canManageBudgets } = useAuth();
   const [items, setItems] = useState<Budget[]>([]);
   const [votings, setVotings] = useState<Record<number, BudgetVoting>>({});
+  const [serviceTitles, setServiceTitles] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -28,10 +30,12 @@ export function BudgetsScreen() {
     setLoading(true);
     setError('');
     try {
-      const [nextBudgets, nextVotings] = await Promise.all([
+      const [nextBudgets, nextVotings, nextServices] = await Promise.all([
         api.budgets(),
-        api.budgetVotings().catch(() => [] as BudgetVoting[])
+        api.budgetVotings().catch(() => [] as BudgetVoting[]),
+        api.services().catch(() => [] as ServiceOrder[])
       ]);
+      setServiceTitles(Object.fromEntries(nextServices.filter((service) => service.id).map((service) => [service.id as number, service.title])));
       setItems(sortBudgets(nextBudgets));
       setVotings(Object.fromEntries(nextVotings.map((voting) => [voting.budgetId, voting])));
     } catch (err) {
@@ -49,6 +53,7 @@ export function BudgetsScreen() {
 
   return (
     <Screen title="Orçamentos" subtitle="Cotações e votação das casas" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
+      <DemandTabs current="budgets" />
       {canManageBudgets ? <Button title="Novo orçamento" icon={Plus} onPress={() => navigation.navigate('BudgetForm', { formMode: 'create', budgetId: null, serviceId: null, formKey: Date.now() })} /> : null}
       {error ? (
         <Card>
@@ -71,7 +76,7 @@ export function BudgetsScreen() {
             {item.supplierDocument ? <Label>CNPJ {item.supplierDocument}</Label> : null}
             <Label>{item.title}</Label>
             <Row>
-              <Label>{item.serviceId ? `Serviço #${item.serviceId}` : 'Sem serviço vinculado'}</Label>
+              <Label>{item.serviceId ? `Cotação do serviço: ${serviceTitles[item.serviceId] ?? `#${item.serviceId}`}` : 'Orçamento avulso'}</Label>
               <Money value={item.amount} />
             </Row>
             {voting?.open ? (

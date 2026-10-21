@@ -676,18 +676,18 @@ class DocumentController {
     private final PortalDocumentRepository documents;
     private final CurrentUserService currentUser;
     private final JwtService jwtService;
-    private final Path uploadRoot;
+    private final DocumentStorage storage;
 
     DocumentController(
         PortalDocumentRepository documents,
         CurrentUserService currentUser,
         JwtService jwtService,
-        @Value("${portal.uploads.dir:uploads/documents}") String uploadDir
+        DocumentStorage storage
     ) {
         this.documents = documents;
         this.currentUser = currentUser;
         this.jwtService = jwtService;
-        this.uploadRoot = Paths.get(uploadDir).toAbsolutePath().normalize();
+        this.storage = storage;
     }
 
     @GetMapping
@@ -695,7 +695,8 @@ class DocumentController {
         if (relatedType != null && relatedId != null) {
             return documents.findByRelatedTypeAndRelatedIdOrderByCreatedAtDesc(relatedType, relatedId);
         }
-        return documents.findAll();
+        // Photos of problem reports belong to the report, not to the documents library.
+        return documents.findAll().stream().filter(document -> !"PROBLEM_REPORT".equals(document.relatedType)).toList();
     }
 
     @PostMapping
@@ -740,14 +741,7 @@ class DocumentController {
             return documents.save(document);
         }
 
-        Files.createDirectories(uploadRoot);
-        String originalName = file.getOriginalFilename() == null ? "document.pdf" : file.getOriginalFilename();
-        String extension = originalName.contains(".") ? originalName.substring(originalName.lastIndexOf('.')) : ".pdf";
-        String storedName = UUID.randomUUID() + extension;
-        Path destination = uploadRoot.resolve(storedName).normalize();
-        file.transferTo(destination);
-
-        document.storagePath = destination.toString();
+        document.storagePath = storage.save(file, false).toString();
         document.url = "pending";
         PortalDocument saved = documents.save(document);
         saved.url = "/api/documents/" + saved.id + "/file";
@@ -769,7 +763,7 @@ class DocumentController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Arquivo não encontrado.");
         }
         String filename = path.getFileName().toString();
-        MediaType type = filename.toLowerCase().endsWith(".pdf") ? MediaType.APPLICATION_PDF : MediaType.APPLICATION_OCTET_STREAM;
+        MediaType type = MediaType.parseMediaType(DocumentStorage.contentTypeOf(filename));
         return ResponseEntity.ok()
             .contentType(type)
             .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
@@ -798,19 +792,85 @@ class ProblemReportController {
     private final ProblemReportRepository reports;
     private final ResidentRepository residents;
     private final CurrentUserService currentUser;
+    private final PortalDocumentRepository documents;
+    private final DocumentStorage storage;
+    private final PushService push;
 
-    ProblemReportController(ProblemReportRepository reports, ResidentRepository residents, CurrentUserService currentUser) {
+    private static final int MAX_PHOTOS = 3;
+    private static final String PHOTO_TYPE = "PROBLEM_REPORT";
+
+    ProblemReportController(
+        ProblemReportRepository reports,
+        ResidentRepository residents,
+        CurrentUserService currentUser,
+        PortalDocumentRepository documents,
+        DocumentStorage storage,
+        PushService push
+    ) {
         this.reports = reports;
         this.residents = residents;
         this.currentUser = currentUser;
+        this.documents = documents;
+        this.storage = storage;
+        this.push = push;
     }
 
     @GetMapping
     List<ProblemReport> list(@RequestParam(required = false) String status) {
-        if (status != null && !status.isBlank()) {
-            return reports.findByStatusOrderByCreatedAtDesc(status);
+        List<ProblemReport> found = status != null && !status.isBlank()
+            ? reports.findByStatusOrderByCreatedAtDesc(status)
+            : reports.findAllByOrderByCreatedAtDesc();
+        Map<Long, Long> photos = documents.findByRelatedType(PHOTO_TYPE).stream()
+            .filter(document -> document.relatedId != null)
+            .collect(java.util.stream.Collectors.groupingBy(document -> document.relatedId, java.util.stream.Collectors.counting()));
+        found.forEach(report -> report.photoCount = photos.getOrDefault(report.id, 0L).intValue());
+        return found;
+    }
+
+    /** The person who reported (or the admin) adds up to three photos to a report. */
+    @PostMapping(value = "/{id}/photos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    PortalDocument addPhoto(@PathVariable Long id, @RequestParam("file") MultipartFile file) throws IOException {
+        ProblemReport report = reports.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Relato não encontrado."));
+        assertCanChangePhotos(report);
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escolha uma foto.");
         }
-        return reports.findAllByOrderByCreatedAtDesc();
+        if (documents.findByRelatedTypeAndRelatedIdOrderByCreatedAtDesc(PHOTO_TYPE, report.id).size() >= MAX_PHOTOS) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cada relato aceita até " + MAX_PHOTOS + " fotos.");
+        }
+        PortalDocument document = new PortalDocument();
+        document.name = "Foto do relato #" + report.id;
+        document.type = "FOTO";
+        document.relatedType = PHOTO_TYPE;
+        document.relatedId = report.id;
+        document.uploadedBy = currentUser.current().id;
+        document.description = "Foto enviada junto com o relato.";
+        document.storagePath = storage.save(file, true).toString();
+        document.url = "pending";
+        PortalDocument saved = documents.save(document);
+        saved.url = "/api/documents/" + saved.id + "/file";
+        return documents.save(saved);
+    }
+
+    @DeleteMapping("/{id}/photos/{documentId}")
+    Map<String, String> removePhoto(@PathVariable Long id, @PathVariable Long documentId) {
+        ProblemReport report = reports.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Relato não encontrado."));
+        assertCanChangePhotos(report);
+        PortalDocument document = documents.findById(documentId)
+            .filter(candidate -> PHOTO_TYPE.equals(candidate.relatedType) && report.id.equals(candidate.relatedId))
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Foto não encontrada."));
+        storage.delete(document);
+        documents.delete(document);
+        return Map.of("status", "REMOVIDA");
+    }
+
+    private void assertCanChangePhotos(ProblemReport report) {
+        AppUser user = currentUser.current();
+        if (!currentUser.isAdmin() && !user.id.equals(report.createdBy)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Só quem fez o relato (ou o administrador) mexe nas fotos.");
+        }
     }
 
     @PostMapping
@@ -846,11 +906,17 @@ class ProblemReportController {
         report.location = incoming.location.trim();
         report.category = incoming.category == null || incoming.category.isBlank() ? "Outro" : incoming.category.trim();
         report.priority = normalizePriority(incoming.priority);
+        String previousStatus = report.status;
         report.status = normalizeStatus(incoming.status);
         report.description = incoming.description.trim();
         report.attachmentName = incoming.attachmentName == null || incoming.attachmentName.isBlank() ? null : incoming.attachmentName.trim();
         report.updatedAt = LocalDateTime.now();
-        return reports.save(report);
+        ProblemReport saved = reports.save(report);
+        if (!previousStatus.equals(saved.status)) {
+            push.notifyUser(saved.createdBy, "Seu relato foi atualizado",
+                "\"" + saved.title + "\" agora está " + statusLabel(saved.status) + ".", Map.of("type", "REPORT", "id", saved.id));
+        }
+        return saved;
     }
 
     private void validate(ProblemReport report) {
@@ -873,6 +939,15 @@ class ProblemReportController {
         return switch (normalized) {
             case "BAIXA", "MEDIA", "ALTA", "URGENTE" -> normalized;
             default -> "MEDIA";
+        };
+    }
+
+    private static String statusLabel(String status) {
+        return switch (status) {
+            case "EM_ANALISE" -> "em análise";
+            case "RESOLVIDO" -> "resolvido";
+            case "CANCELADO" -> "cancelado";
+            default -> "aberto";
         };
     }
 
@@ -1202,6 +1277,12 @@ class SettingsController {
     SettingsResponse update(@RequestBody Settings settings) {
         return SettingsResponse.from(financialService.updateSettings(settings));
     }
+
+    @PutMapping("/budget-rule")
+    @PreAuthorize("hasRole('ADMIN')")
+    SettingsResponse updateBudgetRule(@RequestBody BudgetRuleRequest request) {
+        return SettingsResponse.from(financialService.updateBudgetRule(request.budgetRequiredAbove()));
+    }
 }
 
 @RestControllerAdvice
@@ -1219,6 +1300,12 @@ class ApiExceptionHandler {
             reason = "Não foi possível concluir a solicitação.";
         }
         return ResponseEntity.status(ex.getStatusCode()).body(Map.of("error", reason));
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
+    Map<String, String> uploadTooLarge() {
+        return Map.of("error", "O arquivo é grande demais. O limite é de 10 MB.");
     }
 
     @ExceptionHandler(java.util.NoSuchElementException.class)

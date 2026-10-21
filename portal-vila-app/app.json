@@ -9,6 +9,16 @@
     "assetBundlePatterns": [
       "**/*"
     ],
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O Portal da Vila usa suas fotos para anexar ao relato de um problema ou a um comprovante.",
+          "cameraPermission": "O Portal da Vila usa a câmera para fotografar o problema ou o comprovante."
+        }
+      ],
+      "expo-notifications"
+    ],
     "ios": {
       "supportsTablet": true
     },

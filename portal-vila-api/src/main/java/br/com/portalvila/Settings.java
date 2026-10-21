@@ -27,6 +27,9 @@ public class Settings {
     @JsonIgnore
     public String webhookSecret;
 
+    /** A service above this value needs a budget approved by the houses before it starts. Empty means no rule. */
+    public BigDecimal budgetRequiredAbove;
+
     @Column(nullable = false)
     public LocalDateTime createdAt = LocalDateTime.now();
 

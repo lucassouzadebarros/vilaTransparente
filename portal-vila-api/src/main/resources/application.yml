@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: portal-vila-api
+  servlet:
+    multipart:
+      # Phone photos and scanned receipts: the default of 1 MB refused most of them.
+      max-file-size: 10MB
+      max-request-size: 12MB
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/portal_vila}
     username: ${DATABASE_USERNAME:portal_vila}
@@ -51,3 +56,6 @@ portal:
     user-agent: ${ASAAS_USER_AGENT:Portal da Vila}
   uploads:
     dir: ${PORTAL_UPLOAD_DIR:uploads/documents}
+  push:
+    # Notices on the phone (Expo). Harmless while no phone has registered: there is nobody to send to.
+    enabled: ${PORTAL_PUSH_ENABLED:true}

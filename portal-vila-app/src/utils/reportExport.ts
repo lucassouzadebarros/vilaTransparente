@@ -1,4 +1,7 @@
 import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { MonthlyReport } from '../types';
 import { formatDateBR, formatMoneyBR, monthTitle } from './format';
 
@@ -34,8 +37,18 @@ export function buildReportCsv(report: MonthlyReport) {
   return `﻿${rows.map((row) => row.map(cell).join(';')).join('\r\n')}`;
 }
 
-export function downloadReportCsv(report: MonthlyReport): boolean {
-  if (Platform.OS !== 'web' || typeof document === 'undefined') {
+/** Web: downloads the file. Phone: saves it in the app cache and opens the share sheet (mail, drive, spreadsheet app). */
+export async function downloadReportCsv(report: MonthlyReport): Promise<boolean> {
+  if (Platform.OS !== 'web') {
+    const uri = `${FileSystem.cacheDirectory}prestacao-de-contas-${report.month}.csv`;
+    await FileSystem.writeAsStringAsync(uri, buildReportCsv(report), { encoding: FileSystem.EncodingType.UTF8 });
+    if (!(await Sharing.isAvailableAsync())) {
+      return false;
+    }
+    await Sharing.shareAsync(uri, { mimeType: 'text/csv', dialogTitle: 'Planilha da prestação de contas' });
+    return true;
+  }
+  if (typeof document === 'undefined') {
     return false;
   }
   const blob = new Blob([buildReportCsv(report)], { type: 'text/csv;charset=utf-8' });
@@ -89,8 +102,17 @@ ${report.expensesWithoutDocument > 0 ? `<p class="muted">${report.expensesWithou
 </body></html>`;
 }
 
-export function printReport(report: MonthlyReport): boolean {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+/** Web: opens a clean page to print or save as PDF. Phone: builds the PDF and opens the share sheet. */
+export async function printReport(report: MonthlyReport): Promise<boolean> {
+  if (Platform.OS !== 'web') {
+    const { uri } = await Print.printToFileAsync({ html: buildReportHtml(report) });
+    if (!(await Sharing.isAvailableAsync())) {
+      return false;
+    }
+    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Prestação de contas em PDF' });
+    return true;
+  }
+  if (typeof window === 'undefined') {
     return false;
   }
   const page = window.open('', '_blank');

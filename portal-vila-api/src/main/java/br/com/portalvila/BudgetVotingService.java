@@ -34,6 +34,8 @@ class BudgetVotingService {
     private final HouseRepository houses;
     private final DashboardEventService dashboardEvents;
     private final AuditService audit;
+    private final ServiceOrderRepository services;
+    private final PushService push;
 
     BudgetVotingService(
         BudgetRepository budgets,
@@ -41,8 +43,12 @@ class BudgetVotingService {
         ResidentRepository residents,
         HouseRepository houses,
         DashboardEventService dashboardEvents,
-        AuditService audit
+        AuditService audit,
+        ServiceOrderRepository services,
+        PushService push
     ) {
+        this.push = push;
+        this.services = services;
         this.audit = audit;
         this.budgets = budgets;
         this.votes = votes;
@@ -80,6 +86,18 @@ class BudgetVotingService {
         Resident resident = voterResident(voter, participants);
         if (resident == null) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Somente moradores das casas participantes podem votar.");
+        }
+
+        if (APPROVE.equals(normalized) && budget.serviceId != null) {
+            // Quotes for the same service compete: a house approves at most one of them, so moving its "yes" to this
+            // quote takes it back from the others and only one quote can ever reach the majority.
+            for (Budget sibling : budgets.findByServiceIdOrderByAmountAsc(budget.serviceId)) {
+                if (!sibling.id.equals(budget.id) && OPEN_STATUS.equals(sibling.status)) {
+                    votes.findByBudgetIdAndHouseId(sibling.id, resident.houseId)
+                        .filter(existing -> APPROVE.equals(existing.vote))
+                        .ifPresent(votes::delete);
+                }
+            }
         }
 
         BudgetVote vote = votes.findByBudgetIdAndHouseId(budget.id, resident.houseId).orElseGet(() -> {
@@ -138,7 +156,44 @@ class BudgetVotingService {
         budget.updatedAt = now;
         budgets.save(budget);
         audit.record("BUDGET_" + status, "BUDGET", budget.id, budget.title + " - " + AuditService.money(budget.amount));
+        push.notifyResidents(
+            "APROVADO".equals(status) ? "Orçamento aprovado" : "Orçamento recusado",
+            budget.title + " - " + AuditService.money(budget.amount),
+            Map.of("type", "BUDGET", "id", budget.id));
+        if ("APROVADO".equals(status) && budget.serviceId != null) {
+            chooseForService(budget);
+        }
         dashboardEvents.publishDashboardChanged();
+    }
+
+    /**
+     * An approved quote becomes the budget of its service (which moves from planned to approved) and the other
+     * quotes that were still being voted are closed as not chosen.
+     */
+    private void chooseForService(Budget chosen) {
+        services.findById(chosen.serviceId).ifPresent(service -> {
+            boolean open = !"FINALIZADO".equals(service.status) && !"CANCELADO".equals(service.status);
+            if (open && service.approvedBudgetId == null) {
+                service.approvedBudgetId = chosen.id;
+                if ("PLANEJADO".equals(service.status)) {
+                    service.status = "APROVADO";
+                }
+                if (service.expectedValue == null) {
+                    service.expectedValue = chosen.amount;
+                }
+                if (service.supplier == null || service.supplier.isBlank()) {
+                    service.supplier = chosen.supplier;
+                    service.supplierDocument = chosen.supplierDocument;
+                }
+                service.updatedAt = LocalDateTime.now();
+                services.save(service);
+            }
+        });
+        for (Budget sibling : budgets.findByServiceIdOrderByAmountAsc(chosen.serviceId)) {
+            if (!sibling.id.equals(chosen.id) && OPEN_STATUS.equals(sibling.status)) {
+                decide(sibling, "REJEITADO");
+            }
+        }
     }
 
     private BudgetVotingSummary summarize(

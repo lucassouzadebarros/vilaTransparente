@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { ExternalLink, Lock, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Vote, Wrench } from 'lucide-react-native';
 import { Badge, Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
@@ -9,7 +9,7 @@ import { colors, spacing } from '../theme';
 import { Budget, BudgetVoteChoice, BudgetVoting, PortalDocument } from '../types';
 import { Alert } from '../utils/alert';
 import { formatDateBR } from '../utils/format';
-import { budgetBadgeStatus, closingResult, formatVotingDate, voteLabel, votingScore } from '../utils/budgetVoting';
+import { budgetBadgeStatus, closingResult, formatVotingDate, lowestQuoteId, voteLabel, votingScore } from '../utils/budgetVoting';
 
 export function BudgetDetailsScreen() {
   const route = useRoute<any>();
@@ -19,6 +19,7 @@ export function BudgetDetailsScreen() {
   const [budget, setBudget] = useState<Budget | null>(null);
   const [documents, setDocuments] = useState<PortalDocument[]>([]);
   const [voting, setVoting] = useState<BudgetVoting | null>(null);
+  const [quotes, setQuotes] = useState<Budget[]>([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [sendingVote, setSendingVote] = useState<BudgetVoteChoice | null>(null);
@@ -36,6 +37,7 @@ export function BudgetDetailsScreen() {
       setBudget(nextBudget);
       setDocuments(nextDocuments);
       setVoting(nextVoting);
+      setQuotes(nextBudget.serviceId ? await api.serviceBudgets(nextBudget.serviceId).catch(() => [] as Budget[]) : []);
     } catch {
       setError('Não consegui carregar este orçamento.');
     }
@@ -109,7 +111,16 @@ export function BudgetDetailsScreen() {
           {budget.supplierDocument ? <Label>CNPJ {budget.supplierDocument}</Label> : null}
           <Label>{budget.title}</Label>
           <Money value={budget.amount} strong />
-          <Row><Label>Serviço</Label><Value>{budget.serviceId ? `#${budget.serviceId}` : 'Sem vínculo'}</Value></Row>
+          {budget.scope ? (
+            <View style={styles.scopeBox}>
+              <Text style={styles.scopeTitle}>O que será feito</Text>
+              <Text style={styles.scopeText}>{budget.scope}</Text>
+            </View>
+          ) : null}
+          <Row><Label>Serviço</Label><Value>{budget.serviceId ? `#${budget.serviceId}` : 'Avulso (sem serviço)'}</Value></Row>
+          {budget.serviceId ? (
+            <Button title="Ver serviço" icon={Wrench} variant="ghost" onPress={() => navigation.navigate('ServiceDetails', { id: budget.serviceId, refreshKey: Date.now() })} />
+          ) : null}
           {budget.validUntil ? <Row><Label>Validade</Label><Value>{formatDateBR(budget.validUntil)}</Value></Row> : null}
           {budget.notes ? <Label>{budget.notes}</Label> : null}
           {budget.status === 'APROVADO' && !budget.serviceId ? <Label>Aprovado pelas casas. Pode ser escolhido ao cadastrar ou editar um serviço.</Label> : null}
@@ -161,6 +172,9 @@ export function BudgetDetailsScreen() {
           </View>
           {voting.open && voting.canVote ? (
             <>
+              {budget.serviceId && quotes.length > 1 ? (
+                <Label>Este orçamento é uma das cotações do serviço. Cada casa aprova só uma: ao aprovar esta, o seu "sim" nas outras é retirado.</Label>
+              ) : null}
               <Label>
                 {voting.myVote
                   ? `Seu voto: ${voteLabel(voting.myVote)}. Você pode mudar até a votação encerrar.`
@@ -203,6 +217,29 @@ export function BudgetDetailsScreen() {
           ) : null}
         </Card>
       ) : null}
+      {budget && quotes.length > 1 ? (
+        <Card>
+          <Value>Cotações do mesmo serviço</Value>
+          <Label>Compare antes de votar. A de menor valor está marcada.</Label>
+          {quotes.map((quote) => (
+            <Pressable
+              key={quote.id}
+              accessibilityRole="button"
+              onPress={() => quote.id !== budget.id && navigation.navigate('BudgetDetails', { id: quote.id, refreshKey: Date.now() })}
+              style={[styles.quoteRow, quote.id === budget.id ? styles.quoteRowCurrent : null]}
+            >
+              <View style={styles.quoteCopy}>
+                <Text style={styles.houseName}>{quote.supplier}{quote.id === budget.id ? ' (esta)' : ''}</Text>
+                <View style={styles.quoteTags}>
+                  <Badge status={budgetBadgeStatus(quote.status)} />
+                  {quote.id === lowestQuoteId(quotes) ? <Badge status="MENOR VALOR" /> : null}
+                </View>
+              </View>
+              <Money value={quote.amount} />
+            </Pressable>
+          ))}
+        </Card>
+      ) : null}
     </Screen>
   );
 }
@@ -221,6 +258,52 @@ function ScoreBox({ label, value, color, background }: { label: string; value: n
 }
 
 const styles = StyleSheet.create({
+  scopeBox: {
+    borderRadius: 8,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: 4
+  },
+  scopeTitle: {
+    color: colors.ink,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '900'
+  },
+  scopeText: {
+    color: colors.ink,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '600'
+  },
+  quoteRow: {
+    minHeight: 56,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md
+  },
+  quoteRowCurrent: {
+    borderColor: colors.blue,
+    backgroundColor: '#F4F8FF'
+  },
+  quoteCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 6
+  },
+  quoteTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs
+  },
   scoreRow: {
     flexDirection: 'row',
     gap: spacing.sm

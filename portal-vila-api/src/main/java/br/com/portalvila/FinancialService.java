@@ -221,6 +221,21 @@ class FinancialService {
         return settingsRepository.findAll().stream().findFirst().orElseGet(() -> settingsRepository.save(new Settings()));
     }
 
+    /** Sets (or clears, with null) the value above which a service needs a budget approved by the houses. */
+    public Settings updateBudgetRule(BigDecimal budgetRequiredAbove) {
+        if (budgetRequiredAbove != null && budgetRequiredAbove.signum() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O valor não pode ser negativo.");
+        }
+        Settings settings = settings();
+        settings.budgetRequiredAbove = budgetRequiredAbove == null || budgetRequiredAbove.signum() == 0 ? null : budgetRequiredAbove;
+        settings.updatedAt = LocalDateTime.now();
+        Settings saved = settingsRepository.save(settings);
+        audit.record("BUDGET_RULE_CHANGED", "SETTINGS", saved.id, saved.budgetRequiredAbove == null
+            ? "Orçamento aprovado deixou de ser exigido"
+            : "Orçamento aprovado exigido acima de " + AuditService.money(saved.budgetRequiredAbove));
+        return saved;
+    }
+
     public Settings updateSettings(Settings incoming) {
         Settings settings = settings();
         settings.villageName = incoming.villageName;
