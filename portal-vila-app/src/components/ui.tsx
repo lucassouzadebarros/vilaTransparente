@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, TextStyle, View, ViewStyle } from 'react-native';
-import { Circle, CheckCircle2, CircleAlert, Clock3, LucideIcon } from 'lucide-react-native';
+import { ArrowLeft, Circle, CheckCircle2, CircleAlert, Clock3, LucideIcon } from 'lucide-react-native';
 import { colors, radius, spacing, TOUCH_TARGET } from '../theme';
 import { CONTENT_MAX_WIDTH } from '../utils/layout';
 import { SoftBackdrop } from './SoftBackdrop';
@@ -155,9 +155,10 @@ type ButtonProps = {
 export function Button({ title, onPress, icon: Icon, variant = 'primary', disabled, accessibilityLabel }: ButtonProps) {
   const iconOnly = !title;
   // Primary is the one filled action of a screen; the rest are quiet. An icon-only button has no frame at all.
-  const bg = variant === 'danger' ? colors.red : variant === 'ghost' ? colors.surface : colors.blue;
-  const fg = variant === 'ghost' ? colors.blue : colors.surface;
-  const border = iconOnly ? 'transparent' : variant === 'ghost' ? colors.border : bg;
+  // Danger is a quiet red outline, not a solid block: a destructive action should be findable, not the loudest thing.
+  const bg = variant === 'primary' ? colors.blue : colors.surface;
+  const fg = variant === 'primary' ? colors.surface : variant === 'danger' ? colors.red : colors.blue;
+  const border = iconOnly ? 'transparent' : variant === 'primary' ? colors.blue : variant === 'danger' ? '#F0C4BF' : colors.border;
   return (
     <Pressable
       accessibilityRole="button"
@@ -177,6 +178,34 @@ export function Button({ title, onPress, icon: Icon, variant = 'primary', disabl
     >
       {Icon ? <Icon color={iconOnly ? colors.muted : fg} size={iconOnly ? 20 : 16} /> : null}
       {title ? <Text style={[styles.buttonText, { color: fg }]}>{title}</Text> : null}
+    </Pressable>
+  );
+}
+
+type Fact = { label: string; value: ReactNode };
+
+/** A short list of facts, each a label on the left and its value on the right on one line, with a hairline between. */
+export function Facts({ items }: { items: Fact[] }) {
+  return (
+    <View style={styles.facts}>
+      {items.map((item, index) => (
+        <View key={item.label} style={[styles.fact, index > 0 ? styles.factDivider : null]}>
+          <Text style={styles.factLabel}>{item.label}</Text>
+          <View style={styles.factValue}>
+            {typeof item.value === 'string' || typeof item.value === 'number' ? <Text style={styles.factText}>{item.value}</Text> : item.value}
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** "Back to the list" as a quiet link above the title, instead of a full-width button. */
+export function BackLink({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="link" accessibilityLabel={label} onPress={onPress} style={styles.backLink}>
+      <ArrowLeft color={colors.blue} size={16} />
+      <Text style={styles.backLinkText}>{label}</Text>
     </Pressable>
   );
 }
@@ -378,6 +407,50 @@ const styles = StyleSheet.create({
     borderRadius: radius.control,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  facts: {
+    gap: 0
+  },
+  fact: {
+    minHeight: TOUCH_TARGET,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingVertical: spacing.xs
+  },
+  factDivider: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border
+  },
+  factLabel: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18
+  },
+  factValue: {
+    flex: 1,
+    alignItems: 'flex-end',
+    minWidth: 0
+  },
+  factText: {
+    color: colors.ink,
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '600',
+    textAlign: 'right'
+  },
+  backLink: {
+    minHeight: TOUCH_TARGET,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs
+  },
+  backLinkText: {
+    color: colors.blue,
+    fontSize: 14,
+    fontWeight: '600'
   },
   field: {
     gap: spacing.xs

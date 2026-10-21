@@ -229,9 +229,6 @@ function AdminHome({ dashboard, month, navigation }) {
   return (
     <>
       <LocalCard style={styles.adminBalanceCard}>
-        <View style={styles.adminIcon}>
-          <ShieldCheck color={colors.blue} size={24} />
-        </View>
         <View style={styles.adminBalanceCopy}>
           <Text style={styles.summaryLabel}>Saldo atual</Text>
           <Text style={styles.balanceValue}>{formatCurrency(dashboard?.balance ?? 0)}</Text>
@@ -240,9 +237,11 @@ function AdminHome({ dashboard, month, navigation }) {
       <LocalCard style={styles.transparencyCard}>
         <Text style={styles.cardTitle}>Mensalidades do mês</Text>
         <View style={styles.metricGrid}>
-          <MetricCard icon={TrendingUp} tone="blue" label="Arrecadado" value={formatCurrency(dashboard?.collected ?? 0)} caption={monthLabel(month)} />
-          <MetricCard icon={Users} tone="lilac" label="Casas pagas" value={String(dashboard?.paidHouses ?? 0)} />
-          <MetricCard icon={ArrowDown} tone="red" label="Pendentes" value={String(dashboard?.pendingHouses ?? 0)} />
+          <MetricCard label="Arrecadado" value={formatCurrency(dashboard?.collected ?? 0)} caption={monthLabel(month)} />
+          <View style={styles.metricDivider} />
+          <MetricCard label="Casas pagas" value={String(dashboard?.paidHouses ?? 0)} />
+          <View style={styles.metricDivider} />
+          <MetricCard label="Pendentes" value={String(dashboard?.pendingHouses ?? 0)} tone="red" />
         </View>
         <Pressable style={styles.primaryAction} onPress={() => navigation.navigate('AdminPixCharges')}>
           <QrCode color={colors.surface} size={18} />
@@ -346,16 +345,11 @@ function TransparencyOpenCard({ dashboard, navigation }) {
   );
 }
 
-function MetricCard({ icon: Icon, tone, label, value, caption }) {
-  const color = tone === 'red' ? colors.red : tone === 'lilac' ? colors.lilac : colors.blue;
-  const backgroundColor = 'transparent';
+function MetricCard({ tone, label, value, caption }) {
   return (
     <View style={styles.metricCard}>
-      <View style={[styles.metricIcon, { backgroundColor }]}>
-        <Icon color={color} size={19} />
-      </View>
       <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={[styles.metricValue, tone === 'red' ? styles.metricValueAlert : null]}>{value}</Text>
       {caption ? <Text style={styles.metricCaption}>{caption}</Text> : null}
     </View>
   );
@@ -694,48 +688,40 @@ const styles = StyleSheet.create({
   },
   metricGrid: {
     flexDirection: 'row',
-    gap: 8
+    alignItems: 'stretch'
+  },
+  metricDivider: {
+    width: 1,
+    backgroundColor: colors.border,
+    marginVertical: 4
   },
   metricCard: {
     flex: 1,
-    minHeight: 102,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 5,
-    gap: 4,
-    backgroundColor: colors.surface
-  },
-  metricIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 3
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    gap: 2
   },
   metricLabel: {
-    color: colors.ink,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '700',
-    textAlign: 'center'
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500'
   },
   metricValue: {
     color: colors.ink,
-    fontSize: 13,
-    lineHeight: 17,
+    fontSize: 20,
+    lineHeight: 26,
     fontWeight: '700',
-    textAlign: 'center'
+    fontVariant: ['tabular-nums']
+  },
+  metricValueAlert: {
+    color: colors.red
   },
   metricCaption: {
     color: colors.muted,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '700',
-    textAlign: 'center'
+    fontWeight: '500'
   },
   lockedBody: {
     flexDirection: 'row',

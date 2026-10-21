@@ -1,8 +1,8 @@
-import { useCallback, useState } from 'react';
+import { ReactNode, useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { ExternalLink, Lock, Pencil, TriangleAlert, RefreshCw, ThumbsDown, ThumbsUp, Vote, Wrench, XCircle } from 'lucide-react-native';
-import { Badge, Button, Card, Label, Money, Row, Screen, Value, SectionTitle } from '../components/ui';
+import { Badge, Button, Card, Label, Money, Row, Screen, Value, SectionTitle, Facts } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
@@ -128,6 +128,33 @@ export function BudgetDetailsScreen() {
   const hasRivals = budget?.competes !== false && competingSiblings.length > 1;
   const showVoting = Boolean(voting && (voting.open || voting.closedAt || voting.approveVotes + voting.rejectVotes > 0));
 
+  const facts = (
+    budget
+      ? [
+          budget.problemReportId
+            ? {
+                label: 'Problema',
+                value: (
+                  <LinkValue
+                    text={problemTitle || `#${budget.problemReportId}`}
+                    onPress={() => navigation.navigate('Mais', { screen: 'ProblemDetails', params: { id: budget.problemReportId, refreshKey: Date.now() } })}
+                  />
+                )
+              }
+            : null,
+          {
+            label: 'Serviço',
+            value: budget.serviceId ? (
+              <LinkValue text={`#${budget.serviceId}`} onPress={() => navigation.navigate('ServiceDetails', { id: budget.serviceId, refreshKey: Date.now() })} />
+            ) : (
+              'Ainda não virou serviço'
+            )
+          },
+          budget.validUntil ? { label: 'Validade', value: formatDateBR(budget.validUntil) } : null
+        ].filter(Boolean)
+      : []
+  ) as Array<{ label: string; value: ReactNode }>;
+
   return (
     <Screen title="Orçamento" subtitle="Detalhe da proposta" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       {error ? (
@@ -144,11 +171,13 @@ export function BudgetDetailsScreen() {
       {budget ? (
         <Card>
           <Row>
-            <Value>{budget.supplier}</Value>
+            <SectionTitle style={styles.budgetTitle}>{budget.title}</SectionTitle>
             <Badge status={budgetBadgeStatus(budget.status)} />
           </Row>
-          {budget.supplierDocument ? <Label>CNPJ {budget.supplierDocument}</Label> : null}
-          <Label>{budget.title}</Label>
+          <Label>
+            {budget.supplier}
+            {budget.supplierDocument ? ` · CNPJ ${budget.supplierDocument}` : ''}
+          </Label>
           <Money value={budget.amount} strong />
           {budget.scope ? (
             <View style={styles.scopeBox}>
@@ -156,29 +185,14 @@ export function BudgetDetailsScreen() {
               <Text style={styles.scopeText}>{budget.scope}</Text>
             </View>
           ) : null}
-          {budget.problemReportId ? (
-            <>
-              <Row><Label>Problema</Label><Value>{problemTitle || `#${budget.problemReportId}`}</Value></Row>
-              <Button
-                title="Ver problema"
-                icon={TriangleAlert}
-                variant="ghost"
-                onPress={() => navigation.navigate('Mais', { screen: 'ProblemDetails', params: { id: budget.problemReportId, refreshKey: Date.now() } })}
-              />
-              {related.length > 1 ? (
-                <Label>
-                  {budget.competes === false
-                    ? 'Este orçamento é outro trabalho do mesmo problema: é votado e aprovado à parte e vira o seu próprio serviço.'
-                    : 'Este orçamento concorre com os outros do mesmo trabalho: só um será aprovado.'}
-                </Label>
-              ) : null}
-            </>
+          <Facts items={facts} />
+          {budget.problemReportId && related.length > 1 ? (
+            <Label>
+              {budget.competes === false
+                ? 'Este orçamento é outro trabalho do mesmo problema: é votado e aprovado à parte e vira o seu próprio serviço.'
+                : 'Este orçamento concorre com os outros do mesmo trabalho: só um será aprovado.'}
+            </Label>
           ) : null}
-          <Row><Label>Serviço</Label><Value>{budget.serviceId ? `#${budget.serviceId}` : 'Ainda não virou serviço'}</Value></Row>
-          {budget.serviceId ? (
-            <Button title="Ver serviço" icon={Wrench} variant="ghost" onPress={() => navigation.navigate('ServiceDetails', { id: budget.serviceId, refreshKey: Date.now() })} />
-          ) : null}
-          {budget.validUntil ? <Row><Label>Validade</Label><Value>{formatDateBR(budget.validUntil)}</Value></Row> : null}
           {budget.notes ? <Label>{budget.notes}</Label> : null}
           {budget.status === 'APROVADO' && !budget.serviceId ? <Label>Aprovado pelas casas. Agora pode virar serviço, pago até o valor aprovado (mais 10% de tolerância).</Label> : null}
           {documents[0] ? (
@@ -190,7 +204,7 @@ export function BudgetDetailsScreen() {
             />
           ) : null}
           {canManageBudgets ? (
-            <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+            <Row style={styles.actions}>
               {budget.status === 'APROVADO' && !budget.serviceId ? (
                 <Button
                   title="Criar serviço com este orçamento"
@@ -310,6 +324,14 @@ export function BudgetDetailsScreen() {
   );
 }
 
+function LinkValue({ text, onPress }: { text: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="link" onPress={onPress} style={styles.linkTarget}>
+      <Text style={styles.linkValue}>{text}</Text>
+    </Pressable>
+  );
+}
+
 function resultLabel(status: Budget['status']) {
   return status === 'APROVADO' ? 'aprovado' : status === 'CANCELADO' ? 'cancelado' : 'recusado';
 }
@@ -324,6 +346,27 @@ function ScoreBox({ label, value, color, background }: { label: string; value: n
 }
 
 const styles = StyleSheet.create({
+  budgetTitle: {
+    flex: 1,
+    fontSize: 18,
+    lineHeight: 24
+  },
+  actions: {
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    paddingTop: spacing.xs
+  },
+  linkTarget: {
+    minHeight: 32,
+    justifyContent: 'center'
+  },
+  linkValue: {
+    color: colors.blue,
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'right',
+    textDecorationLine: 'underline'
+  },
   scopeBox: {
     borderRadius: 8,
     backgroundColor: colors.bg,
