@@ -17,6 +17,10 @@ type DocumentType = 'RECIBO' | 'NOTA_FISCAL';
 /** One list for every screen, so the monthly statement can add up by category. */
 const EXPENSE_CATEGORIES = ['Energia', 'Água', 'Limpeza', 'Manutenção', 'Segurança', 'Jardinagem', 'Taxas', 'Outros'];
 
+/** Routine bills that never need a vote (the same list the server uses). */
+const ROUTINE_CATEGORIES = ['Energia', 'Água', 'Taxas'];
+const MIN_REASON_LETTERS = 20;
+
 const documentTypeLabels: Record<DocumentType, string> = {
   RECIBO: 'Recibo',
   NOTA_FISCAL: 'Nota fiscal'
@@ -39,6 +43,9 @@ export function ExpensesScreen() {
   const [documentUrl, setDocumentUrl] = useState('');
   const [documentFile, setDocumentFile] = useState<PickedFile | null>(null);
   const [saving, setSaving] = useState(false);
+  // Largest expense that can be typed in without a voted budget (null: the rule is off).
+  const [limit, setLimit] = useState<number | null>(null);
+  const [exceptionReason, setExceptionReason] = useState('');
 
   const documentsById = useMemo(() => {
     return documents.reduce<Record<number, PortalDocument>>((acc, item) => {
@@ -50,9 +57,10 @@ export function ExpensesScreen() {
   }, [documents]);
 
   const load = useCallback(async () => {
-    const [expenseList, documentList] = await Promise.all([api.expenses(), api.documents()]);
+    const [expenseList, documentList, settings] = await Promise.all([api.expenses(), api.documents(), api.settings().catch(() => null)]);
     setItems(sortNewestFirst(expenseList));
     setDocuments(documentList);
+    setLimit((settings as { budgetRequiredAbove?: number | null } | null)?.budgetRequiredAbove ?? null);
   }, []);
 
   const openFormRequested = Boolean(route.params?.openForm);
@@ -77,6 +85,13 @@ export function ExpensesScreen() {
       Alert.alert('Despesa', 'Informe um valor válido.');
       return;
     }
+    if (needsReason(amountValue) && countLetters(exceptionReason) < MIN_REASON_LETTERS) {
+      Alert.alert(
+        'Despesa sem votação',
+        `Acima de ${formatCurrency(limit ?? 0)} a despesa precisa ter um orçamento votado pelas casas. Se foi uma emergência, escreva a justificativa (pelo menos ${MIN_REASON_LETTERS} letras): ela aparece para todos.`
+      );
+      return;
+    }
     if (!documentFile && !documentUrl.trim()) {
       Alert.alert(
         'Despesa sem comprovante',
@@ -91,6 +106,10 @@ export function ExpensesScreen() {
     await save(amountValue);
   }
 
+  function needsReason(amountValue: number) {
+    return limit != null && amountValue > limit && !ROUTINE_CATEGORIES.includes(category);
+  }
+
   async function save(amountValue: number) {
     setSaving(true);
     try {
@@ -100,7 +119,8 @@ export function ExpensesScreen() {
         expenseDate: new Date().toISOString().slice(0, 10),
         category,
         supplier: supplier.trim() || undefined,
-        paymentMethod: 'PIX'
+        paymentMethod: 'PIX',
+        exceptionReason: needsReason(amountValue) ? exceptionReason.trim() : undefined
       });
 
       if (saved.id && (documentFile || documentUrl.trim())) {
@@ -142,6 +162,7 @@ export function ExpensesScreen() {
     setAmount('');
     setSupplier('');
     setCategory('Outros');
+    setExceptionReason('');
     setDocumentType('RECIBO');
     setDocumentName('Recibo');
     setDocumentUrl('');
@@ -274,6 +295,23 @@ export function ExpensesScreen() {
             </View>
           </View>
 
+          {needsReason(parseCurrencyInput(amount)) ? (
+            <View style={styles.reasonBox}>
+              <Text style={styles.reasonTitle}>Despesa sem orçamento votado</Text>
+              <Text style={styles.reasonText}>
+                {`Acima de ${formatCurrency(limit ?? 0)} o normal é gerar um orçamento a partir do problema e levar à votação. Se esta compra não pôde esperar, explique o motivo: o texto aparece para todos e a despesa é marcada como "sem votação" no relatório.`}
+              </Text>
+              <FormField
+                label="Justificativa (aparece para todos)"
+                value={exceptionReason}
+                onChangeText={setExceptionReason}
+                placeholder="Ex.: Cano estourado no sábado, o encanador precisou comprar a peça na hora."
+                multiline
+                hint={`${countLetters(exceptionReason)} de ${MIN_REASON_LETTERS} letras no mínimo`}
+              />
+            </View>
+          ) : null}
+
           <View style={styles.documentBox}>
             <View style={styles.documentHeader}>
               <FileText color={colors.blue} size={18} strokeWidth={2.4} />
@@ -335,6 +373,13 @@ export function ExpensesScreen() {
               <Text style={styles.expenseValue}>{formatCurrency(item.amount)}</Text>
             </View>
 
+            {item.exceptionReason ? (
+              <View style={styles.reasonBox}>
+                <Text style={styles.reasonTitle}>Sem votação das casas</Text>
+                <Text style={styles.reasonText}>{item.exceptionReason}</Text>
+              </View>
+            ) : null}
+
             {portalDocument ? (
               <Pressable accessibilityRole="button" onPress={() => openDocument(portalDocument)} style={styles.documentLinkButton}>
                 <Eye color={colors.blue} size={16} strokeWidth={2.4} />
@@ -359,6 +404,8 @@ function FormField({
   onChangeText,
   placeholder,
   keyboardType,
+  hint,
+  multiline,
   style
 }: {
   label: string;
@@ -366,6 +413,8 @@ function FormField({
   onChangeText: (value: string) => void;
   placeholder?: string;
   keyboardType?: 'default' | 'numeric' | 'email-address';
+  hint?: string;
+  multiline?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   return (
@@ -377,10 +426,12 @@ function FormField({
           onChangeText={onChangeText}
           placeholder={placeholder}
           keyboardType={keyboardType}
-          style={styles.input}
+          multiline={multiline}
+          style={[styles.input, multiline ? styles.inputMultiline : null]}
           placeholderTextColor={colors.muted}
         />
       </View>
+      {hint ? <Text style={styles.fieldHint}>{hint}</Text> : null}
     </View>
   );
 }
@@ -410,6 +461,10 @@ function DocumentActionButton({ title, icon: Icon, onPress, danger }: { title: s
       <Text style={[styles.documentActionText, danger ? styles.documentActionTextDanger : null]}>{title}</Text>
     </Pressable>
   );
+}
+
+function countLetters(value: string) {
+  return (value.match(/\p{L}/gu) ?? []).length;
 }
 
 function formatCurrencyInput(value: string) {
@@ -568,6 +623,37 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '500'
+  },
+  inputMultiline: {
+    minHeight: 72,
+    textAlignVertical: 'top',
+    paddingTop: 10
+  },
+  fieldHint: {
+    color: colors.muted,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '600'
+  },
+  reasonBox: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.red,
+    backgroundColor: colors.redSoft,
+    padding: 12,
+    gap: 6
+  },
+  reasonTitle: {
+    color: colors.red,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '900'
+  },
+  reasonText: {
+    color: colors.ink,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600'
   },
   twoColumns: {
     flexDirection: 'row',

@@ -41,6 +41,7 @@ class BudgetVotingService {
     private final ServiceOrderRepository services;
     private final PushService push;
     private final AppUserRepository users;
+    private final ReportLifecycle lifecycle;
 
     private static final ZoneId VILLAGE_ZONE = ZoneId.of("America/Sao_Paulo");
 
@@ -53,8 +54,10 @@ class BudgetVotingService {
         AuditService audit,
         ServiceOrderRepository services,
         PushService push,
-        AppUserRepository users
+        AppUserRepository users,
+        ReportLifecycle lifecycle
     ) {
+        this.lifecycle = lifecycle;
         this.users = users;
         this.push = push;
         this.services = services;
@@ -111,6 +114,17 @@ class BudgetVotingService {
             for (Budget sibling : budgets.findByServiceIdOrderByAmountAsc(budget.serviceId)) {
                 if (!sibling.id.equals(budget.id) && OPEN_STATUS.equals(sibling.status)) {
                     votes.findByBudgetIdAndHouseId(sibling.id, resident.houseId)
+                        .filter(existing -> APPROVE.equals(existing.vote))
+                        .ifPresent(votes::delete);
+                }
+            }
+        }
+
+        if (APPROVE.equals(normalized) && budget.problemReportId != null && budget.competes) {
+            // Budgets of the same job compete too: a house approves only one of them.
+            for (Budget rival : budgets.findByProblemReportId(budget.problemReportId)) {
+                if (!rival.id.equals(budget.id) && rival.competes && OPEN_STATUS.equals(rival.status)) {
+                    votes.findByBudgetIdAndHouseId(rival.id, resident.houseId)
                         .filter(existing -> APPROVE.equals(existing.vote))
                         .ifPresent(votes::delete);
                 }
@@ -242,7 +256,43 @@ class BudgetVotingService {
         if ("APROVADO".equals(status) && budget.serviceId != null) {
             chooseForService(budget);
         }
+        if (budget.problemReportId != null) {
+            followProblem(budget, status);
+        }
         dashboardEvents.publishDashboardChanged();
+    }
+
+    /**
+     * The problem the budget was generated for hears about the result. When a budget wins, the budgets that competed
+     * with it (same job) are closed as not chosen; when one is refused and nothing else is going, the problem is open again.
+     */
+    private void followProblem(Budget budget, String status) {
+        String money = budget.title + " - " + AuditService.money(budget.amount);
+        if ("APROVADO".equals(status)) {
+            lifecycle.note(budget.problemReportId, ProblemReportEvent.BUDGET, "Orçamento aprovado pelas casas: " + money + ". Já pode virar serviço.");
+            if (budget.competes) {
+                for (Budget rival : budgets.findByProblemReportId(budget.problemReportId)) {
+                    if (!rival.id.equals(budget.id) && rival.competes && OPEN_STATUS.equals(rival.status)) {
+                        closeAsNotChosen(rival, budget);
+                    }
+                }
+            }
+        } else {
+            lifecycle.note(budget.problemReportId, ProblemReportEvent.BUDGET, "Orçamento recusado: " + money + ".");
+            lifecycle.reopenIfIdle(budget.problemReportId, "Nenhum orçamento ativo: o problema voltou para os abertos.");
+        }
+    }
+
+    /** A budget of the same job that lost to the approved one: closed without a push "recusado", it just was not chosen. */
+    private void closeAsNotChosen(Budget rival, Budget winner) {
+        LocalDateTime now = LocalDateTime.now();
+        rival.status = "REJEITADO";
+        rival.votingClosedAt = now;
+        rival.updatedAt = now;
+        budgets.save(rival);
+        audit.record("BUDGET_REJEITADO", "BUDGET", rival.id, rival.title + " - outro orçamento do mesmo trabalho foi aprovado");
+        lifecycle.note(rival.problemReportId, ProblemReportEvent.BUDGET,
+            "Orçamento não escolhido: " + rival.title + " - " + AuditService.money(rival.amount) + " (" + winner.supplier + " foi aprovado).");
     }
 
     /**

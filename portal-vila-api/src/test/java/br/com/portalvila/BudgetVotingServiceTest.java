@@ -40,6 +40,9 @@ class BudgetVotingServiceTest {
     @Autowired
     ResidentRepository residents;
 
+    @Autowired
+    SettingsRepository settings;
+
     @MockBean
     PixGatewayClient gatewayClient;
 
@@ -53,6 +56,7 @@ class BudgetVotingServiceTest {
         votes.deleteAll();
         budgets.deleteAll();
         services.deleteAll();
+        settings.deleteAll();
         residents.deleteAll();
         houses.deleteAll();
         voters.clear();

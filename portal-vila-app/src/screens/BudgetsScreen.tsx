@@ -5,7 +5,7 @@ import { DemandTabs } from '../components/DemandTabs';
 import { Badge, Button, Card, EmptyState, Label, Money, Row, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
-import { Budget, BudgetVoting, ServiceOrder } from '../types';
+import { Budget, BudgetVoting, ProblemReport, ServiceOrder } from '../types';
 import { awaitingMyVote, budgetBadgeStatus, deadlineLabel, votingScore } from '../utils/budgetVoting';
 
 /** Budgets still being voted on come first, then the newest. */
@@ -17,12 +17,25 @@ function sortBudgets(budgets: Budget[]) {
   });
 }
 
+/** Where the budget came from: the problem it answers, or the service it quotes (older records). */
+function originLabel(item: Budget, problemTitles: Record<number, string>, serviceTitles: Record<number, string>) {
+  if (item.problemReportId) {
+    const title = problemTitles[item.problemReportId] ?? `#${item.problemReportId}`;
+    return `Para o problema: ${title}${item.competes === false ? ' (outro trabalho)' : ''}`;
+  }
+  if (item.serviceId) {
+    return `Cotação do serviço: ${serviceTitles[item.serviceId] ?? `#${item.serviceId}`}`;
+  }
+  return 'Orçamento sem problema ligado';
+}
+
 export function BudgetsScreen() {
   const navigation = useNavigation<any>();
   const { canManageBudgets } = useAuth();
   const [items, setItems] = useState<Budget[]>([]);
   const [votings, setVotings] = useState<Record<number, BudgetVoting>>({});
   const [serviceTitles, setServiceTitles] = useState<Record<number, string>>({});
+  const [problemTitles, setProblemTitles] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -30,11 +43,13 @@ export function BudgetsScreen() {
     setLoading(true);
     setError('');
     try {
-      const [nextBudgets, nextVotings, nextServices] = await Promise.all([
+      const [nextBudgets, nextVotings, nextServices, nextProblems] = await Promise.all([
         api.budgets(),
         api.budgetVotings().catch(() => [] as BudgetVoting[]),
-        api.services().catch(() => [] as ServiceOrder[])
+        api.services().catch(() => [] as ServiceOrder[]),
+        api.problemReports().catch(() => [] as ProblemReport[])
       ]);
+      setProblemTitles(Object.fromEntries(nextProblems.filter((problem) => problem.id).map((problem) => [problem.id as number, problem.title])));
       setServiceTitles(Object.fromEntries(nextServices.filter((service) => service.id).map((service) => [service.id as number, service.title])));
       setItems(sortBudgets(nextBudgets));
       setVotings(Object.fromEntries(nextVotings.map((voting) => [voting.budgetId, voting])));
@@ -76,7 +91,7 @@ export function BudgetsScreen() {
             {item.supplierDocument ? <Label>CNPJ {item.supplierDocument}</Label> : null}
             <Label>{item.title}</Label>
             <Row>
-              <Label>{item.serviceId ? `Cotação do serviço: ${serviceTitles[item.serviceId] ?? `#${item.serviceId}`}` : 'Orçamento avulso'}</Label>
+              <Label>{originLabel(item, problemTitles, serviceTitles)}</Label>
               <Money value={item.amount} />
             </Row>
             {voting?.open ? (

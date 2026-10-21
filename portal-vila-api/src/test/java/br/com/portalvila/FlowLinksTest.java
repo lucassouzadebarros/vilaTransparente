@@ -85,7 +85,7 @@ class FlowLinksTest {
     }
 
     private FinishServiceRequest finish(String value) {
-        return new FinishServiceRequest(new BigDecimal(value), LocalDate.of(2026, 10, 20), "Fornecedor", null, null, true, null);
+        return new FinishServiceRequest(new BigDecimal(value), LocalDate.of(2026, 10, 20), "Fornecedor", null, null, true, null, null);
     }
 
     private static void assertStatus(Runnable action, HttpStatus status) {
@@ -94,7 +94,7 @@ class FlowLinksTest {
     }
 
     @Test
-    void aReportStartsOneServiceAndIsResolvedWhenItIsPaid() {
+    void aReportStartsAServiceAndIsResolvedWhenItIsPaid() {
         ProblemReport report = report("ABERTO");
         ServiceOrder incoming = service("Consertar o portão");
         incoming.problemReportId = report.id;
@@ -105,10 +105,6 @@ class FlowLinksTest {
         assertThat(created.problemReportId).isEqualTo(report.id);
         assertThat(linked.serviceId).isEqualTo(created.id);
         assertThat(linked.status).isEqualTo("EM_ANALISE");
-
-        ServiceOrder second = service("Outro conserto");
-        second.problemReportId = report.id;
-        assertStatus(() -> workflow.saveService(second), HttpStatus.CONFLICT);
 
         workflow.finishService(created.id, finish("350.00"));
         assertThat(reports.findById(report.id).orElseThrow().status).isEqualTo("RESOLVIDO");
@@ -210,8 +206,8 @@ class FlowLinksTest {
     }
 
     @Test
-    void aLimitMakesBigServicesWaitForAnApprovedBudget() {
-        // No rule set: anything can start.
+    void aLimitMakesBigServicesComeFromAnApprovedBudget() {
+        // No rule set: anything can be created and started.
         ServiceOrder free = service("Troca de lâmpada");
         free.expectedValue = new BigDecimal("5000.00");
         free.status = "EM_ANDAMENTO";
@@ -222,35 +218,22 @@ class FlowLinksTest {
 
         ServiceOrder big = service("Reforma do telhado");
         big.expectedValue = new BigDecimal("800.00");
-        big.status = "EM_ANDAMENTO";
         assertStatus(() -> workflow.saveService(big), HttpStatus.CONFLICT);
 
         ServiceOrder small = service("Reparo");
         small.expectedValue = new BigDecimal("400.00");
-        small.status = "EM_ANDAMENTO";
-        assertThat(workflow.saveService(small).status).isEqualTo("EM_ANDAMENTO");
+        assertThat(workflow.saveService(small).status).isEqualTo("PLANEJADO");
 
-        // Planned is fine, but moving it forward or paying it needs the budget.
-        ServiceOrder planned = workflow.saveService(service("Reforma do telhado"));
-        ServiceOrder start = service("Reforma do telhado");
-        start.expectedValue = new BigDecimal("800.00");
-        start.status = "EM_ANDAMENTO";
-        assertStatus(() -> workflow.updateService(planned.id, start), HttpStatus.CONFLICT);
-        assertStatus(() -> workflow.finishService(planned.id, finish("900.00")), HttpStatus.CONFLICT);
-        assertThat(expenses.count()).isZero();
-
-        // With the budget approved by the houses it can go on.
-        Budget budget = quote(planned.id, "800.00");
+        // With the budget approved by the houses it can be created, taking the value from the budget.
+        Budget budget = quote(null, "800.00");
         voting.vote(budget.id, "APROVAR", voters.get(2));
         voting.vote(budget.id, "APROVAR", voters.get(3));
         voting.vote(budget.id, "APROVAR", voters.get(5));
-        ServiceOrder withBudget = service("Reforma do telhado");
-        withBudget.expectedValue = new BigDecimal("800.00");
-        withBudget.status = "EM_ANDAMENTO";
-        withBudget.approvedBudgetId = budget.id;
-        assertThat(workflow.updateService(planned.id, withBudget).status).isEqualTo("EM_ANDAMENTO");
-        workflow.finishService(planned.id, finish("800.00"));
-        assertThat(expenses.findByServiceOrderId(planned.id)).hasSize(1);
+        ServiceOrder fromBudget = service("Reforma do telhado");
+        fromBudget.approvedBudgetId = budget.id;
+        ServiceOrder created = workflow.saveService(fromBudget);
+        assertThat(created.expectedValue).isEqualByComparingTo("800.00");
+        assertThat(created.status).isEqualTo("APROVADO");
 
         // The rule can be switched off again, and a negative value is refused.
         financial.updateBudgetRule(null);

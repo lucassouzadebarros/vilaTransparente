@@ -180,6 +180,7 @@ export const api = {
   budget: (id: number) => requestData<Budget>(apiClient.get(`/budgets/${id}`)),
   createBudget: (budget: Budget) => requestData<Budget>(apiClient.post('/budgets', budget)),
   updateBudget: (id: number, budget: Budget) => requestData<Budget>(apiClient.put(`/budgets/${id}`, budget)),
+  cancelBudget: (id: number) => requestData<{ status: string }>(apiClient.delete(`/budgets/${id}`)),
   budgetVotings: () => requestData<BudgetVoting[]>(apiClient.get('/budgets/votes')),
   budgetVoting: (id: number) => requestData<BudgetVoting>(apiClient.get(`/budgets/${id}/votes`)),
   voteBudget: (id: number, vote: BudgetVoteChoice) => requestData<BudgetVoting>(apiClient.post(`/budgets/${id}/vote`, { vote })),

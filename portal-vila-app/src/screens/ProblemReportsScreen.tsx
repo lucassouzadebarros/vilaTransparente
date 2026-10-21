@@ -23,7 +23,7 @@ import { SoftBackdrop } from '../components/SoftBackdrop';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors } from '../theme';
-import { ProblemReport, ServiceOrder } from '../types';
+import { Budget, ProblemReport, ServiceOrder } from '../types';
 
 const filters: Array<{ key: string; label: string; icon?: LucideIcon }> = [
   { key: 'TODOS', label: 'Todos' },
@@ -40,14 +40,6 @@ const priorityLabels: Record<ProblemReport['priority'], string> = {
   URGENTE: 'Urgente'
 };
 
-const serviceStatusLabels: Record<ServiceOrder['status'], string> = {
-  PLANEJADO: 'planejado',
-  APROVADO: 'orçamento aprovado',
-  EM_ANDAMENTO: 'em andamento',
-  FINALIZADO: 'finalizado',
-  CANCELADO: 'cancelado'
-};
-
 const statusLabels: Record<ProblemReport['status'], string> = {
   ABERTO: 'Aberto',
   EM_ANALISE: 'Em análise',
@@ -60,7 +52,8 @@ export function ProblemReportsScreen() {
   const { isAdmin, canManageBudgets } = useAuth();
   const [status, setStatus] = useState('TODOS');
   const [items, setItems] = useState<ProblemReport[]>([]);
-  const [services, setServices] = useState<Record<number, ServiceOrder>>({});
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [services, setServices] = useState<ServiceOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -68,12 +61,14 @@ export function ProblemReportsScreen() {
     setLoading(true);
     setError('');
     try {
-      const [reports, nextServices] = await Promise.all([
+      const [reports, nextBudgets, nextServices] = await Promise.all([
         api.problemReports(nextStatus === 'TODOS' ? undefined : nextStatus),
+        api.budgets().catch(() => [] as Budget[]),
         api.services().catch(() => [] as ServiceOrder[])
       ]);
       setItems(reports);
-      setServices(Object.fromEntries(nextServices.filter((service) => service.id).map((service) => [service.id as number, service])));
+      setBudgets(nextBudgets);
+      setServices(nextServices);
     } catch (err) {
       setError(apiErrorMessage(err, 'Não consegui carregar os problemas.'));
     } finally {
@@ -150,10 +145,11 @@ export function ProblemReportsScreen() {
               <ProblemCard
                 key={item.id}
                 item={item}
-                service={item.serviceId ? services[item.serviceId] : undefined}
-                canCreateService={canManageBudgets && !item.serviceId && (item.status === 'ABERTO' || item.status === 'EM_ANALISE')}
+                budgets={budgets.filter((budget) => budget.problemReportId === item.id && budget.status !== 'CANCELADO')}
+                services={services.filter((service) => service.problemReportId === item.id && service.status !== 'CANCELADO')}
+                canAct={canManageBudgets && (item.status === 'ABERTO' || item.status === 'EM_ANALISE')}
+                onGenerateBudget={() => navigation.navigate('BudgetForm', { formMode: 'create', budgetId: null, serviceId: null, problemReportId: item.id, formKey: Date.now() })}
                 onCreateService={() => navigation.navigate('ServiceForm', { formMode: 'create', serviceId: null, budgetId: null, problemReportId: item.id, formKey: Date.now() })}
-                onOpenService={() => navigation.navigate('ServiceDetails', { id: item.serviceId, refreshKey: Date.now() })}
                 onPress={() => navigation.navigate('ProblemDetails', { id: item.id, refreshKey: Date.now() })}
               />
             ))
@@ -184,19 +180,36 @@ function FilterButton({
   );
 }
 
+function chainSummary(budgets: Budget[], services: ServiceOrder[]) {
+  const parts: string[] = [];
+  const voting = budgets.filter((budget) => budget.status === 'EM_ANALISE').length;
+  const approved = budgets.filter((budget) => budget.status === 'APROVADO').length;
+  if (budgets.length) {
+    const detail = [voting ? `${voting} em votação` : '', approved ? `${approved} aprovado${approved > 1 ? 's' : ''}` : ''].filter(Boolean).join(', ');
+    parts.push(`${budgets.length} orçamento${budgets.length > 1 ? 's' : ''}${detail ? ` (${detail})` : ''}`);
+  }
+  if (services.length) {
+    const done = services.filter((service) => service.status === 'FINALIZADO').length;
+    parts.push(`${services.length} serviço${services.length > 1 ? 's' : ''}${done ? ` (${done} pago${done > 1 ? 's' : ''})` : ''}`);
+  }
+  return parts.join(' · ');
+}
+
 function ProblemCard({
   item,
-  service,
-  canCreateService,
+  budgets,
+  services,
+  canAct,
+  onGenerateBudget,
   onCreateService,
-  onOpenService,
   onPress
 }: {
   item: ProblemReport;
-  service?: ServiceOrder;
-  canCreateService: boolean;
+  budgets: Budget[];
+  services: ServiceOrder[];
+  canAct: boolean;
+  onGenerateBudget: () => void;
   onCreateService: () => void;
-  onOpenService: () => void;
   onPress: () => void;
 }) {
   const priorityColor = item.priority === 'URGENTE' || item.priority === 'ALTA' ? colors.red : item.priority === 'MEDIA' ? '#D98A10' : colors.green;
@@ -233,19 +246,24 @@ function ProblemCard({
         <MetaItem icon={MapPin} label="Local" value={item.location || 'Sem local'} />
         <MetaItem icon={CalendarDays} label="Data" value={item.createdAt ? formatDate(item.createdAt) : 'Sem data'} />
       </View>
-      {item.serviceId ? (
-        <Pressable accessibilityRole="button" onPress={onOpenService} style={styles.linkRow}>
+      {budgets.length || services.length ? (
+        <View style={styles.linkRow}>
           <Wrench color={colors.blue} size={16} />
-          <Text style={styles.linkText}>
-            Serviço #{item.serviceId}{service ? `: ${serviceStatusLabels[service.status] ?? service.status}` : ''}
-          </Text>
-          <ChevronRight color={colors.blue} size={16} />
-        </Pressable>
-      ) : canCreateService ? (
-        <Pressable accessibilityRole="button" onPress={onCreateService} style={styles.createRow}>
-          <Plus color={colors.blue} size={16} />
-          <Text style={styles.linkText}>Criar serviço a partir deste relato</Text>
-        </Pressable>
+          <Text style={styles.linkText}>{chainSummary(budgets, services)}</Text>
+        </View>
+      ) : null}
+      {canAct ? (
+        <View style={styles.actionRow}>
+          <Pressable accessibilityRole="button" onPress={onGenerateBudget} style={[styles.createRow, styles.actionMain]}>
+            <Plus color={colors.blue} size={16} />
+            <Text style={styles.createText}>{budgets.length ? 'Gerar outro orçamento' : 'Gerar orçamento'}</Text>
+          </Pressable>
+          {!budgets.length && !services.length ? (
+            <Pressable accessibilityRole="button" onPress={onCreateService} style={[styles.createRow, styles.actionSide]}>
+              <Text style={styles.createText}>Resolver direto</Text>
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
     </Pressable>
   );
@@ -513,6 +531,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8
   },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 8
+  },
+  actionMain: {
+    flex: 1
+  },
+  actionSide: {
+    paddingHorizontal: 14
+  },
   createRow: {
     minHeight: 44,
     borderRadius: 8,
@@ -523,6 +551,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8
+  },
+  createText: {
+    color: colors.blue,
+    fontSize: 12,
+    fontWeight: '800'
   },
   linkText: {
     flex: 1,

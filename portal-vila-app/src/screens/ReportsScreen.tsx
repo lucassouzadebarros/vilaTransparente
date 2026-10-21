@@ -130,6 +130,18 @@ export function ReportsScreen() {
             </Card>
           ) : null}
 
+          {(report.unvotedCount ?? 0) > 0 ? (
+            <Card style={styles.warningCard}>
+              <Row style={styles.warningRow}>
+                <AlertTriangle color={colors.amber} size={20} />
+                <Text style={styles.warningText}>
+                  Gastos sem orçamento votado: {formatMoneyBR(report.unvotedTotal ?? 0)} ({report.unvotedCount}{' '}
+                  {report.unvotedCount === 1 ? 'lançamento' : 'lançamentos'}). Serviços pequenos, dentro do limite, e emergências justificadas não passam por votação.
+                </Text>
+              </Row>
+            </Card>
+          ) : null}
+
           <Card>
             <Value>De onde veio o dinheiro</Value>
             {report.incomeBySource.length === 0 ? <Label>Nenhuma entrada neste mês.</Label> : null}
@@ -173,6 +185,7 @@ export function ReportsScreen() {
                   <Text style={expense.hasDocument ? styles.hasDocument : styles.noDocument}>
                     {expense.hasDocument ? 'Com comprovante' : 'Sem comprovante'}
                   </Text>
+                  {expense.exceptionReason ? <Text style={styles.noVote}>Sem votação: {expense.exceptionReason}</Text> : null}
                 </View>
                 <Money value={-expense.amount} />
               </View>
@@ -238,6 +251,7 @@ const styles = StyleSheet.create({
   entryTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
   hasDocument: { color: colors.green, fontSize: 12, fontWeight: '700' },
   noDocument: { color: colors.amber, fontSize: 12, fontWeight: '800' },
+  noVote: { color: colors.red, fontSize: 12, lineHeight: 16, fontWeight: '800' },
   lineBlock: { gap: 4, paddingVertical: 4 },
   lineLabel: { flex: 1, color: colors.ink, fontSize: 15, fontWeight: '700' },
   lineCount: { color: colors.muted, fontWeight: '600' },

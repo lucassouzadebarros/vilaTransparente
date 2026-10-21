@@ -61,17 +61,27 @@ Observacao: `npm audit` aponta vulnerabilidades na arvore Expo/React Native. Nao
 
 ## Do relato ao pagamento
 
-Os tres cadastros principais formam uma cadeia, e cada elo guarda o anterior:
+O caminho do dinheiro e: **Problema -> Orcamento -> Votacao -> Servico -> Pagamento**.
 
-1. **Relato** (`problem_reports`): o morador relata o problema, com ate 3 fotos. O administrador ou o sindico pode
-   criar um servico a partir dele; o relato guarda o servico (`service_id`) e o servico guarda o relato (`problem_report_id`).
-2. **Servico** (`service_orders`): so e finalizado pelo botao "Finalizar", que lanca a despesa no caixa. Ao finalizar,
-   o relato de origem vira "Resolvido"; ao cancelar, o relato volta para "Aberto" e as cotacoes ainda em votacao sao canceladas.
-3. **Cotacoes** (`budgets.service_id`): varias cotacoes competem pelo mesmo servico. Cada casa aprova no maximo uma; a
-   primeira a chegar a maioria vira o orcamento do servico e as outras sao encerradas como nao escolhidas.
+1. **Problema** (`problem_reports`): o morador relata, com ate 3 fotos. O administrador ou o sindico gera um ou mais
+   orcamentos a partir dele (ou resolve direto, se for um servico pequeno). O problema passa a "Em analise" no primeiro
+   orcamento, volta a "Aberto" se todos forem recusados/cancelados e vira "Resolvido" so quando tudo que saiu dele
+   (orcamentos e servicos) estiver concluido e pago.
+2. **Orcamento** (`budgets.problem_report_id`): um problema pode ter varios. Ao cadastrar o segundo, o sistema pergunta se
+   ele *concorre* com os outros (mesmo trabalho: cada casa aprova so um e, quando um vence, os outros sao encerrados) ou e
+   *outro trabalho* (votado e aprovado a parte, vira o seu proprio servico). Todo orcamento passa por votacao das casas, com prazo.
+3. **Servico** (`service_orders`): nasce de um orcamento aprovado. O valor pago pode passar ate 10% do aprovado. So termina
+   pelo botao "Finalizar", que lanca a despesa no caixa.
 
-Regra opcional de valor: em Configuracoes o administrador define a partir de quanto um servico so comeca (ou e pago) com
-orcamento aprovado pelas casas (`settings.budget_required_above`, vazio = nao exige).
+Regra de valor (`settings.budget_required_above`, vazio = nao exige): ate esse valor o servico pode ser criado e pago direto;
+acima dele so a partir de um orcamento aprovado. Duas saidas, ambas publicas:
+
+- **Emergencia**: ao finalizar um servico fora da regra, o admin escreve uma justificativa (minimo 20 letras). O servico
+  fica marcado como "Gasto sem votacao" e a justificativa aparece para todos.
+- **Despesa direta** acima do limite (tela Despesas): exige justificativa, exceto Energia, Agua e Taxas (contas de rotina).
+
+O extrato mensal mostra a linha "Gastos sem orcamento votado" (valor e quantidade) e marca cada despesa nessa situacao,
+na tela, no CSV e no PDF.
 
 ## Fotos e anexos
 

@@ -18,20 +18,23 @@ export function buildReportCsv(report: MonthlyReport) {
     ['Entradas', decimal(report.totalIncome)],
     ['Saídas', decimal(report.totalExpenses)],
     ['Saldo final', decimal(report.closingBalance)],
+    ['Gastos sem orçamento votado', decimal(report.unvotedTotal ?? 0), `${report.unvotedCount ?? 0} lançamento(s)`],
     [],
     ['Entradas'],
     ['Data', 'Origem', 'Descrição', 'Valor'],
     ...report.incomes.map((income) => [formatDateBR(income.date), income.source, income.description, decimal(income.amount)]),
     [],
     ['Saídas'],
-    ['Data', 'Categoria', 'Descrição', 'Fornecedor', 'Valor', 'Comprovante'],
+    ['Data', 'Categoria', 'Descrição', 'Fornecedor', 'Valor', 'Comprovante', 'Orçamento votado', 'Justificativa (sem votação)'],
     ...report.expenses.map((expense) => [
       formatDateBR(expense.date),
       expense.category,
       expense.description,
       expense.supplier ?? '',
       decimal(expense.amount),
-      expense.hasDocument ? 'Sim' : 'Não'
+      expense.hasDocument ? 'Sim' : 'Não',
+      expense.voted === false ? 'Não' : 'Sim',
+      expense.exceptionReason ?? ''
     ])
   ];
   return `﻿${rows.map((row) => row.map(cell).join(';')).join('\r\n')}`;
@@ -74,7 +77,7 @@ export function buildReportHtml(report: MonthlyReport, villageName = 'Portal da 
     .map((income) => `<tr><td>${formatDateBR(income.date)}</td><td>${escapeHtml(income.source)}</td><td>${escapeHtml(income.description)}</td><td class="n">${formatMoneyBR(income.amount)}</td></tr>`)
     .join('');
   const expenses = report.expenses
-    .map((expense) => `<tr><td>${formatDateBR(expense.date)}</td><td>${escapeHtml(expense.category)}</td><td>${escapeHtml(expense.description)}${expense.supplier ? ` <small>- ${escapeHtml(expense.supplier)}</small>` : ''}</td><td>${expense.hasDocument ? 'Sim' : '<b>Não</b>'}</td><td class="n">${formatMoneyBR(expense.amount)}</td></tr>`)
+    .map((expense) => `<tr><td>${formatDateBR(expense.date)}</td><td>${escapeHtml(expense.category)}</td><td>${escapeHtml(expense.description)}${expense.supplier ? ` <small>- ${escapeHtml(expense.supplier)}</small>` : ''}</td><td>${expense.hasDocument ? 'Sim' : '<b>Não</b>'}</td><td>${expense.voted === false ? '<b>Não</b>' : 'Sim'}${expense.exceptionReason ? ` <small>${escapeHtml(expense.exceptionReason)}</small>` : ''}</td><td class="n">${formatMoneyBR(expense.amount)}</td></tr>`)
     .join('');
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Prestação de contas - ${monthTitle(report.month)}</title>
 <style>
@@ -97,7 +100,8 @@ small{color:#667085}.muted{color:#667085}
 <h2>De onde veio o dinheiro</h2><table>${lines(report.incomeBySource) || '<tr><td>Nenhuma entrada no mês.</td></tr>'}</table>
 <h2>Para onde foi</h2><table>${lines(report.expensesByCategory) || '<tr><td>Nenhuma saída no mês.</td></tr>'}</table>
 <h2>Entradas</h2><table><tr><th>Data</th><th>Origem</th><th>Descrição</th><th class="n">Valor</th></tr>${incomes}</table>
-<h2>Saídas</h2><table><tr><th>Data</th><th>Categoria</th><th>Descrição</th><th>Comprovante</th><th class="n">Valor</th></tr>${expenses}</table>
+<h2>Saídas</h2><table><tr><th>Data</th><th>Categoria</th><th>Descrição</th><th>Comprovante</th><th>Votado</th><th class="n">Valor</th></tr>${expenses}</table>
+${(report.unvotedCount ?? 0) > 0 ? `<p class="muted">Gastos sem orçamento votado: ${formatMoneyBR(report.unvotedTotal ?? 0)} (${report.unvotedCount} lançamento(s)). Serviços pequenos e emergências justificadas não passam por votação.</p>` : ''}
 ${report.expensesWithoutDocument > 0 ? `<p class="muted">${report.expensesWithoutDocument} saída(s) deste mês ainda sem comprovante anexado.</p>` : ''}
 </body></html>`;
 }

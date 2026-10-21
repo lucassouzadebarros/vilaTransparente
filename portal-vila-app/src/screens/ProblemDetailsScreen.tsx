@@ -1,15 +1,15 @@
 import { useCallback, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { ArrowLeft, Camera, ChevronRight, ImagePlus, Pencil, RefreshCw, Send, Wrench, X, XCircle } from 'lucide-react-native';
+import { ArrowLeft, Camera, ChevronRight, ImagePlus, Pencil, Plus, RefreshCw, Send, Wrench, X, XCircle } from 'lucide-react-native';
 import { Badge, Button, Card, Label, Row, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
-import { PortalDocument, ProblemReport, ProblemReportEvent, ServiceOrder } from '../types';
+import { Budget, PortalDocument, ProblemReport, ProblemReportEvent, ServiceOrder } from '../types';
 import { Alert } from '../utils/alert';
 import { pickImage, pickerErrorMessage } from '../utils/filePicker';
-import { formatDateBR, formatDateTimeBR } from '../utils/format';
+import { formatDateBR, formatDateTimeBR, formatMoneyBR } from '../utils/format';
 
 const MAX_PHOTOS = 3;
 
@@ -28,16 +28,24 @@ const serviceStatusLabels: Record<ServiceOrder['status'], string> = {
   CANCELADO: 'cancelado'
 };
 
+const budgetStatusLabels: Record<Budget['status'], string> = {
+  EM_ANALISE: 'em votação',
+  APROVADO: 'aprovado',
+  REJEITADO: 'recusado',
+  CANCELADO: 'cancelado'
+};
+
 type Photo = { document: PortalDocument; url: string };
 
-/** One report in full: description, photos, and the service that came out of it. */
+/** One report in full: description, photos, the budgets generated for it and the services that came out of them. */
 export function ProblemDetailsScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const { session, isAdmin, canManageBudgets } = useAuth();
   const id = Number(route.params?.id);
   const [report, setReport] = useState<ProblemReport | null>(null);
-  const [service, setService] = useState<ServiceOrder | null>(null);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [services, setServices] = useState<ServiceOrder[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
@@ -48,8 +56,9 @@ export function ProblemDetailsScreen() {
   const load = useCallback(async () => {
     setError('');
     try {
-      const [reports, services, documents, history] = await Promise.all([
+      const [reports, allBudgets, allServices, documents, history] = await Promise.all([
         api.problemReports(),
+        api.budgets().catch(() => [] as Budget[]),
         api.services().catch(() => [] as ServiceOrder[]),
         api.documents('PROBLEM_REPORT', id).catch(() => [] as PortalDocument[]),
         api.problemReportEvents(id).catch(() => [] as ProblemReportEvent[])
@@ -57,7 +66,8 @@ export function ProblemDetailsScreen() {
       setEvents(history);
       const found = reports.find((item) => item.id === id) ?? null;
       setReport(found);
-      setService(found?.serviceId ? services.find((item) => item.id === found.serviceId) ?? null : null);
+      setBudgets(allBudgets.filter((item) => item.problemReportId === id && item.status !== 'CANCELADO'));
+      setServices(allServices.filter((item) => item.problemReportId === id && item.status !== 'CANCELADO'));
       // Photos are private: each one is shown from a short-lived link.
       const withLinks = await Promise.all(
         documents.map(async (document) => ({ document, url: await api.documentAccessUrl(document.id as number).catch(() => '') }))
@@ -214,19 +224,49 @@ export function ProblemDetailsScreen() {
             </Card>
           ) : null}
 
-          {report.serviceId ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => navigation.navigate('ServiceDetails', { id: report.serviceId, refreshKey: Date.now() })}
-              style={styles.serviceLink}
-            >
-              <Wrench color={colors.blue} size={20} />
-              <View style={styles.serviceCopy}>
-                <Text style={styles.serviceTitle}>{service ? service.title : `Serviço #${report.serviceId}`}</Text>
-                <Text style={styles.serviceStatus}>{service ? `Serviço ${serviceStatusLabels[service.status] ?? service.status}` : 'Ver o serviço'}</Text>
-              </View>
-              <ChevronRight color={colors.blue} size={18} />
-            </Pressable>
+          {budgets.length ? (
+            <Card>
+              <Value>Orçamentos deste problema</Value>
+              {budgets.length > 1 ? <Label>Os que concorrem entre si disputam o mesmo trabalho: cada casa aprova só um.</Label> : null}
+              {budgets.map((budget) => (
+                <Pressable
+                  key={budget.id}
+                  accessibilityRole="button"
+                  onPress={() => navigation.navigate('BudgetDetails', { id: budget.id, refreshKey: Date.now() })}
+                  style={styles.serviceLink}
+                >
+                  <View style={styles.serviceCopy}>
+                    <Text style={styles.serviceTitle}>{budget.title}</Text>
+                    <Text style={styles.serviceStatus}>
+                      {budget.supplier} · {formatMoneyBR(budget.amount)} · {budgetStatusLabels[budget.status] ?? budget.status}
+                      {budgets.length > 1 ? (budget.competes === false ? ' · outro trabalho' : ' · concorre') : ''}
+                    </Text>
+                  </View>
+                  <ChevronRight color={colors.blue} size={18} />
+                </Pressable>
+              ))}
+            </Card>
+          ) : null}
+
+          {services.length ? (
+            <Card>
+              <Value>Serviços deste problema</Value>
+              {services.map((service) => (
+                <Pressable
+                  key={service.id}
+                  accessibilityRole="button"
+                  onPress={() => navigation.navigate('ServiceDetails', { id: service.id, refreshKey: Date.now() })}
+                  style={styles.serviceLink}
+                >
+                  <Wrench color={colors.blue} size={20} />
+                  <View style={styles.serviceCopy}>
+                    <Text style={styles.serviceTitle}>{service.title}</Text>
+                    <Text style={styles.serviceStatus}>Serviço {serviceStatusLabels[service.status] ?? service.status}</Text>
+                  </View>
+                  <ChevronRight color={colors.blue} size={18} />
+                </Pressable>
+              ))}
+            </Card>
           ) : null}
 
           <Card>
@@ -268,10 +308,18 @@ export function ProblemDetailsScreen() {
             <Card>
               <Value>Ações administrativas</Value>
               <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
-                {canManageBudgets && open && !report.serviceId ? (
+                {canManageBudgets && open ? (
                   <Button
-                    title="Criar serviço a partir deste relato"
+                    title={budgets.length ? 'Gerar outro orçamento' : 'Gerar orçamento'}
+                    icon={Plus}
+                    onPress={() => navigation.navigate('BudgetForm', { formMode: 'create', budgetId: null, serviceId: null, problemReportId: report.id, formKey: Date.now() })}
+                  />
+                ) : null}
+                {canManageBudgets && open && !budgets.length && !services.length ? (
+                  <Button
+                    title="Resolver direto (serviço pequeno)"
                     icon={Wrench}
+                    variant="ghost"
                     onPress={() => navigation.navigate('ServiceForm', { formMode: 'create', serviceId: null, budgetId: null, problemReportId: report.id, formKey: Date.now() })}
                   />
                 ) : null}

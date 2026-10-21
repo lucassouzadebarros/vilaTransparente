@@ -14,6 +14,13 @@ public class Budget {
 
     public Long serviceId;
 
+    /** The problem this budget was generated for, if any. */
+    public Long problemReportId;
+
+    /** True when it is a quote for the same job as the other budgets of the problem: only one of them wins. */
+    @Column(nullable = false)
+    public boolean competes = true;
+
     @Column(nullable = false)
     public String title;
 

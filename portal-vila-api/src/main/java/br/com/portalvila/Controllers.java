@@ -435,11 +435,13 @@ class ExpenseController {
     private final ExpenseRepository expenses;
     private final DashboardEventService dashboardEvents;
     private final AuditService audit;
+    private final SpendingRules rules;
 
-    ExpenseController(ExpenseRepository expenses, DashboardEventService dashboardEvents, AuditService audit) {
+    ExpenseController(ExpenseRepository expenses, DashboardEventService dashboardEvents, AuditService audit, SpendingRules rules) {
         this.expenses = expenses;
         this.dashboardEvents = dashboardEvents;
         this.audit = audit;
+        this.rules = rules;
     }
 
     @GetMapping
@@ -455,8 +457,10 @@ class ExpenseController {
         if (expense.expenseDate == null) {
             expense.expenseDate = LocalDate.now();
         }
+        rules.assertExpenseAllowed(expense);
         Expense saved = expenses.save(expense);
-        audit.record("EXPENSE_CREATED", "EXPENSE", saved.id, saved.description + " - " + AuditService.money(saved.amount));
+        audit.record("EXPENSE_CREATED", "EXPENSE", saved.id, saved.description + " - " + AuditService.money(saved.amount)
+            + (saved.exceptionReason == null ? "" : " - SEM VOTAÇÃO: " + saved.exceptionReason));
         dashboardEvents.publishDashboardChanged();
         return saved;
     }
@@ -487,6 +491,8 @@ class ExpenseController {
         expense.documentId = incoming.documentId;
         expense.serviceOrderId = incoming.serviceOrderId;
         expense.budgetId = incoming.budgetId;
+        expense.exceptionReason = incoming.exceptionReason;
+        rules.assertExpenseAllowed(expense);
         Expense saved = expenses.save(expense);
         audit.record("EXPENSE_UPDATED", "EXPENSE", saved.id, before + " -> " + saved.description + " - " + AuditService.money(saved.amount));
         dashboardEvents.publishDashboardChanged();
@@ -661,10 +667,7 @@ class BudgetController {
     @DeleteMapping("/{id}")
     @PreAuthorize("@access.canManageBudgets()")
     Map<String, String> delete(@PathVariable Long id) {
-        Budget budget = budgets.findById(id).orElseThrow();
-        budget.status = "CANCELADO";
-        budgets.save(budget);
-        audit.record("BUDGET_CANCELADO", "BUDGET", budget.id, budget.title + " - " + AuditService.money(budget.amount));
+        workflow.cancelBudget(id);
         return Map.of("status", "CANCELADO");
     }
 }

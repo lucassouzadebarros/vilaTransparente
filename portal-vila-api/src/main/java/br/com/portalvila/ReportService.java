@@ -22,7 +22,8 @@ record ReportLine(String label, BigDecimal amount, int count) {
 record ReportIncome(LocalDate date, String source, String description, BigDecimal amount) {
 }
 
-record ReportExpense(Long id, LocalDate date, String description, String category, String supplier, BigDecimal amount, boolean hasDocument) {
+/** {@code voted}: the money is behind a budget the houses approved, or is a routine bill (energy, water, fees). */
+record ReportExpense(Long id, LocalDate date, String description, String category, String supplier, BigDecimal amount, boolean hasDocument, boolean voted, String exceptionReason) {
 }
 
 record MonthlyReportResponse(
@@ -36,7 +37,9 @@ record MonthlyReportResponse(
     List<ReportLine> expensesByCategory,
     List<ReportIncome> incomes,
     List<ReportExpense> expenses,
-    int expensesWithoutDocument
+    int expensesWithoutDocument,
+    BigDecimal unvotedTotal,
+    int unvotedCount
 ) {
 }
 
@@ -81,7 +84,7 @@ class ReportService {
         boolean enabled = admin || financialService.transparencyEnabledFor(residentId);
         if (!enabled) {
             return new MonthlyReportResponse(reference.toString(), false, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                BigDecimal.ZERO, List.of(), List.of(), List.of(), List.of(), 0);
+                BigDecimal.ZERO, List.of(), List.of(), List.of(), List.of(), 0, BigDecimal.ZERO, 0);
         }
         LocalDate start = reference.atDay(1);
         LocalDate end = reference.atEndOfMonth();
@@ -144,8 +147,10 @@ class ReportService {
 
         List<ReportExpense> expenseLines = monthExpenses.stream()
             .map(expense -> new ReportExpense(expense.id, expense.expenseDate, expense.description, category(expense.category),
-                expense.supplier, expense.amount, expense.documentId != null))
+                expense.supplier, expense.amount, expense.documentId != null,
+                expense.budgetId != null || SpendingRules.isRoutine(expense.category), expense.exceptionReason))
             .toList();
+        List<ReportExpense> unvoted = expenseLines.stream().filter(line -> !line.voted()).toList();
 
         return new MonthlyReportResponse(
             reference.toString(),
@@ -158,7 +163,9 @@ class ReportService {
             expensesByCategory,
             monthIncomes,
             expenseLines,
-            (int) expenseLines.stream().filter(line -> !line.hasDocument()).count()
+            (int) expenseLines.stream().filter(line -> !line.hasDocument()).count(),
+            unvoted.stream().map(ReportExpense::amount).reduce(BigDecimal.ZERO, BigDecimal::add),
+            unvoted.size()
         );
     }
 

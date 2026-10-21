@@ -3,7 +3,10 @@ import { Linking, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput,
 import { Alert } from '../utils/alert';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ArrowLeft, CalendarDays, CreditCard, Eye, FileText, LucideIcon, Trash2, Upload } from 'lucide-react-native';
+import { FormField as ReasonField } from '../components/FormField';
 import { SoftBackdrop } from '../components/SoftBackdrop';
+import { Budget } from '../types';
+import { formatMoneyBR } from '../utils/format';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
 import { Camera as CameraIcon } from 'lucide-react-native';
@@ -22,17 +25,32 @@ export function FinishServiceScreen() {
   const [documentUrl, setDocumentUrl] = useState('');
   const [documentFile, setDocumentFile] = useState<PickedFile | null>(null);
   const [busy, setBusy] = useState(false);
+  const [approved, setApproved] = useState<Budget | null>(null);
+  const [limit, setLimit] = useState<number | null>(null);
+  const [emergencyReason, setEmergencyReason] = useState('');
 
   useEffect(() => {
     // A finished service already has its expense: finishing again only fixes data and must not book it twice.
     api.service(id)
-      .then((service) => {
+      .then(async (service) => {
         if (service.status === 'FINALIZADO') {
           setGenerateExpense(false);
         }
+        if (service.approvedBudgetId) {
+          const budgets = await api.serviceBudgets(id).catch(() => [] as Budget[]);
+          setApproved(budgets.find((budget) => budget.id === service.approvedBudgetId) ?? null);
+        }
       })
       .catch(() => undefined);
+    api.settings()
+      .then((settings) => setLimit((settings as { budgetRequiredAbove?: number | null }).budgetRequiredAbove ?? null))
+      .catch(() => undefined);
   }, [id]);
+
+  // What the houses approved (with 10% of room) or, with no budget, the limit above which a vote is needed.
+  const paid = parseCurrencyInput(finalValue);
+  const ceiling = approved ? Math.round(approved.amount * 1.1 * 100) / 100 : limit;
+  const outsideRule = ceiling !== null && paid > ceiling;
 
   async function finish() {
     if (busy) {
@@ -41,6 +59,10 @@ export function FinishServiceScreen() {
     const paidValue = parseCurrencyInput(finalValue);
     if (paidValue <= 0) {
       Alert.alert('Serviço', 'Informe o valor final pago.');
+      return;
+    }
+    if (outsideRule && emergencyReason.trim().length < 20) {
+      Alert.alert('Serviço', 'Este valor passa do que as casas aprovaram. Se for uma emergência, escreva a justificativa (pelo menos 20 letras): ela aparece para todas as casas.');
       return;
     }
 
@@ -75,7 +97,8 @@ export function FinishServiceScreen() {
         supplierDocument,
         documentId,
         generateExpense,
-        notes: ''
+        notes: '',
+        emergencyReason: outsideRule ? emergencyReason.trim() : undefined
       });
       Alert.alert('Serviço', 'Serviço finalizado e prestação de contas atualizada.');
       navigation.goBack();
@@ -136,6 +159,15 @@ export function FinishServiceScreen() {
       <View style={styles.divider} />
 
       <FormSection icon={CreditCard} title="Dados do pagamento">
+        {approved ? (
+          <Text style={styles.sectionHelp}>
+            Orçamento aprovado pelas casas: {formatMoneyBR(approved.amount)} ({approved.supplier}). Dá para pagar até {formatMoneyBR(ceiling ?? approved.amount)} (10% de folga).
+          </Text>
+        ) : limit !== null ? (
+          <Text style={styles.sectionHelp}>
+            Este serviço não tem orçamento aprovado: sem votação só dá para pagar até {formatMoneyBR(limit)}.
+          </Text>
+        ) : null}
         <FormField
           label="Valor final pago"
           value={finalValue}
@@ -150,6 +182,17 @@ export function FinishServiceScreen() {
           placeholder="2026-06-06"
           right={<CalendarDays color={colors.blue} size={19} strokeWidth={2.4} />}
         />
+        {outsideRule ? (
+          <ReasonField
+            label="Justificativa de emergência"
+            required
+            value={emergencyReason}
+            onChangeText={setEmergencyReason}
+            multiline
+            placeholder="Por que foi preciso pagar sem a votação das casas? Ex.: cano estourou e a rua ficou sem água."
+            hint={`Este valor passa de ${formatMoneyBR(ceiling ?? 0)}. A justificativa (mínimo 20 letras) aparece para todas as casas, no serviço e na prestação de contas.`}
+          />
+        ) : null}
         <FormField label="Fornecedor executado" value={supplier} onChangeText={setSupplier} placeholder="Digite o nome do fornecedor" />
         <FormField label="CNPJ do fornecedor" value={supplierDocument} onChangeText={setSupplierDocument} placeholder="12.345.678/0001-90" />
 
