@@ -37,6 +37,33 @@ export function closingResult(voting: BudgetVoting) {
   return voted >= voting.votesToApprove && voting.approveVotes > voting.rejectVotes ? 'Aprovado' : 'Recusado';
 }
 
+/**
+ * What the deadline of an open voting means today: "Vota até 28/10 (faltam 3 dias)", "Último dia para votar: hoje".
+ * Empty when there is no deadline.
+ */
+export function deadlineLabel(deadline?: string | null, today: Date = new Date()) {
+  if (!deadline) {
+    return '';
+  }
+  const [year, month, day] = deadline.slice(0, 10).split('-').map(Number);
+  if (!year || !month || !day) {
+    return '';
+  }
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const left = Math.round((new Date(year, month - 1, day).getTime() - startOfToday) / 86_400_000);
+  const date = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}`;
+  if (left < 0) {
+    return `Prazo terminou em ${date}`;
+  }
+  if (left === 0) {
+    return 'Último dia para votar: hoje';
+  }
+  if (left === 1) {
+    return `Vota até amanhã (${date})`;
+  }
+  return `Vota até ${date} (faltam ${left} dias)`;
+}
+
 export function formatVotingDate(value?: string | null) {
   if (!value) {
     return '';

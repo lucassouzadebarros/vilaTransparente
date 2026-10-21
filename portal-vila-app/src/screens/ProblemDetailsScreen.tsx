@@ -1,15 +1,15 @@
 import { useCallback, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { ArrowLeft, Camera, ChevronRight, ImagePlus, Pencil, RefreshCw, Wrench, X } from 'lucide-react-native';
+import { ArrowLeft, Camera, ChevronRight, ImagePlus, Pencil, RefreshCw, Send, Wrench, X, XCircle } from 'lucide-react-native';
 import { Badge, Button, Card, Label, Row, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
-import { PortalDocument, ProblemReport, ServiceOrder } from '../types';
+import { PortalDocument, ProblemReport, ProblemReportEvent, ServiceOrder } from '../types';
 import { Alert } from '../utils/alert';
 import { pickImage, pickerErrorMessage } from '../utils/filePicker';
-import { formatDateBR } from '../utils/format';
+import { formatDateBR, formatDateTimeBR } from '../utils/format';
 
 const MAX_PHOTOS = 3;
 
@@ -41,15 +41,20 @@ export function ProblemDetailsScreen() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
+  const [events, setEvents] = useState<ProblemReportEvent[]>([]);
+  const [comment, setComment] = useState('');
+  const [posting, setPosting] = useState(false);
 
   const load = useCallback(async () => {
     setError('');
     try {
-      const [reports, services, documents] = await Promise.all([
+      const [reports, services, documents, history] = await Promise.all([
         api.problemReports(),
         api.services().catch(() => [] as ServiceOrder[]),
-        api.documents('PROBLEM_REPORT', id).catch(() => [] as PortalDocument[])
+        api.documents('PROBLEM_REPORT', id).catch(() => [] as PortalDocument[]),
+        api.problemReportEvents(id).catch(() => [] as ProblemReportEvent[])
       ]);
+      setEvents(history);
       const found = reports.find((item) => item.id === id) ?? null;
       setReport(found);
       setService(found?.serviceId ? services.find((item) => item.id === found.serviceId) ?? null : null);
@@ -72,6 +77,7 @@ export function ProblemDetailsScreen() {
   const isOwner = Boolean(session?.residentId && report?.residentId === session.residentId);
   const canChangePhotos = isOwner || isAdmin;
   const open = report?.status === 'ABERTO' || report?.status === 'EM_ANALISE';
+  const canComment = (isOwner || canManageBudgets) && report?.status !== 'CANCELADO';
 
   async function addPhoto(source: 'camera' | 'library') {
     if (!report?.id) {
@@ -89,6 +95,41 @@ export function ProblemDetailsScreen() {
     } finally {
       setSending(false);
     }
+  }
+
+  async function sendComment() {
+    const message = comment.trim();
+    if (!message || posting) {
+      return;
+    }
+    setPosting(true);
+    try {
+      await api.addProblemComment(id, message);
+      setComment('');
+      await load();
+    } catch (err) {
+      Alert.alert('Comentário', apiErrorMessage(err, 'Não consegui enviar o comentário.'));
+    } finally {
+      setPosting(false);
+    }
+  }
+
+  function confirmCancel() {
+    Alert.alert('Cancelar relato', 'O relato sai da lista de abertos. Deseja cancelar?', [
+      { text: 'Voltar', style: 'cancel' },
+      {
+        text: 'Cancelar relato',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.cancelProblemReport(id);
+            await load();
+          } catch (err) {
+            Alert.alert('Cancelar relato', apiErrorMessage(err, 'Não consegui cancelar o relato.'));
+          }
+        }
+      }
+    ]);
   }
 
   function removePhoto(photo: Photo) {
@@ -188,6 +229,41 @@ export function ProblemDetailsScreen() {
             </Pressable>
           ) : null}
 
+          <Card>
+            <Value>Histórico e comentários</Value>
+            {events.length === 0 ? <Label>Ainda sem registros.</Label> : null}
+            <View style={styles.history}>
+              {events.map((event) => (
+                <View key={event.id} style={styles.eventRow}>
+                  <View style={[styles.eventDot, event.kind === 'COMMENT' ? styles.eventDotComment : null]} />
+                  <View style={styles.eventCopy}>
+                    <Text style={styles.eventMeta}>
+                      {event.author ?? 'Sistema'} · {formatDateTimeBR(event.createdAt)}
+                    </Text>
+                    <Text style={[styles.eventText, event.kind === 'COMMENT' ? styles.eventComment : null]}>{event.message}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+            {canComment ? (
+              <View style={styles.commentBox}>
+                <TextInput
+                  value={comment}
+                  onChangeText={(value) => setComment(value.slice(0, 500))}
+                  placeholder={isOwner ? 'Escreva uma informação nova para a administração...' : 'Escreva um comentário para quem relatou...'}
+                  placeholderTextColor={colors.muted}
+                  multiline
+                  style={styles.commentInput}
+                  accessibilityLabel="Comentário"
+                />
+                <Button title={posting ? 'Enviando...' : 'Enviar comentário'} icon={Send} disabled={posting || !comment.trim()} onPress={sendComment} />
+              </View>
+            ) : null}
+            {isOwner && report.status === 'ABERTO' ? (
+              <Button title="Cancelar meu relato" icon={XCircle} variant="danger" onPress={confirmCancel} />
+            ) : null}
+          </Card>
+
           {canManageBudgets || isAdmin ? (
             <Card>
               <Value>Ações administrativas</Value>
@@ -274,6 +350,60 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  history: {
+    gap: 0
+  },
+  eventRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    paddingBottom: spacing.md
+  },
+  eventDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    marginTop: 5,
+    backgroundColor: colors.border
+  },
+  eventDotComment: {
+    backgroundColor: colors.blue
+  },
+  eventCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2
+  },
+  eventMeta: {
+    color: colors.muted,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '700'
+  },
+  eventText: {
+    color: colors.ink,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600'
+  },
+  eventComment: {
+    fontWeight: '800'
+  },
+  commentBox: {
+    gap: spacing.sm
+  },
+  commentInput: {
+    minHeight: 76,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: '600',
+    textAlignVertical: 'top'
   },
   serviceLink: {
     minHeight: 60,

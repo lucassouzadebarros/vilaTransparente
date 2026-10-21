@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -28,6 +29,7 @@ class ServiceOrderWorkflow {
     private final ProblemReportRepository reports;
     private final SettingsRepository settings;
     private final PushService push;
+    private final ReportHistory history;
 
     ServiceOrderWorkflow(
         ServiceOrderRepository services,
@@ -38,8 +40,10 @@ class ServiceOrderWorkflow {
         AuditService audit,
         ProblemReportRepository reports,
         SettingsRepository settings,
-        PushService push
+        PushService push,
+        ReportHistory history
     ) {
+        this.history = history;
         this.push = push;
         this.reports = reports;
         this.settings = settings;
@@ -90,6 +94,7 @@ class ServiceOrderWorkflow {
             origin.updatedAt = LocalDateTime.now();
             reports.save(origin);
             audit.record("REPORT_TO_SERVICE", "REPORT", origin.id, origin.title + " -> serviço #" + saved.id);
+            history.record(origin.id, ProblemReportEvent.SERVICE, "Virou o serviço #" + saved.id + ": " + saved.title);
         }
         audit.record("SERVICE_CREATED", "SERVICE", saved.id, saved.title + valueNote(saved.expectedValue));
         dashboardEvents.publishDashboardChanged();
@@ -158,6 +163,7 @@ class ServiceOrderWorkflow {
             }
             report.updatedAt = LocalDateTime.now();
             reports.save(report);
+            history.record(report.id, ProblemReportEvent.SERVICE, "O serviço #" + service.id + " foi cancelado e o relato voltou para os abertos.");
         });
         audit.record("SERVICE_CANCELLED", "SERVICE", service.id, service.title);
         dashboardEvents.publishDashboardChanged();
@@ -178,7 +184,9 @@ class ServiceOrderWorkflow {
         budget.status = "EM_ANALISE";
         budget.votingClosedAt = null;
         budget.scope = blankToNull(budget.scope);
+        budget.remindedOn = null;
         validateBudget(budget);
+        validateDeadline(budget.votingDeadline);
         if (forService != null) {
             ServiceOrder service = services.findById(forService)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Serviço não encontrado."));
@@ -239,6 +247,17 @@ class ServiceOrderWorkflow {
         budget.expectedDate = incoming.expectedDate;
         budget.documentId = incoming.documentId;
         budget.status = nextStatus;
+        if ("EM_ANALISE".equals(nextStatus)) {
+            LocalDate deadline = incoming.votingDeadline;
+            if (!Objects.equals(deadline, budget.votingDeadline)) {
+                validateDeadline(deadline);
+            } else if (reopening && deadline != null && deadline.isBefore(BudgetVotingService.today())) {
+                // A reopened voting would otherwise close again at once because of its old deadline.
+                deadline = null;
+            }
+            budget.votingDeadline = deadline;
+            budget.remindedOn = null;
+        }
         budget.scope = incomingScope;
         budget.notes = incoming.notes;
         budget.updatedAt = LocalDateTime.now();
@@ -300,6 +319,7 @@ class ServiceOrderWorkflow {
                 report.updatedAt = LocalDateTime.now();
                 reports.save(report);
                 audit.record("REPORT_RESOLVED", "REPORT", report.id, report.title + " - resolvido pelo serviço #" + finishedId);
+                history.record(report.id, ProblemReportEvent.STATUS, "Resolvido: o serviço #" + finishedId + " foi finalizado e pago.");
                 push.notifyUser(report.createdBy, "Seu relato foi resolvido", "\"" + report.title + "\" foi resolvido.",
                     Map.of("type", "REPORT", "id", report.id));
             }
@@ -344,6 +364,12 @@ class ServiceOrderWorkflow {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                 "Serviços acima de " + AuditService.money(limit) + " precisam de um orçamento aprovado pelas casas. "
                     + "Cadastre as cotações no serviço e aguarde a votação.");
+        }
+    }
+
+    private static void validateDeadline(LocalDate deadline) {
+        if (deadline != null && deadline.isBefore(BudgetVotingService.today())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O prazo da votação não pode estar no passado.");
         }
     }
 

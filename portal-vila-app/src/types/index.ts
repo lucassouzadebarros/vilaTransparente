@@ -173,6 +173,7 @@ export type Budget = {
   scope?: string;
   notes?: string;
   votingClosedAt?: string | null;
+  votingDeadline?: string | null;
 };
 
 export type BudgetVoteChoice = 'APROVAR' | 'RECUSAR';
@@ -197,6 +198,7 @@ export type BudgetVoting = {
   cannotVoteReason?: string | null;
   closedAt?: string | null;
   houses: BudgetVoteHouse[];
+  deadline?: string | null;
 };
 
 export type ProblemReport = {
@@ -277,5 +279,14 @@ export type WebhookEvent = {
   processed: boolean;
   processedAt?: string;
   errorMessage?: string;
+  createdAt: string;
+};
+
+export type ProblemReportEvent = {
+  id: number;
+  reportId: number;
+  kind: 'CREATED' | 'STATUS' | 'SERVICE' | 'COMMENT';
+  author?: string | null;
+  message: string;
   createdAt: string;
 };

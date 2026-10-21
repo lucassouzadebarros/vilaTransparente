@@ -24,6 +24,7 @@ const actionLabels: Record<string, string> = {
   BUDGET_CREATED: 'Orçamento cadastrado',
   BUDGET_UPDATED: 'Orçamento alterado',
   BUDGET_RULE_CHANGED: 'Regra de orçamento alterada',
+  BUDGET_EXPIRED: 'Votação encerrada pelo prazo',
   BUDGET_APROVADO: 'Orçamento aprovado',
   BUDGET_REJEITADO: 'Orçamento recusado',
   BUDGET_CANCELADO: 'Orçamento cancelado',

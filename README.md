@@ -94,3 +94,14 @@ Sem aparelho registrado nada e enviado. Para desligar no servidor: `PORTAL_PUSH_
 
 `MigrationsTest` roda todas as migracoes (`db/migration`) num banco em memoria e confere se as entidades batem com as
 tabelas. Mantenha as migracoes novas simples (uma coluna por `alter table`, tipos ANSI) para rodarem no PostgreSQL e no teste.
+
+## Prazo da votacao e historico do relato
+
+- **Prazo**: todo orcamento novo ja vem com prazo de 7 dias (editavel ou em branco). O prazo e o ultimo dia para votar; no dia
+  seguinte a votacao encerra sozinha (a cada hora, e tambem quando alguem abre a lista ou tenta votar fora do prazo), com a
+  mesma regra do encerramento manual: passa se mais da metade das casas votou e o "sim" vence. No ultimo dia e na vespera, as
+  casas que ainda nao votaram recebem um lembrete as 9h (so chega a celulares com avisos ativos). Horario de Sao Paulo.
+- **Historico do relato** (`problem_report_events`): registro, mudancas de situacao, virou servico, resolvido e comentarios.
+  Quem aparece e a casa ("Casa 10"), a "Administracao" ou o "Sindico", nunca o nome. Comentam: quem fez o relato, o
+  administrador e o sindico (a administracao comentando avisa quem relatou). Quem relatou pode cancelar enquanto ninguem comecou
+  a analisar (situacao "Aberto"). Migracao V21.

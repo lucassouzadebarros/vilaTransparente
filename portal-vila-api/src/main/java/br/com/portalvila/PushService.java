@@ -72,6 +72,10 @@ class PushService {
         send(ids, title, body, data);
     }
 
+    void notifyUsers(List<Long> userIds, String title, String body, Map<String, Object> data) {
+        send(userIds, title, body, data);
+    }
+
     void notifyUser(Long userId, String title, String body, Map<String, Object> data) {
         if (userId != null) {
             send(List.of(userId), title, body, data);

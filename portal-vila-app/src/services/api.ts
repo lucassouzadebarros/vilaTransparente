@@ -16,6 +16,7 @@ import {
   PixCharge,
   PortalDocument,
   ProblemReport,
+  ProblemReportEvent,
   RegistrationHouseOption,
   Resident,
   ResidentRegistration,
@@ -186,6 +187,9 @@ export const api = {
   problemReports: (status?: string) => requestData<ProblemReport[]>(apiClient.get('/problem-reports', { params: status ? { status } : {} })),
   createProblemReport: (report: ProblemReport) => requestData<ProblemReport>(apiClient.post('/problem-reports', report)),
   updateProblemReport: (id: number, report: ProblemReport) => requestData<ProblemReport>(apiClient.put(`/problem-reports/${id}`, report)),
+  problemReportEvents: (id: number) => requestData<ProblemReportEvent[]>(apiClient.get(`/problem-reports/${id}/events`)),
+  addProblemComment: (id: number, message: string) => requestData<ProblemReportEvent>(apiClient.post(`/problem-reports/${id}/comments`, { message })),
+  cancelProblemReport: (id: number) => requestData<ProblemReport>(apiClient.post(`/problem-reports/${id}/cancel`)),
   documents: (relatedType?: string, relatedId?: number) => requestData<PortalDocument[]>(
     apiClient.get('/documents', { params: relatedType && relatedId ? { relatedType, relatedId } : {} })
   ),
