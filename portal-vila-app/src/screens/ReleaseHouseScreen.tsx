@@ -184,13 +184,13 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   releasedText: {
     color: colors.muted,
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   confirmBox: {
     borderRadius: 10,
@@ -204,13 +204,13 @@ const styles = StyleSheet.create({
     color: colors.red,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   confirmText: {
     color: colors.ink,
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   successCard: {
     borderColor: colors.green,
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
     color: colors.green,
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   errorCard: {
     borderColor: colors.red,
@@ -230,6 +230,6 @@ const styles = StyleSheet.create({
     color: colors.red,
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: '900'
+    fontWeight: '700'
   }
 });

@@ -55,14 +55,14 @@ const categories = [
 
 const priorities = [
   { label: 'Baixa', icon: CircleArrowDown, color: colors.green },
-  { label: 'Média', icon: CircleMinus, color: '#D59A00' },
-  { label: 'Alta', icon: CircleArrowUp, color: '#F27D24' },
+  { label: 'Média', icon: CircleMinus, color: '#8A5200' },
+  { label: 'Alta', icon: CircleArrowUp, color: '#B45309' },
   { label: 'Urgente', icon: CircleAlert, color: colors.red }
 ];
 
 const statusOptions: Array<{ value: ProblemReport['status']; label: string; icon: LucideIcon; color: string }> = [
   { value: 'ABERTO', label: 'Aberto', icon: CircleAlert, color: colors.blue },
-  { value: 'EM_ANALISE', label: 'Em análise', icon: Clock3, color: '#D59A00' },
+  { value: 'EM_ANALISE', label: 'Em análise', icon: Clock3, color: '#8A5200' },
   { value: 'RESOLVIDO', label: 'Resolvido', icon: CheckCircle2, color: colors.green },
   { value: 'CANCELADO', label: 'Cancelado', icon: CircleX, color: colors.red }
 ];
@@ -607,7 +607,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 44,
     lineHeight: 54,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0,
     textAlign: 'center'
   },
@@ -631,14 +631,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5ECF4',
+    borderColor: '#EEF1EF',
     padding: 34,
     gap: 22,
-    shadowColor: '#163052',
-    shadowOpacity: 0.08,
+    shadowColor: '#16202A',
+    shadowOpacity: 0,
     shadowRadius: 22,
     shadowOffset: { width: 0, height: 10 },
-    elevation: 4,
+    elevation: 0,
     zIndex: 1
   },
   formCardCompact: {
@@ -677,7 +677,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 34,
     lineHeight: 42,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0
   },
   titleCompact: {
@@ -701,7 +701,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 19,
     lineHeight: 25,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   fieldLabelCompact: {
     fontSize: 13,
@@ -714,7 +714,7 @@ const styles = StyleSheet.create({
     color: colors.red,
     fontSize: 15,
     lineHeight: 20,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   fieldErrorCompact: {
     fontSize: 12,
@@ -728,7 +728,7 @@ const styles = StyleSheet.create({
     minHeight: 66,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#BFCBE0',
+    borderColor: '#C5CDC9',
     backgroundColor: colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
@@ -816,7 +816,7 @@ const styles = StyleSheet.create({
     width: '48%'
   },
   chipSelected: {
-    backgroundColor: '#F7FAFF'
+    backgroundColor: '#F2F4F2'
   },
   chipPressed: {
     opacity: 0.8
@@ -825,7 +825,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 18,
     lineHeight: 24,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   chipTextCompact: {
     fontSize: 12,
@@ -866,7 +866,7 @@ const styles = StyleSheet.create({
     width: '31%',
     aspectRatio: 1,
     borderRadius: 8,
-    backgroundColor: '#EEF4FA'
+    backgroundColor: '#EEF1EF'
   },
   photoActionsRow: {
     flexDirection: 'row',
@@ -906,7 +906,7 @@ const styles = StyleSheet.create({
     height: 122,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#BFCBE0',
+    borderColor: '#C5CDC9',
     borderStyle: 'dashed',
     backgroundColor: colors.surface,
     flexDirection: 'row',
@@ -932,7 +932,7 @@ const styles = StyleSheet.create({
     width: 172,
     height: 122,
     borderRadius: 8,
-    backgroundColor: '#EEF4FA',
+    backgroundColor: '#EEF1EF',
     overflow: 'visible'
   },
   thumbnailCompact: {
@@ -947,7 +947,7 @@ const styles = StyleSheet.create({
   thumbnailPlaceholder: {
     flex: 1,
     borderRadius: 8,
-    backgroundColor: '#EEF4FA'
+    backgroundColor: '#EEF1EF'
   },
   removePhoto: {
     position: 'absolute',
@@ -961,11 +961,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#163052',
-    shadowOpacity: 0.16,
+    shadowColor: '#16202A',
+    shadowOpacity: 0,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 2
+    elevation: 0
   },
   photoActions: {
     flex: 1,
@@ -996,7 +996,7 @@ const styles = StyleSheet.create({
     color: colors.blue,
     fontSize: 17,
     lineHeight: 23,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   photoButtonTextCompact: {
     fontSize: 13,
@@ -1019,7 +1019,7 @@ const styles = StyleSheet.create({
     color: colors.teal,
     fontSize: 18,
     lineHeight: 25,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   successTextCompact: {
     fontSize: 13,
@@ -1042,7 +1042,7 @@ const styles = StyleSheet.create({
     color: colors.red,
     fontSize: 16,
     lineHeight: 22,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   errorTextCompact: {
     fontSize: 12,
@@ -1072,7 +1072,7 @@ const styles = StyleSheet.create({
     color: colors.blue,
     fontSize: 20,
     lineHeight: 26,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   footerButtonTextCompact: {
     fontSize: 14,
@@ -1088,10 +1088,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 16,
     shadowColor: colors.blue,
-    shadowOpacity: 0.22,
+    shadowOpacity: 0,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 5 },
-    elevation: 3
+    elevation: 0
   },
   submitButtonDisabled: {
     opacity: 0.62
@@ -1100,6 +1100,6 @@ const styles = StyleSheet.create({
     color: colors.surface,
     fontSize: 20,
     lineHeight: 26,
-    fontWeight: '900'
+    fontWeight: '700'
   }
 });

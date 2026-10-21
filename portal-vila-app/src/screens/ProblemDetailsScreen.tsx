@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   photoGrid: {
     flexDirection: 'row',
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
     maxWidth: '33%',
     aspectRatio: 1,
     borderRadius: 8,
-    backgroundColor: '#EEF4FA'
+    backgroundColor: '#EEF1EF'
   },
   photoPress: {
     flex: 1,
@@ -434,7 +434,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 12,
     lineHeight: 15,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   eventText: {
     color: colors.ink,
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   eventComment: {
-    fontWeight: '800'
+    fontWeight: '700'
   },
   commentBox: {
     gap: spacing.sm
@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
     minHeight: 60,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#C9DAF2',
+    borderColor: '#C5CDC9',
     backgroundColor: colors.blueSoft,
     paddingHorizontal: spacing.md,
     flexDirection: 'row',
@@ -480,12 +480,12 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 14,
     lineHeight: 18,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   serviceStatus: {
     color: colors.blue,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '800'
+    fontWeight: '700'
   }
 });

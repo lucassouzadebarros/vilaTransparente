@@ -358,15 +358,15 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#BFD1F2',
+    borderColor: '#C5CDC9',
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#163052',
-    shadowOpacity: 0.04,
+    shadowColor: '#16202A',
+    shadowOpacity: 0,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 1
+    elevation: 0
   },
   headerCopy: {
     flex: 1,
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 25,
     lineHeight: 30,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0
   },
   subtitle: {
@@ -400,11 +400,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 14,
     gap: 12,
-    shadowColor: '#163052',
-    shadowOpacity: 0.07,
+    shadowColor: '#16202A',
+    shadowOpacity: 0,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 7 },
-    elevation: 2,
+    elevation: 0,
     zIndex: 1
   },
   sectionHeader: {
@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 18,
     lineHeight: 22,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0
   },
   sectionHelp: {
@@ -433,12 +433,12 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 13,
     lineHeight: 17,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   inputFrame: {
     minHeight: 46,
     borderWidth: 1,
-    borderColor: '#C9D6E8',
+    borderColor: '#C5CDC9',
     borderRadius: 8,
     backgroundColor: colors.surface,
     flexDirection: 'row',
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
   switchCard: {
     minHeight: 64,
     borderWidth: 1,
-    borderColor: '#C9D6E8',
+    borderColor: '#C5CDC9',
     borderRadius: 8,
     backgroundColor: colors.surface,
     paddingHorizontal: 14,
@@ -500,7 +500,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 13,
     lineHeight: 17,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   switchText: {
     color: colors.muted,
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
     color: colors.blue,
     fontSize: 13,
     lineHeight: 17,
-    fontWeight: '900',
+    fontWeight: '700',
     textAlign: 'center'
   },
   documentActionTextDanger: {
@@ -561,7 +561,7 @@ const styles = StyleSheet.create({
     color: colors.blue,
     fontSize: 13,
     lineHeight: 17,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   footerButtonTextPrimary: {
     color: colors.surface

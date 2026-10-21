@@ -51,14 +51,13 @@ export function DemandTabs({ current }: { current: DemandKey }) {
 }
 
 const styles = StyleSheet.create({
+  // A segmented control: a quiet gray track with the chosen section lifted onto a white tab.
   strip: {
     flexDirection: 'row',
-    gap: 4,
-    padding: 4,
+    gap: 2,
+    padding: 3,
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: '#E8EBE9',
     zIndex: 1
   },
   tab: {
@@ -66,19 +65,23 @@ const styles = StyleSheet.create({
     minWidth: 0,
     minHeight: 40,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
     paddingHorizontal: spacing.xs,
     alignItems: 'center',
     justifyContent: 'center'
   },
   tabSelected: {
-    backgroundColor: colors.blue
+    backgroundColor: colors.surface,
+    borderColor: colors.border
   },
   tabText: {
     color: colors.muted,
-    fontSize: 13,
-    fontWeight: '800'
+    fontSize: 14,
+    fontWeight: '600'
   },
   tabTextSelected: {
-    color: colors.surface
+    color: colors.ink,
+    fontWeight: '700'
   }
 });

@@ -171,7 +171,7 @@ function MenuRow({
         pressed ? styles.rowPressed : null
       ]}
     >
-      <View style={[styles.iconBox, compact ? styles.iconBoxCompact : null, { backgroundColor: softColor }]}>
+      <View style={[styles.iconBox, compact ? styles.iconBoxCompact : null, { backgroundColor: 'transparent' }]}>
         <Icon color={color} size={compact ? 20 : 24} />
       </View>
       <View style={styles.rowCopy}>
@@ -209,11 +209,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: 30,
     gap: 24,
-    shadowColor: '#163052',
-    shadowOpacity: 0.07,
+    shadowColor: '#16202A',
+    shadowOpacity: 0,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
-    elevation: 3,
+    elevation: 0,
     zIndex: 1
   },
   menuCardCompact: {
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 31,
     lineHeight: 38,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0
   },
   titleCompact: {
@@ -278,20 +278,20 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 8
   },
   rowPressed: {
-    backgroundColor: '#F8FBFF'
+    backgroundColor: colors.blueSoft
   },
   iconBox: {
-    width: 58,
-    height: 58,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 0,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0
   },
   iconBoxCompact: {
-    width: 44,
-    height: 44,
-    borderRadius: 10
+    width: 32,
+    height: 32,
+    borderRadius: 0
   },
   rowCopy: {
     flex: 1,
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 19,
     lineHeight: 25,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   rowTitleCompact: {
     fontSize: 14,

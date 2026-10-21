@@ -765,7 +765,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 25,
     lineHeight: 30,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0
   },
   subtitle: {
@@ -784,7 +784,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#C9DAF2',
+    borderColor: '#C5CDC9',
     backgroundColor: colors.blueSoft,
     padding: spacing.md,
     zIndex: 1
@@ -803,11 +803,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 13,
     gap: 10,
-    shadowColor: '#163052',
-    shadowOpacity: 0.06,
+    shadowColor: '#16202A',
+    shadowOpacity: 0,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 5 },
-    elevation: 2,
+    elevation: 0,
     zIndex: 1
   },
   sectionHeader: {
@@ -828,7 +828,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 16,
     lineHeight: 20,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0
   },
   sectionHelp: {
@@ -841,7 +841,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '900',
+    fontWeight: '700',
     marginTop: 2
   },
   suggestionRow: {
@@ -866,7 +866,7 @@ const styles = StyleSheet.create({
   suggestionText: {
     color: colors.muted,
     fontSize: 12,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   suggestionTextSelected: {
     color: colors.blue
@@ -887,12 +887,12 @@ const styles = StyleSheet.create({
   closedTitle: {
     color: colors.ink,
     fontSize: 14,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   closedText: {
     color: colors.ink,
     fontSize: 13,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   statusGrid: {
     flexDirection: 'row',
@@ -919,7 +919,7 @@ const styles = StyleSheet.create({
   statusChoiceText: {
     color: colors.blue,
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
     textAlign: 'center'
   },
   statusChoiceTextSelected: {
@@ -955,7 +955,7 @@ const styles = StyleSheet.create({
   priorityChoiceText: {
     color: colors.ink,
     fontSize: 12,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   budgetChoice: {
     minHeight: 58,
@@ -972,7 +972,7 @@ const styles = StyleSheet.create({
   },
   budgetChoiceSelected: {
     borderColor: colors.blue,
-    backgroundColor: '#F4F8FF'
+    backgroundColor: '#F2F4F2'
   },
   budgetCopy: {
     flex: 1,
@@ -982,7 +982,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 13,
     lineHeight: 17,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   budgetSubtitle: {
     color: colors.muted,
@@ -993,7 +993,7 @@ const styles = StyleSheet.create({
   selectedText: {
     color: colors.blue,
     fontSize: 12,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   budgetRight: {
     alignItems: 'flex-end',
@@ -1021,7 +1021,7 @@ const styles = StyleSheet.create({
   documentActionText: {
     color: colors.blue,
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '700',
     textAlign: 'center'
   },
   documentActionTextDanger: {
@@ -1055,7 +1055,7 @@ const styles = StyleSheet.create({
   footerButtonText: {
     color: colors.blue,
     fontSize: 13,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   footerButtonTextPrimary: {
     color: colors.surface

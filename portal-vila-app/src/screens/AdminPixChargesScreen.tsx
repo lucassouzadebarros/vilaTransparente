@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   modeTitleSelected: {
     color: colors.blue
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   houseList: {
     gap: spacing.sm
@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   houseTitleSelected: {
     color: colors.blue
@@ -462,13 +462,13 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   selectedHint: {
     color: colors.blue,
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   muted: {
     color: colors.muted,

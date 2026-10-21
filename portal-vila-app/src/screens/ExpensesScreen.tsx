@@ -561,7 +561,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 24,
     lineHeight: 29,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0
   },
   subtitle: {
@@ -579,11 +579,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#163052',
-    shadowOpacity: 0.05,
+    shadowColor: '#16202A',
+    shadowOpacity: 0,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
-    elevation: 2
+    elevation: 0
   },
   formCard: {
     backgroundColor: colors.surface,
@@ -592,11 +592,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: 12,
     gap: 10,
-    shadowColor: '#163052',
-    shadowOpacity: 0.07,
+    shadowColor: '#16202A',
+    shadowOpacity: 0,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
-    elevation: 2,
+    elevation: 0,
     zIndex: 1
   },
   sectionHeader: {
@@ -620,7 +620,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 17,
     lineHeight: 21,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   sectionHelp: {
     color: colors.muted,
@@ -635,12 +635,12 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   inputFrame: {
     minHeight: 44,
     borderWidth: 1,
-    borderColor: '#C9D6E8',
+    borderColor: '#C5CDC9',
     borderRadius: 7,
     backgroundColor: colors.surface,
     justifyContent: 'center'
@@ -676,7 +676,7 @@ const styles = StyleSheet.create({
     color: colors.red,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   reasonText: {
     color: colors.ink,
@@ -696,7 +696,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 8,
-    backgroundColor: '#FBFDFF',
+    backgroundColor: '#F8F9F8',
     padding: 10,
     gap: 9
   },
@@ -709,7 +709,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 14,
     lineHeight: 18,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   choiceRow: {
     flexDirection: 'row',
@@ -736,7 +736,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   choiceTextSelected: {
     color: colors.blue
@@ -769,7 +769,7 @@ const styles = StyleSheet.create({
     color: colors.blue,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   documentActionTextDanger: {
     color: colors.red
@@ -783,16 +783,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     shadowColor: colors.blue,
-    shadowOpacity: 0.18,
+    shadowOpacity: 0,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
-    elevation: 2
+    elevation: 0
   },
   primaryButtonText: {
     color: colors.surface,
     fontSize: 13,
     lineHeight: 17,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   emptyCard: {
     minHeight: 68,
@@ -810,7 +810,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   expenseCard: {
     backgroundColor: colors.surface,
@@ -819,11 +819,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     gap: 10,
-    shadowColor: '#163052',
-    shadowOpacity: 0.06,
+    shadowColor: '#16202A',
+    shadowOpacity: 0,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 7 },
-    elevation: 2,
+    elevation: 0,
     zIndex: 1
   },
   expenseTop: {
@@ -848,7 +848,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 15,
     lineHeight: 19,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   expenseMeta: {
     color: colors.muted,
@@ -860,7 +860,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 16,
     lineHeight: 21,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   documentLinkButton: {
     minHeight: 44,
@@ -877,7 +877,7 @@ const styles = StyleSheet.create({
     color: colors.blue,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '900'
+    fontWeight: '700'
   },
   noDocumentRow: {
     minHeight: 28,
@@ -889,7 +889,7 @@ const styles = StyleSheet.create({
     color: colors.amber,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   closeFormButton: {
     minHeight: 44,
@@ -899,7 +899,7 @@ const styles = StyleSheet.create({
   closeFormText: {
     color: colors.muted,
     fontSize: 13,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   categoryBox: {
     gap: 8
@@ -907,7 +907,7 @@ const styles = StyleSheet.create({
   categoryTitle: {
     color: colors.ink,
     fontSize: 13,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   categoryRow: {
     flexDirection: 'row',
@@ -931,10 +931,10 @@ const styles = StyleSheet.create({
   categoryChipText: {
     color: colors.ink,
     fontSize: 13,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   categoryChipTextSelected: {
     color: colors.blue,
-    fontWeight: '900'
+    fontWeight: '700'
   }
 });

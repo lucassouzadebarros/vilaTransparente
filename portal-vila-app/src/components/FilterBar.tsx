@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors, spacing, TOUCH_TARGET } from '../theme';
 
 export type FilterOption<K extends string = string> = {
@@ -18,28 +18,38 @@ type Props<K extends string> = {
 
 /**
  * The one filter every list uses: a single choice among a few options, with the number of items behind each.
- * It is announced as a group of radio buttons, so a screen reader says which option is selected.
+ * It looks like a row of text tabs with an underline on the chosen one, and is announced as a group of radio buttons,
+ * so a screen reader says which option is selected. A long list of options scrolls sideways in a single line.
  */
 export function FilterBar<K extends string>({ label, options, value, onChange }: Props<K>) {
   return (
-    <View accessibilityRole="radiogroup" accessibilityLabel={label} style={styles.bar}>
-      {options.map((option) => {
-        const selected = option.key === value;
-        const spoken = option.count == null ? option.label : `${option.label}, ${option.count}`;
-        return (
-          <Pressable
-            key={option.key}
-            accessibilityRole="radio"
-            accessibilityLabel={spoken}
-            accessibilityState={{ checked: selected }}
-            onPress={() => onChange(option.key)}
-            style={({ pressed }) => [styles.chip, selected ? styles.chipSelected : null, pressed ? styles.pressed : null]}
-          >
-            <Text style={[styles.text, selected ? styles.textSelected : null]}>{option.label}</Text>
-            {option.count != null ? <Text style={[styles.count, selected ? styles.countSelected : null]}>{option.count}</Text> : null}
-          </Pressable>
-        );
-      })}
+    <View style={styles.wrap}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        accessibilityRole="radiogroup"
+        accessibilityLabel={label}
+        contentContainerStyle={styles.bar}
+      >
+        {options.map((option) => {
+          const selected = option.key === value;
+          const spoken = option.count == null ? option.label : `${option.label}, ${option.count}`;
+          return (
+            <Pressable
+              key={option.key}
+              accessibilityRole="radio"
+              accessibilityLabel={spoken}
+              accessibilityState={{ checked: selected }}
+              aria-checked={selected}
+              onPress={() => onChange(option.key)}
+              style={({ pressed }) => [styles.tab, selected ? styles.tabSelected : null, pressed ? styles.pressed : null]}
+            >
+              <Text style={[styles.text, selected ? styles.textSelected : null]}>{option.label}</Text>
+              {option.count != null ? <Text style={[styles.count, selected ? styles.countSelected : null]}>{option.count}</Text> : null}
+            </Pressable>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }
@@ -59,49 +69,52 @@ export function EmptyFilter({ message, onClear }: { message: string; onClear?: (
 }
 
 const styles = StyleSheet.create({
-  bar: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm
+  wrap: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border
   },
-  chip: {
+  bar: {
+    gap: spacing.xs
+  },
+  tab: {
     minHeight: TOUCH_TARGET,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm
+    gap: 6,
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
+    marginBottom: -1
   },
-  chipSelected: {
-    borderColor: colors.blue,
-    backgroundColor: colors.blue
+  tabSelected: {
+    borderBottomColor: colors.blue
   },
   pressed: {
-    opacity: 0.85
+    opacity: 0.7
   },
   text: {
-    color: colors.ink,
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: '700'
+    color: colors.muted,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '500'
   },
   textSelected: {
-    color: colors.surface
+    color: colors.ink,
+    fontWeight: '700'
   },
   count: {
     color: colors.muted,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '700'
+    fontWeight: '500',
+    fontVariant: ['tabular-nums']
   },
   countSelected: {
-    color: colors.blueSoft
+    color: colors.blue,
+    fontWeight: '700'
   },
   empty: {
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -113,7 +126,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: '600',
+    fontWeight: '500',
     textAlign: 'center'
   },
   clear: {
@@ -125,6 +138,6 @@ const styles = StyleSheet.create({
   clearText: {
     color: colors.blue,
     fontSize: 14,
-    fontWeight: '700'
+    fontWeight: '600'
   }
 });

@@ -1,11 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { Eye, Pencil, Plus, RefreshCw, Vote } from 'lucide-react-native';
+import { ChevronRight, Plus, RefreshCw, Vote } from 'lucide-react-native';
 import { DemandTabs } from '../components/DemandTabs';
 import { EmptyFilter, FilterBar, FilterOption } from '../components/FilterBar';
-import { Badge, Button, Card, EmptyState, Label, Money, Row, Screen, Value } from '../components/ui';
+import { Badge, Button, Card, EmptyState, Label, Screen, Value, formatMoney } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
+import { colors, spacing } from '../theme';
 import { Budget, BudgetVoting, ProblemReport, ServiceOrder } from '../types';
 import { awaitingMyVote, budgetBadgeStatus, deadlineLabel, votingScore } from '../utils/budgetVoting';
 
@@ -132,33 +134,127 @@ export function BudgetsScreen() {
       {visible.map((item) => {
         const voting = item.id ? votings[item.id] : undefined;
         const openDetails = () => navigation.navigate('BudgetDetails', { id: item.id, refreshKey: Date.now() });
+        const waiting = awaitingMyVote(voting);
+        const voted = voting ? voting.approveVotes + voting.rejectVotes : 0;
+        const houses = voting?.participatingHouses ?? 0;
         return (
-          <Card key={item.id}>
-            <Row>
-              <Value>{item.supplier}</Value>
+          <Pressable
+            key={item.id}
+            accessibilityRole="button"
+            accessibilityLabel={`${item.title}, ${item.supplier}, ${formatMoney(item.amount)}`}
+            onPress={openDetails}
+            style={({ pressed }) => [styles.card, pressed ? styles.cardPressed : null]}
+          >
+            <View style={styles.top}>
+              <View style={styles.titleBlock}>
+                <Text style={styles.title}>{item.title}</Text>
+                <Text style={styles.supplier}>{item.supplier}</Text>
+              </View>
+              <View style={styles.amountBlock}>
+                <Text style={styles.amount}>{formatMoney(item.amount)}</Text>
+                <ChevronRight color={colors.muted} size={18} />
+              </View>
+            </View>
+            <View style={styles.badges}>
               <Badge status={budgetBadgeStatus(item.status)} />
-            </Row>
-            {item.supplierDocument ? <Label>CNPJ {item.supplierDocument}</Label> : null}
-            <Label>{item.title}</Label>
-            <Row>
-              <Label>{originLabel(item, problemTitles, serviceTitles)}</Label>
-              <Money value={item.amount} />
-            </Row>
+              {waiting ? <Badge status="AGUARDANDO SEU VOTO" /> : null}
+            </View>
+            <Text style={styles.origin}>{originLabel(item, problemTitles, serviceTitles)}</Text>
             {voting?.open ? (
-              <Row>
-                <Label>{votingScore(voting)}</Label>
-                {awaitingMyVote(voting) ? <Badge status="AGUARDANDO SEU VOTO" /> : null}
-              </Row>
+              <View style={styles.progressBlock}>
+                <View
+                  accessibilityRole="progressbar"
+                  accessibilityLabel={`${voted} de ${houses} casas votaram`}
+                  style={styles.track}
+                >
+                  <View style={[styles.fill, { width: `${houses ? Math.round((voted / houses) * 100) : 0}%` }]} />
+                </View>
+                <Text style={styles.progressText}>
+                  {voted} de {houses} casas votaram{voting.deadline ? ` · ${deadlineLabel(voting.deadline)}` : ''}
+                </Text>
+              </View>
             ) : null}
-            {voting?.open && voting.deadline ? <Label>{deadlineLabel(voting.deadline)}</Label> : null}
-            <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
-              {awaitingMyVote(voting) ? <Button title="Votar" icon={Vote} onPress={openDetails} /> : null}
-              <Button title="Detalhes" icon={Eye} variant="ghost" onPress={openDetails} />
-              {canManageBudgets ? <Button title="Editar" icon={Pencil} variant="ghost" onPress={() => navigation.navigate('BudgetForm', { formMode: 'edit', budgetId: item.id, formKey: Date.now() })} /> : null}
-            </Row>
-          </Card>
+            {waiting ? <Button title="Votar" icon={Vote} onPress={openDetails} /> : null}
+          </Pressable>
         );
       })}
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    gap: spacing.sm
+  },
+  cardPressed: {
+    backgroundColor: colors.blueSoft
+  },
+  top: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.md
+  },
+  titleBlock: {
+    flex: 1,
+    minWidth: 0
+  },
+  title: {
+    color: colors.ink,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '700'
+  },
+  supplier: {
+    color: colors.muted,
+    fontSize: 14,
+    lineHeight: 20
+  },
+  amountBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2
+  },
+  amount: {
+    color: colors.ink,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums']
+  },
+  badges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  origin: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18
+  },
+  progressBlock: {
+    gap: 6
+  },
+  track: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: '#E3E7E5',
+    overflow: 'hidden'
+  },
+  fill: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: colors.blue
+  },
+  progressText: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18,
+    fontVariant: ['tabular-nums']
+  }
+});
