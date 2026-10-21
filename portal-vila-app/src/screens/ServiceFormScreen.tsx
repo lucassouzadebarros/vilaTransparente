@@ -61,7 +61,7 @@ const categorySuggestions = [
   'Manutenção', 'Segurança', 'Jardinagem', 'Elétrica', 'Hidráulica', 'Pintura'
 ];
 
-type FieldErrors = Partial<Record<'title' | 'description' | 'supplierDocument' | 'plannedDate', string>>;
+type FieldErrors = Partial<Record<'title' | 'description' | 'supplierDocument' | 'plannedDate' | 'expectedValue', string>>;
 
 function positiveId(value: unknown) {
   const parsed = Number(value);
@@ -104,6 +104,8 @@ export function ServiceFormScreen() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [origin, setOrigin] = useState<ProblemReport | null>(null);
   const [originId, setOriginId] = useState<number | null>(null);
+  // Largest value a service can have without an approved budget (null: the rule is off).
+  const [limit, setLimit] = useState<number | null>(null);
 
   const selectedBudget = useMemo(() => {
     return budgets.find((budget) => budget.id === selectedBudgetId);
@@ -180,11 +182,12 @@ export function ServiceFormScreen() {
         setLoading(true);
         setError('');
         try {
-          const nextBudgets = await api.budgets();
+          const [nextBudgets, settings] = await Promise.all([api.budgets(), api.settings().catch(() => null)]);
           if (!active) {
             return;
           }
           setBudgets(nextBudgets);
+          setLimit((settings as { budgetRequiredAbove?: number | null } | null)?.budgetRequiredAbove ?? null);
 
           if (editingServiceId) {
             const [nextService, nextDocuments] = await Promise.all([
@@ -213,13 +216,23 @@ export function ServiceFormScreen() {
             setSupplier(seeded.supplier ?? '');
             setSupplierDocument(maskedDocument);
             setLoadedSupplierDocument(maskedDocument);
+            if (seeded.problemReportId) {
+              const fromBudget = (await api.problemReports().catch(() => [] as ProblemReport[])).find((item) => item.id === seeded.problemReportId);
+              if (active && fromBudget) {
+                setOrigin(fromBudget);
+                setOriginId(fromBudget.id ?? null);
+                setDescription(fromBudget.location ? `${fromBudget.description}\n\nLocal: ${fromBudget.location}.` : fromBudget.description);
+                setCategory(fromBudget.category ?? '');
+                setPriority(fromBudget.priority);
+              }
+            }
           }
           if (routeReportId) {
             const found = (await api.problemReports()).find((item) => item.id === routeReportId);
             if (!active) {
               return;
             }
-            if (found && !found.serviceId && (found.status === 'ABERTO' || found.status === 'EM_ANALISE')) {
+            if (found && (found.status === 'ABERTO' || found.status === 'EM_ANALISE')) {
               setOrigin(found);
               setOriginId(found.id ?? null);
               setTitle(found.title);
@@ -229,7 +242,7 @@ Local: ${found.location}.` : found.description);
               setCategory(found.category ?? '');
               setPriority(found.priority);
             } else {
-              setError('Este relato já virou serviço ou foi encerrado, então não dá para criar outro serviço a partir dele.');
+              setError('Este relato já foi encerrado, então não dá para criar um serviço a partir dele.');
             }
           }
         } catch (err) {
@@ -259,9 +272,9 @@ Local: ${found.location}.` : found.description);
     if (!budget) {
       return;
     }
-    if (!expectedValue.trim()) {
-      setExpectedValue(currencyFromNumber(budget.amount));
-    }
+    // The value of a service backed by a budget is the approved value.
+    setExpectedValue(currencyFromNumber(budget.amount));
+    clearFieldError('expectedValue');
     if (!supplier.trim()) {
       setSupplier(budget.supplier ?? '');
     }
@@ -284,6 +297,14 @@ Local: ${found.location}.` : found.description);
     // A number already on file is not re-checked unless it was changed.
     if (supplierDocument.trim() && supplierDocument !== loadedSupplierDocument && !isValidDocument(supplierDocument)) {
       next.supplierDocument = 'CPF ou CNPJ inválido. Confira os números ou deixe em branco.';
+    }
+    const value = parseCurrency(expectedValue);
+    if (!isEditing && limit != null && !selectedBudgetId) {
+      if (value == null || value <= 0) {
+        next.expectedValue = `Informe o valor previsto. Sem orçamento aprovado, o serviço vai até ${formatMoneyBR(limit)}.`;
+      } else if (value > limit) {
+        next.expectedValue = `Acima de ${formatMoneyBR(limit)} o serviço precisa de um orçamento aprovado pelas casas. Gere o orçamento a partir do problema.`;
+      }
     }
     setFieldErrors(next);
     return Object.keys(next).length === 0;
@@ -414,7 +435,7 @@ Local: ${found.location}.` : found.description);
             <Info color={colors.blue} size={18} />
             <Text style={styles.infoText}>
               {origin ? `Este serviço nasce do relato "${origin.title}".` : `Este serviço nasce do relato #${originId}.`}
-              {isEditing ? '' : ' Quando for finalizado e pago, o relato é marcado como Resolvido.'}
+              {isEditing ? '' : ' O relato só é marcado como Resolvido quando todos os serviços e orçamentos dele estiverem concluídos.'}
             </Text>
           </View>
         ) : null}
@@ -525,7 +546,15 @@ Local: ${found.location}.` : found.description);
             onBlur={() => setExpectedValue((value) => finishCurrency(value))}
             keyboardType="decimal-pad"
             placeholder="R$ 0,00"
-            hint="O valor pago é informado ao finalizar o serviço."
+            required={!selectedBudgetId && limit != null}
+            error={fieldErrors.expectedValue}
+            hint={
+              selectedBudgetId
+                ? 'Vem do orçamento aprovado. O valor pago pode passar até 10% dele.'
+                : limit != null
+                  ? `Sem orçamento aprovado, o serviço pode ser criado direto até ${formatMoneyBR(limit)}. Acima disso, gere um orçamento para as casas votarem.`
+                  : 'O valor pago é informado ao finalizar o serviço.'
+            }
           />
         </FormSection>
 
@@ -546,7 +575,10 @@ Local: ${found.location}.` : found.description);
         </FormSection>
 
         <FormSection icon={Link2} title="Orçamento vinculado">
-          <Text style={styles.sectionHelp}>Aparecem aqui os orçamentos aprovados pela votação das casas que ainda não estão em outro serviço.</Text>
+          <Text style={styles.sectionHelp}>
+            Aparecem aqui os orçamentos aprovados pela votação das casas que ainda não viraram serviço.
+            {limit != null ? ` Serviços acima de ${formatMoneyBR(limit)} só podem ser criados a partir de um deles.` : ''}
+          </Text>
           <BudgetChoice
             selected={selectedBudgetId === null}
             title="Sem orçamento vinculado"

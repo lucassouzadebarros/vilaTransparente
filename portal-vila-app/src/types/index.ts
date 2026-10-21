@@ -12,6 +12,8 @@ export type ReportExpense = {
   supplier?: string | null;
   amount: number;
   hasDocument: boolean;
+  voted?: boolean;
+  exceptionReason?: string | null;
 };
 
 export type MonthlyReport = {
@@ -26,6 +28,8 @@ export type MonthlyReport = {
   incomes: ReportIncome[];
   expenses: ReportExpense[];
   expensesWithoutDocument: number;
+  unvotedTotal?: number;
+  unvotedCount?: number;
 };
 
 export type Reconciliation = {
@@ -137,6 +141,7 @@ export type Expense = {
   documentId?: number;
   serviceOrderId?: number;
   budgetId?: number;
+  exceptionReason?: string | null;
 };
 
 export type ServiceOrder = {
@@ -154,6 +159,7 @@ export type ServiceOrder = {
   completedDate?: string;
   approvedBudgetId?: number | null;
   problemReportId?: number | null;
+  emergencyReason?: string | null;
   notes?: string;
 };
 
@@ -174,6 +180,8 @@ export type Budget = {
   notes?: string;
   votingClosedAt?: string | null;
   votingDeadline?: string | null;
+  problemReportId?: number | null;
+  competes?: boolean;
 };
 
 export type BudgetVoteChoice = 'APROVAR' | 'RECUSAR';

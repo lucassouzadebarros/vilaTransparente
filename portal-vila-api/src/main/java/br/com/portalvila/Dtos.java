@@ -134,7 +134,9 @@ record FinishServiceRequest(
     String supplierDocument,
     Long documentId,
     boolean generateExpense,
-    String notes
+    String notes,
+    /** Required (and shown to everyone) when the payment goes beyond the approved budget or the limit. */
+    String emergencyReason
 ) {
 }
 

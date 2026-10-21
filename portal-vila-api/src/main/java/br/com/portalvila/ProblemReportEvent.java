@@ -11,6 +11,7 @@ public class ProblemReportEvent {
     public static final String STATUS = "STATUS";
     public static final String SERVICE = "SERVICE";
     public static final String COMMENT = "COMMENT";
+    public static final String BUDGET = "BUDGET";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

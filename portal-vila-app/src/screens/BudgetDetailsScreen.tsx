@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { ExternalLink, Lock, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Vote, Wrench } from 'lucide-react-native';
+import { ExternalLink, Lock, Pencil, TriangleAlert, RefreshCw, ThumbsDown, ThumbsUp, Vote, Wrench } from 'lucide-react-native';
 import { Badge, Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
-import { Budget, BudgetVoteChoice, BudgetVoting, PortalDocument } from '../types';
+import { Budget, BudgetVoteChoice, BudgetVoting, PortalDocument, ProblemReport } from '../types';
 import { Alert } from '../utils/alert';
 import { formatDateBR } from '../utils/format';
 import { budgetBadgeStatus, closingResult, deadlineLabel, formatVotingDate, lowestQuoteId, voteLabel, votingScore } from '../utils/budgetVoting';
@@ -20,6 +20,8 @@ export function BudgetDetailsScreen() {
   const [documents, setDocuments] = useState<PortalDocument[]>([]);
   const [voting, setVoting] = useState<BudgetVoting | null>(null);
   const [quotes, setQuotes] = useState<Budget[]>([]);
+  const [related, setRelated] = useState<Budget[]>([]);
+  const [problemTitle, setProblemTitle] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [sendingVote, setSendingVote] = useState<BudgetVoteChoice | null>(null);
@@ -37,7 +39,19 @@ export function BudgetDetailsScreen() {
       setBudget(nextBudget);
       setDocuments(nextDocuments);
       setVoting(nextVoting);
-      setQuotes(nextBudget.serviceId ? await api.serviceBudgets(nextBudget.serviceId).catch(() => [] as Budget[]) : []);
+      if (nextBudget.problemReportId) {
+        const [allBudgets, reports] = await Promise.all([
+          api.budgets().catch(() => [] as Budget[]),
+          api.problemReports().catch(() => [] as ProblemReport[])
+        ]);
+        setRelated(allBudgets.filter((item) => item.problemReportId === nextBudget.problemReportId && item.status !== 'CANCELADO'));
+        setProblemTitle(reports.find((item) => item.id === nextBudget.problemReportId)?.title ?? '');
+        setQuotes([]);
+      } else {
+        setRelated([]);
+        setProblemTitle('');
+        setQuotes(nextBudget.serviceId ? await api.serviceBudgets(nextBudget.serviceId).catch(() => [] as Budget[]) : []);
+      }
     } catch {
       setError('Não consegui carregar este orçamento.');
     }
@@ -87,6 +101,9 @@ export function BudgetDetailsScreen() {
     }, [id, route.params?.refreshKey])
   );
 
+  const siblings = related.length ? related : quotes;
+  const competingSiblings = siblings.filter((item) => item.competes !== false);
+  const hasRivals = budget?.competes !== false && competingSiblings.length > 1;
   const showVoting = Boolean(voting && (voting.open || voting.closedAt || voting.approveVotes + voting.rejectVotes > 0));
 
   return (
@@ -117,13 +134,31 @@ export function BudgetDetailsScreen() {
               <Text style={styles.scopeText}>{budget.scope}</Text>
             </View>
           ) : null}
-          <Row><Label>Serviço</Label><Value>{budget.serviceId ? `#${budget.serviceId}` : 'Avulso (sem serviço)'}</Value></Row>
+          {budget.problemReportId ? (
+            <>
+              <Row><Label>Problema</Label><Value>{problemTitle || `#${budget.problemReportId}`}</Value></Row>
+              <Button
+                title="Ver problema"
+                icon={TriangleAlert}
+                variant="ghost"
+                onPress={() => navigation.navigate('Mais', { screen: 'ProblemDetails', params: { id: budget.problemReportId, refreshKey: Date.now() } })}
+              />
+              {related.length > 1 ? (
+                <Label>
+                  {budget.competes === false
+                    ? 'Este orçamento é outro trabalho do mesmo problema: é votado e aprovado à parte e vira o seu próprio serviço.'
+                    : 'Este orçamento concorre com os outros do mesmo trabalho: só um será aprovado.'}
+                </Label>
+              ) : null}
+            </>
+          ) : null}
+          <Row><Label>Serviço</Label><Value>{budget.serviceId ? `#${budget.serviceId}` : 'Ainda não virou serviço'}</Value></Row>
           {budget.serviceId ? (
             <Button title="Ver serviço" icon={Wrench} variant="ghost" onPress={() => navigation.navigate('ServiceDetails', { id: budget.serviceId, refreshKey: Date.now() })} />
           ) : null}
           {budget.validUntil ? <Row><Label>Validade</Label><Value>{formatDateBR(budget.validUntil)}</Value></Row> : null}
           {budget.notes ? <Label>{budget.notes}</Label> : null}
-          {budget.status === 'APROVADO' && !budget.serviceId ? <Label>Aprovado pelas casas. Pode ser escolhido ao cadastrar ou editar um serviço.</Label> : null}
+          {budget.status === 'APROVADO' && !budget.serviceId ? <Label>Aprovado pelas casas. Agora pode virar serviço, pago até o valor aprovado (mais 10% de tolerância).</Label> : null}
           {documents[0] ? (
             <Button
               title="Abrir PDF do orçamento"
@@ -173,8 +208,8 @@ export function BudgetDetailsScreen() {
           </View>
           {voting.open && voting.canVote ? (
             <>
-              {budget.serviceId && quotes.length > 1 ? (
-                <Label>Este orçamento é uma das cotações do serviço. Cada casa aprova só uma: ao aprovar esta, o seu "sim" nas outras é retirado.</Label>
+              {hasRivals ? (
+                <Label>Este orçamento concorre com outros do mesmo trabalho. Cada casa aprova só um: ao aprovar este, o seu "sim" nos outros é retirado.</Label>
               ) : null}
               <Label>
                 {voting.myVote
@@ -218,11 +253,15 @@ export function BudgetDetailsScreen() {
           ) : null}
         </Card>
       ) : null}
-      {budget && quotes.length > 1 ? (
+      {budget && siblings.length > 1 ? (
         <Card>
-          <Value>Cotações do mesmo serviço</Value>
-          <Label>Compare antes de votar. A de menor valor está marcada.</Label>
-          {quotes.map((quote) => (
+          <Value>{related.length ? 'Orçamentos deste problema' : 'Cotações do mesmo serviço'}</Value>
+          <Label>
+            {related.length
+              ? 'Os que concorrem disputam o mesmo trabalho; os de "outro trabalho" são votados à parte. O menor valor entre os concorrentes está marcado.'
+              : 'Compare antes de votar. A de menor valor está marcada.'}
+          </Label>
+          {siblings.map((quote) => (
             <Pressable
               key={quote.id}
               accessibilityRole="button"
@@ -233,7 +272,8 @@ export function BudgetDetailsScreen() {
                 <Text style={styles.houseName}>{quote.supplier}{quote.id === budget.id ? ' (esta)' : ''}</Text>
                 <View style={styles.quoteTags}>
                   <Badge status={budgetBadgeStatus(quote.status)} />
-                  {quote.id === lowestQuoteId(quotes) ? <Badge status="MENOR VALOR" /> : null}
+                  {quote.competes !== false && quote.id === lowestQuoteId(competingSiblings) ? <Badge status="MENOR VALOR" /> : null}
+                  {related.length ? <Badge status={quote.competes === false ? 'OUTRO TRABALHO' : 'CONCORRE'} /> : null}
                 </View>
               </View>
               <Money value={quote.amount} />

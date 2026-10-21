@@ -37,6 +37,10 @@ public class ServiceOrder {
     /** The problem report this service was opened from, if any. */
     public Long problemReportId;
 
+    /** Why this service was paid above the limit without an approved budget. Shown to everyone. */
+    @Column(columnDefinition = "text")
+    public String emergencyReason;
+
     @Column(columnDefinition = "text")
     public String notes;
 

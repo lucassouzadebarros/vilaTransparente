@@ -67,6 +67,7 @@ interface DirectReceiptRepository extends JpaRepository<DirectReceipt, Long> {
 }
 
 interface ServiceOrderRepository extends JpaRepository<ServiceOrder, Long> {
+    List<ServiceOrder> findByProblemReportId(Long problemReportId);
     List<ServiceOrder> findByStatusOrderByCreatedAtDesc(String status);
 }
 
@@ -74,6 +75,7 @@ interface BudgetRepository extends JpaRepository<Budget, Long> {
     List<Budget> findByServiceIdOrderByAmountAsc(Long serviceId);
     List<Budget> findByServiceIdAndStatus(Long serviceId, String status);
     List<Budget> findByStatus(String status);
+    List<Budget> findByProblemReportId(Long problemReportId);
     List<Budget> findByStatusAndVotingDeadlineBefore(String status, java.time.LocalDate date);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

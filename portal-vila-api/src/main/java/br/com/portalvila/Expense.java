@@ -33,6 +33,10 @@ public class Expense {
     public Long serviceOrderId;
     public Long budgetId;
 
+    /** Why this expense went above the limit with no service or approved budget behind it. Shown to everyone. */
+    @Column(columnDefinition = "text")
+    public String exceptionReason;
+
     @Column(nullable = false)
     public LocalDateTime createdAt = LocalDateTime.now();
 }

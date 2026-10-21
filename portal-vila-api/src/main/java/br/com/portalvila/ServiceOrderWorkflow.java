@@ -12,9 +12,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
+/**
+ * The chain from a problem to the money: a budget is generated for the problem, goes to the houses' vote, and an approved
+ * budget becomes a service, which is paid by the finish action. {@link SpendingRules} keeps the chain from being skipped
+ * above the limit the village set.
+ */
 @Service
 class ServiceOrderWorkflow {
     private static final Set<String> VALID_STATUSES = Set.of("PLANEJADO", "APROVADO", "EM_ANDAMENTO", "FINALIZADO", "CANCELADO");
@@ -27,9 +31,9 @@ class ServiceOrderWorkflow {
     private final BudgetVotingService voting;
     private final AuditService audit;
     private final ProblemReportRepository reports;
-    private final SettingsRepository settings;
     private final PushService push;
-    private final ReportHistory history;
+    private final SpendingRules rules;
+    private final ReportLifecycle lifecycle;
 
     ServiceOrderWorkflow(
         ServiceOrderRepository services,
@@ -39,14 +43,14 @@ class ServiceOrderWorkflow {
         BudgetVotingService voting,
         AuditService audit,
         ProblemReportRepository reports,
-        SettingsRepository settings,
         PushService push,
-        ReportHistory history
+        SpendingRules rules,
+        ReportLifecycle lifecycle
     ) {
-        this.history = history;
+        this.lifecycle = lifecycle;
+        this.rules = rules;
         this.push = push;
         this.reports = reports;
-        this.settings = settings;
         this.audit = audit;
         this.services = services;
         this.budgets = budgets;
@@ -66,35 +70,43 @@ class ServiceOrderWorkflow {
     }
 
     /**
-     * A new service is always open. Finishing books the payment on the cash box and cancelling is audited, so
-     * both have their own actions: the form can no longer mark a service as paid without a payment behind it.
+     * A new service is always open. Finishing books the payment on the cash box and cancelling is audited, so both have
+     * their own actions. Above the village's limit a service is born from an approved budget (it then takes the problem,
+     * the value and the supplier from it); below it, it can be created directly.
      */
     @Transactional
     public ServiceOrder saveService(ServiceOrder incoming) {
         validateService(incoming);
         incoming.id = null;
+        Budget backing = backingBudget(incoming.approvedBudgetId);
+        if (backing != null) {
+            if (incoming.problemReportId == null) {
+                incoming.problemReportId = backing.problemReportId;
+            }
+            if (incoming.expectedValue == null) {
+                incoming.expectedValue = backing.amount;
+            }
+        }
         incoming.status = openStatus(incoming.status, incoming.approvedBudgetId);
         incoming.finalValue = null;
         incoming.completedDate = null;
+        incoming.emergencyReason = null;
         if (incoming.priority == null || incoming.priority.isBlank()) {
             incoming.priority = "MEDIA";
         }
-        ProblemReport origin = openReport(incoming.problemReportId);
-        if ("EM_ANDAMENTO".equals(incoming.status)) {
-            requireApprovedBudget(incoming.expectedValue, incoming.approvedBudgetId);
-        }
+        rules.assertServiceAllowed(incoming.expectedValue, incoming.approvedBudgetId);
+        ProblemReport origin = incoming.problemReportId == null ? null : lifecycle.openForBudget(incoming.problemReportId);
         incoming.updatedAt = LocalDateTime.now();
         ServiceOrder saved = services.save(incoming);
         reconcileServiceBudget(saved, null);
         if (origin != null) {
-            origin.serviceId = saved.id;
-            if ("ABERTO".equals(origin.status)) {
-                origin.status = "EM_ANALISE";
+            if (origin.serviceId == null) {
+                origin.serviceId = saved.id;
+                reports.save(origin);
             }
-            origin.updatedAt = LocalDateTime.now();
-            reports.save(origin);
+            lifecycle.underAnalysis(origin);
             audit.record("REPORT_TO_SERVICE", "REPORT", origin.id, origin.title + " -> serviço #" + saved.id);
-            history.record(origin.id, ProblemReportEvent.SERVICE, "Virou o serviço #" + saved.id + ": " + saved.title);
+            lifecycle.note(origin.id, ProblemReportEvent.SERVICE, "Virou o serviço #" + saved.id + ": " + saved.title);
         }
         audit.record("SERVICE_CREATED", "SERVICE", saved.id, saved.title + valueNote(saved.expectedValue));
         dashboardEvents.publishDashboardChanged();
@@ -116,11 +128,8 @@ class ServiceOrderWorkflow {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Um serviço finalizado ou cancelado não muda de situação por aqui.");
             }
         } else {
-            String previousStatus = service.status;
             service.status = openStatus(incoming.status == null || incoming.status.isBlank() ? service.status : incoming.status, incoming.approvedBudgetId);
-            if ("EM_ANDAMENTO".equals(service.status) && !"EM_ANDAMENTO".equals(previousStatus)) {
-                requireApprovedBudget(incoming.expectedValue, incoming.approvedBudgetId);
-            }
+            rules.assertServiceAllowed(incoming.expectedValue, incoming.approvedBudgetId);
             service.finalValue = null;
             service.completedDate = null;
         }
@@ -155,38 +164,56 @@ class ServiceOrderWorkflow {
             budgets.save(quote);
             audit.record("BUDGET_CANCELADO", "BUDGET", quote.id, quote.title + " - serviço #" + service.id + " cancelado");
         }
-        // The problem that started it is still there: it goes back to the open list, free to start a new service.
-        reportOf(service).ifPresent(report -> {
-            report.serviceId = null;
-            if ("EM_ANALISE".equals(report.status)) {
-                report.status = "ABERTO";
+        if (service.problemReportId != null) {
+            reports.findById(service.problemReportId).ifPresent(report -> {
+                report.serviceId = services.findByProblemReportId(report.id).stream()
+                    .filter(other -> !"CANCELADO".equals(other.status))
+                    .map(other -> other.id)
+                    .findFirst()
+                    .orElse(null);
+                reports.save(report);
+            });
+            boolean reopened = lifecycle.reopenIfIdle(service.problemReportId,
+                "O serviço #" + service.id + " foi cancelado e não há mais orçamento ou serviço ativo: o problema voltou para os abertos.");
+            if (!reopened) {
+                lifecycle.note(service.problemReportId, ProblemReportEvent.SERVICE, "O serviço #" + service.id + " foi cancelado.");
             }
-            report.updatedAt = LocalDateTime.now();
-            reports.save(report);
-            history.record(report.id, ProblemReportEvent.SERVICE, "O serviço #" + service.id + " foi cancelado e o relato voltou para os abertos.");
-        });
+        }
         audit.record("SERVICE_CANCELLED", "SERVICE", service.id, service.title);
         dashboardEvents.publishDashboardChanged();
     }
 
     /**
-     * Every new budget goes to the houses' vote. A budget can be a quote for a service that is still being
-     * decided (several quotes compete for it) or stand alone: a stand-alone one, once approved, is picked in the
-     * service form (see {@link #reconcileServiceBudget}).
+     * Every new budget goes to the houses' vote. It can be generated for a problem (and then competes with the other
+     * budgets of that problem, or not, when it is another job) or stand alone. A budget still tied to a service (the
+     * older way: quotes inside a service) keeps working.
      */
     @Transactional
     public Budget saveBudget(Budget budget) {
         // A new budget is always a new row: sending an id must never overwrite one that was already voted.
         Long forService = budget.serviceId;
+        Long forReport = budget.problemReportId;
+        boolean competes = budget.competes;
         budget.id = null;
         budget.createdAt = LocalDateTime.now();
         budget.serviceId = null;
+        budget.problemReportId = null;
         budget.status = "EM_ANALISE";
         budget.votingClosedAt = null;
         budget.scope = blankToNull(budget.scope);
         budget.remindedOn = null;
         validateBudget(budget);
         validateDeadline(budget.votingDeadline);
+        ProblemReport report = null;
+        if (forReport != null) {
+            report = lifecycle.openForBudget(forReport);
+            if (competes && budgets.findByProblemReportId(report.id).stream()
+                .anyMatch(other -> other.competes && "APROVADO".equals(other.status))) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Este problema já tem um orçamento aprovado para o mesmo trabalho. Se este é outro trabalho, marque que ele não concorre com os outros.");
+            }
+            budget.problemReportId = report.id;
+        }
         if (forService != null) {
             ServiceOrder service = services.findById(forService)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Serviço não encontrado."));
@@ -197,7 +224,13 @@ class ServiceOrderWorkflow {
         }
         budget.updatedAt = LocalDateTime.now();
         Budget saved = budgets.save(budget);
+        if (report != null) {
+            lifecycle.underAnalysis(report);
+            lifecycle.note(report.id, ProblemReportEvent.BUDGET, "Orçamento gerado: " + saved.title + " - " + AuditService.money(saved.amount)
+                + " (" + saved.supplier + ")" + (saved.competes ? "" : ", outro trabalho"));
+        }
         audit.record("BUDGET_CREATED", "BUDGET", saved.id, saved.title + " - " + AuditService.money(saved.amount)
+            + (saved.problemReportId == null ? "" : " (problema #" + saved.problemReportId + ")")
             + (saved.serviceId == null ? "" : " (cotação do serviço #" + saved.serviceId + ")"));
         push.notifyResidents("Nova votação", saved.title + " - " + AuditService.money(saved.amount) + ". Vote no aplicativo.",
             Map.of("type", "BUDGET", "id", saved.id));
@@ -205,7 +238,7 @@ class ServiceOrderWorkflow {
         return saved;
     }
 
-    /** Keeps the budget's service link as it is: that link is only changed from the service form. */
+    /** Keeps the budget's links (problem, service) and whether it competes as they are: they are set once, when it is generated. */
     @Transactional
     public Budget updateBudget(Long id, Budget incoming) {
         Budget budget = budgets.findById(id)
@@ -268,6 +301,24 @@ class ServiceOrderWorkflow {
     }
 
     @Transactional
+    public void cancelBudget(Long id) {
+        Budget budget = budgets.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Orçamento não encontrado."));
+        budget.status = "CANCELADO";
+        budget.updatedAt = LocalDateTime.now();
+        budgets.save(budget);
+        audit.record("BUDGET_CANCELADO", "BUDGET", budget.id, budget.title + " - " + AuditService.money(budget.amount));
+        if (budget.problemReportId != null) {
+            boolean reopened = lifecycle.reopenIfIdle(budget.problemReportId,
+                "O orçamento \"" + budget.title + "\" foi cancelado e não há mais orçamento ou serviço ativo: o problema voltou para os abertos.");
+            if (!reopened) {
+                lifecycle.note(budget.problemReportId, ProblemReportEvent.BUDGET, "Orçamento cancelado: " + budget.title + ".");
+            }
+        }
+        dashboardEvents.publishDashboardChanged();
+    }
+
+    @Transactional
     public ServiceOrder finishService(Long id, FinishServiceRequest request) {
         ServiceOrder service = services.findById(id).orElseThrow();
         if ("CANCELADO".equals(service.status)) {
@@ -280,16 +331,15 @@ class ServiceOrderWorkflow {
         if (request.generateExpense() && !expenses.findByServiceOrderId(service.id).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "A despesa deste serviço já foi lançada. Finalize sem gerar despesa para só atualizar os dados.");
         }
-        if (!"FINALIZADO".equals(service.status) && !"EM_ANDAMENTO".equals(service.status)) {
-            // The service goes straight from the plan to paid: the budget rule has to hold here too.
-            requireApprovedBudget(request.finalValue(), service.approvedBudgetId);
-        }
+        // What is paid has to stay close to what the houses approved, in any state the service is in.
+        boolean emergency = rules.assertPaymentAllowed(service, request.finalValue(), request.emergencyReason());
         service.status = "FINALIZADO";
         service.finalValue = request.finalValue();
         service.completedDate = request.completedDate();
         service.supplier = request.supplier();
         service.supplierDocument = request.supplierDocument();
         service.notes = request.notes();
+        service.emergencyReason = emergency ? request.emergencyReason().trim() : null;
         service.updatedAt = LocalDateTime.now();
         service = services.save(service);
 
@@ -305,66 +355,27 @@ class ServiceOrderWorkflow {
             expense.documentId = request.documentId();
             expense.serviceOrderId = service.id;
             expense.budgetId = service.approvedBudgetId;
+            expense.exceptionReason = service.emergencyReason;
             expenses.save(expense);
         }
         audit.record("SERVICE_FINISHED", "SERVICE", service.id,
             service.title + " - pago " + AuditService.money(request.finalValue())
                 + (service.expectedValue == null ? "" : " (previsto " + AuditService.money(service.expectedValue) + ")")
-                + (request.generateExpense() ? " - despesa lançada" : " - sem despesa"));
-        // The problem that started this service is solved once the service is paid.
-        Long finishedId = service.id;
-        reportOf(service).ifPresent(report -> {
-            if (!"RESOLVIDO".equals(report.status) && !"CANCELADO".equals(report.status)) {
-                report.status = "RESOLVIDO";
-                report.updatedAt = LocalDateTime.now();
-                reports.save(report);
-                audit.record("REPORT_RESOLVED", "REPORT", report.id, report.title + " - resolvido pelo serviço #" + finishedId);
-                history.record(report.id, ProblemReportEvent.STATUS, "Resolvido: o serviço #" + finishedId + " foi finalizado e pago.");
-                push.notifyUser(report.createdBy, "Seu relato foi resolvido", "\"" + report.title + "\" foi resolvido.",
-                    Map.of("type", "REPORT", "id", report.id));
-            }
-        });
+                + (request.generateExpense() ? " - despesa lançada" : " - sem despesa")
+                + (emergency ? " - EMERGÊNCIA sem votação: " + service.emergencyReason : ""));
+        if (service.problemReportId != null) {
+            lifecycle.resolveIfDone(service.problemReportId, service.id);
+        }
         dashboardEvents.publishDashboardChanged();
         return service;
     }
 
-    /** The open problem report a new service is being created for; it can only start one service. */
-    private ProblemReport openReport(Long reportId) {
-        if (reportId == null) {
+    private Budget backingBudget(Long approvedBudgetId) {
+        if (approvedBudgetId == null) {
             return null;
         }
-        ProblemReport report = reports.findById(reportId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Relato não encontrado."));
-        if (report.serviceId != null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Este relato já virou o serviço #" + report.serviceId + ".");
-        }
-        if ("RESOLVIDO".equals(report.status) || "CANCELADO".equals(report.status)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Este relato já foi encerrado.");
-        }
-        return report;
-    }
-
-    private Optional<ProblemReport> reportOf(ServiceOrder service) {
-        if (service.problemReportId == null) {
-            return Optional.empty();
-        }
-        return reports.findById(service.problemReportId);
-    }
-
-    /**
-     * When the village sets a limit, a service above it only starts (or is paid) with a budget the houses approved.
-     * With no limit set, nothing is required.
-     */
-    private void requireApprovedBudget(BigDecimal amount, Long approvedBudgetId) {
-        if (amount == null || approvedBudgetId != null) {
-            return;
-        }
-        BigDecimal limit = settings.findAll().stream().findFirst().map(row -> row.budgetRequiredAbove).orElse(null);
-        if (limit != null && amount.compareTo(limit) > 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                "Serviços acima de " + AuditService.money(limit) + " precisam de um orçamento aprovado pelas casas. "
-                    + "Cadastre as cotações no serviço e aguarde a votação.");
-        }
+        return budgets.findById(approvedBudgetId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Orçamento vinculado não encontrado."));
     }
 
     private static void validateDeadline(LocalDate deadline) {

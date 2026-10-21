@@ -9,7 +9,7 @@ import { FormField } from '../components/FormField';
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
-import { Budget, PortalDocument, ServiceOrder } from '../types';
+import { Budget, PortalDocument, ProblemReport, ServiceOrder } from '../types';
 import {
   currencyFromNumber,
   dateBRToISO,
@@ -78,6 +78,7 @@ export function BudgetFormScreen() {
   const editingBudgetId = formMode === 'create' ? null : routeBudgetId;
   const formKey = route.params?.formKey ?? route.key;
   const routeServiceId = positiveId(route.params?.serviceId);
+  const routeReportId = positiveId(route.params?.problemReportId);
 
   const [budgetId, setBudgetId] = useState<number | null>(null);
   const [title, setTitle] = useState('');
@@ -89,6 +90,10 @@ export function BudgetFormScreen() {
   const [amount, setAmount] = useState('');
   const [scope, setScope] = useState('');
   const [forService, setForService] = useState<ServiceOrder | null>(null);
+  const [forReport, setForReport] = useState<ProblemReport | null>(null);
+  // Other budgets of the same problem that are still alive (being voted or approved), to ask if this one competes with them.
+  const [rivals, setRivals] = useState<Budget[]>([]);
+  const [competes, setCompetes] = useState(true);
   const [budgetDate, setBudgetDate] = useState('');
   const [validUntil, setValidUntil] = useState('');
   const [expectedDate, setExpectedDate] = useState('');
@@ -119,6 +124,9 @@ export function BudgetFormScreen() {
     setAmount('');
     setScope('');
     setForService(null);
+    setForReport(null);
+    setRivals([]);
+    setCompetes(true);
     setBudgetDate('');
     setValidUntil('');
     setExpectedDate('');
@@ -182,10 +190,32 @@ export function BudgetFormScreen() {
                   setForService(linked);
                 }
               }
+              if (nextBudget.problemReportId) {
+                const reports = await api.problemReports().catch(() => [] as ProblemReport[]);
+                if (active) {
+                  setForReport(reports.find((report) => report.id === nextBudget.problemReportId) ?? null);
+                  setCompetes(nextBudget.competes !== false);
+                }
+              }
             }
             return;
           }
           resetForm();
+          if (routeReportId) {
+            const [reports, allBudgets] = await Promise.all([api.problemReports(), api.budgets().catch(() => [] as Budget[])]);
+            if (!active) {
+              return;
+            }
+            const report = reports.find((item) => item.id === routeReportId);
+            if (!report || report.status === 'RESOLVIDO' || report.status === 'CANCELADO') {
+              setError('Este problema já foi encerrado, então não dá para gerar orçamento para ele.');
+            } else {
+              setForReport(report);
+              setTitle(report.title);
+              setScope(report.location ? `${report.description}\n\nLocal: ${report.location}.` : report.description);
+              setRivals(allBudgets.filter((budget) => budget.problemReportId === report.id && (budget.status === 'EM_ANALISE' || budget.status === 'APROVADO')));
+            }
+          }
           if (routeServiceId) {
             const service = await api.service(routeServiceId);
             if (!active) {
@@ -210,7 +240,7 @@ export function BudgetFormScreen() {
       return () => {
         active = false;
       };
-    }, [editingBudgetId, routeServiceId, formKey])
+    }, [editingBudgetId, routeServiceId, routeReportId, formKey])
   );
 
   function clearFieldError(field: keyof FieldErrors) {
@@ -282,6 +312,8 @@ export function BudgetFormScreen() {
         id: budgetId ?? undefined,
         title: title.trim(),
         serviceId: isEditing ? undefined : routeServiceId,
+        problemReportId: isEditing ? undefined : routeReportId,
+        competes: isEditing ? undefined : competes,
         scope: scope.trim() || undefined,
         supplier: supplier.trim(),
         supplierDocument: supplierDocument.trim() || undefined,
@@ -406,12 +438,31 @@ export function BudgetFormScreen() {
           <View style={styles.infoBox}>
             <Info color={colors.blue} size={18} />
             <Text style={styles.infoText}>
-              {forService
-                ? `Cotação para o serviço "${forService.title}". Cada casa aprova só uma cotação do serviço: vence a que chegar primeiro à maioria, e as outras são encerradas.`
-                : 'Todo orçamento novo vai para a votação das casas. Ele é aprovado quando a maioria das casas votar "Aprovar".'}
+              {forReport
+                ? `Orçamento para o problema "${forReport.title}". Ele vai para a votação das casas; se for aprovado, pode virar serviço.`
+                : forService
+                  ? `Cotação para o serviço "${forService.title}". Cada casa aprova só uma cotação do serviço: vence a que chegar primeiro à maioria, e as outras são encerradas.`
+                  : 'Todo orçamento novo vai para a votação das casas. Ele é aprovado quando a maioria das casas votar "Aprovar".'}
             </Text>
           </View>
         )}
+
+        {!isEditing && forReport && rivals.length > 0 ? (
+          <FormSection icon={Flag} title="Concorre com os outros deste problema?">
+            <Text style={styles.sectionHelp}>
+              Este problema já tem {rivals.length === 1 ? '1 orçamento' : `${rivals.length} orçamentos`} ({rivals.map((rival) => rival.supplier).join(', ')}).
+            </Text>
+            <View style={styles.statusGrid}>
+              <StatusChoice label="Sim, mesmo trabalho" selected={competes} onPress={() => setCompetes(true)} />
+              <StatusChoice label="Não, outro trabalho" selected={!competes} onPress={() => setCompetes(false)} />
+            </View>
+            <Text style={styles.sectionHelp}>
+              {competes
+                ? 'São cotações do mesmo trabalho: cada casa aprova só uma, e quando uma for aprovada as outras são encerradas.'
+                : 'É outro trabalho (por exemplo, pintura e parte elétrica): é votado separado e vira o seu próprio serviço.'}
+            </Text>
+          </FormSection>
+        ) : null}
 
         <FormSection icon={UserRound} title="Fornecedor e valor">
           <FormField
