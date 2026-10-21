@@ -46,11 +46,10 @@ export function ServiceDetailsScreen() {
     ]);
     setService(nextService);
     // Budgets of the same problem (the new flow); quotes registered inside the service are the older way.
-    setBudgets(
-      nextService.problemReportId
-        ? allBudgets.filter((budget) => budget.problemReportId === nextService.problemReportId && budget.status !== 'CANCELADO')
-        : nextQuotes
-    );
+    const ofProblem = nextService.problemReportId
+      ? allBudgets.filter((budget) => budget.problemReportId === nextService.problemReportId && budget.status !== 'CANCELADO')
+      : [];
+    setBudgets([...ofProblem, ...nextQuotes.filter((quote) => !ofProblem.some((budget) => budget.id === quote.id))]);
     setLegacyQuotes(nextQuotes);
     setDocuments(nextDocuments);
     setOrigin(nextService.problemReportId ? reports.find((report) => report.id === nextService.problemReportId) ?? null : null);

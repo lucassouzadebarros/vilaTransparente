@@ -206,6 +206,25 @@ class BudgetFirstFlowTest {
         assertThat(reports.findById(report.id).orElseThrow().status).isEqualTo("EM_ANALISE");
         workflow.cancelBudget(again.id);
         assertThat(reports.findById(report.id).orElseThrow().status).isEqualTo("ABERTO");
+
+        // Cancelling twice is harmless.
+        workflow.cancelBudget(again.id);
+        assertThat(budgets.findById(again.id).orElseThrow().status).isEqualTo("CANCELADO");
+    }
+
+    @Test
+    void aBudgetBehindALiveServiceCannotBeCancelledUntilTheServiceIs() {
+        ProblemReport report = report();
+        Budget budget = budgetFor(report, "Pedreiro A", "800.00", true);
+        approve(budget);
+        ServiceOrder service = serviceFrom(budget);
+
+        assertStatus(() -> workflow.cancelBudget(budget.id), HttpStatus.CONFLICT);
+        assertThat(budgets.findById(budget.id).orElseThrow().status).isEqualTo("APROVADO");
+
+        workflow.cancelService(service.id);
+        workflow.cancelBudget(budget.id);
+        assertThat(budgets.findById(budget.id).orElseThrow().status).isEqualTo("CANCELADO");
     }
 
     @Test

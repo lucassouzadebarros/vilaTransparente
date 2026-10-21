@@ -66,8 +66,15 @@ export function ProblemDetailsScreen() {
       setEvents(history);
       const found = reports.find((item) => item.id === id) ?? null;
       setReport(found);
-      setBudgets(allBudgets.filter((item) => item.problemReportId === id && item.status !== 'CANCELADO'));
-      setServices(allServices.filter((item) => item.problemReportId === id && item.status !== 'CANCELADO'));
+      const problemServices = allServices.filter((item) => item.problemReportId === id && item.status !== 'CANCELADO');
+      // Quotes registered straight on one of the problem's services (the older way) belong to it too.
+      const serviceIds = new Set(problemServices.map((item) => item.id));
+      setBudgets(
+        allBudgets.filter(
+          (item) => item.status !== 'CANCELADO' && (item.problemReportId === id || (!item.problemReportId && item.serviceId != null && serviceIds.has(item.serviceId)))
+        )
+      );
+      setServices(problemServices);
       // Photos are private: each one is shown from a short-lived link.
       const withLinks = await Promise.all(
         documents.map(async (document) => ({ document, url: await api.documentAccessUrl(document.id as number).catch(() => '') }))

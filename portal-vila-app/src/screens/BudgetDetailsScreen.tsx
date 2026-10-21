@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { ExternalLink, Lock, Pencil, TriangleAlert, RefreshCw, ThumbsDown, ThumbsUp, Vote, Wrench } from 'lucide-react-native';
+import { ExternalLink, Lock, Pencil, TriangleAlert, RefreshCw, ThumbsDown, ThumbsUp, Vote, Wrench, XCircle } from 'lucide-react-native';
 import { Badge, Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
@@ -75,6 +75,28 @@ export function BudgetDetailsScreen() {
     } finally {
       setSendingVote(null);
     }
+  }
+
+  function confirmCancel() {
+    Alert.alert(
+      'Cancelar orçamento',
+      'O orçamento sai da votação e não poderá virar serviço. Se for o último do problema, o problema volta para os abertos. Deseja cancelar?',
+      [
+        { text: 'Voltar', style: 'cancel' },
+        {
+          text: 'Cancelar orçamento',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.cancelBudget(id);
+              navigation.navigate('Budgets');
+            } catch (err) {
+              setMessage({ text: apiErrorMessage(err, 'Não consegui cancelar o orçamento.'), error: true });
+            }
+          }
+        }
+      ]
+    );
   }
 
   async function closeVoting() {
@@ -177,6 +199,9 @@ export function BudgetDetailsScreen() {
                 />
               ) : null}
               <Button title="Editar" icon={Pencil} variant="ghost" onPress={() => navigation.navigate('BudgetForm', { formMode: 'edit', budgetId: budget.id, formKey: Date.now() })} />
+              {budget.status === 'EM_ANALISE' || (budget.status === 'APROVADO' && !budget.serviceId) ? (
+                <Button title="Cancelar orçamento" icon={XCircle} variant="danger" onPress={confirmCancel} />
+              ) : null}
             </Row>
           ) : null}
         </Card>
