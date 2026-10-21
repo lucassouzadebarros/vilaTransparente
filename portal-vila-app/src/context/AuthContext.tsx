@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from '../services/api';
 import { Session } from '../types';
+import { registerForPush } from '../utils/push';
 
 type AuthContextValue = {
   session: Session | null;
@@ -39,6 +40,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setSession(stored);
     });
   }, []);
+
+  // On a phone build, tell the server where to send notices. Nothing happens on the web.
+  useEffect(() => {
+    if (session?.token) {
+      registerForPush().catch(() => undefined);
+    }
+  }, [session?.token]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {

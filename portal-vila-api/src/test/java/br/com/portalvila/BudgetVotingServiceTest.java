@@ -201,12 +201,12 @@ class BudgetVotingServiceTest {
     void budgetsAreLinkedOnlyFromTheServiceOnceApproved() {
         ServiceOrder wall = workflow.saveService(service("Pintura do muro", null));
 
-        // The budget side cannot link: the service id is ignored on create and on edit.
+        // A stand-alone budget is not tied to any service until the service picks it, and editing it never links it:
+        // the service id sent on edit is ignored.
         Budget budget = new Budget();
         budget.title = "Pintura";
         budget.supplier = "Pinturas Silva";
         budget.amount = new BigDecimal("2500.00");
-        budget.serviceId = wall.id;
         budget = workflow.saveBudget(budget);
         assertThat(budget.serviceId).isNull();
         Budget withService = copy(budget);

@@ -58,3 +58,39 @@ npm run typecheck
 ```
 
 Observacao: `npm audit` aponta vulnerabilidades na arvore Expo/React Native. Nao rodei `npm audit fix --force` porque ele pode trocar versoes principais e quebrar a compatibilidade do SDK Expo.
+
+## Do relato ao pagamento
+
+Os tres cadastros principais formam uma cadeia, e cada elo guarda o anterior:
+
+1. **Relato** (`problem_reports`): o morador relata o problema, com ate 3 fotos. O administrador ou o sindico pode
+   criar um servico a partir dele; o relato guarda o servico (`service_id`) e o servico guarda o relato (`problem_report_id`).
+2. **Servico** (`service_orders`): so e finalizado pelo botao "Finalizar", que lanca a despesa no caixa. Ao finalizar,
+   o relato de origem vira "Resolvido"; ao cancelar, o relato volta para "Aberto" e as cotacoes ainda em votacao sao canceladas.
+3. **Cotacoes** (`budgets.service_id`): varias cotacoes competem pelo mesmo servico. Cada casa aprova no maximo uma; a
+   primeira a chegar a maioria vira o orcamento do servico e as outras sao encerradas como nao escolhidas.
+
+Regra opcional de valor: em Configuracoes o administrador define a partir de quanto um servico so comeca (ou e pago) com
+orcamento aprovado pelas casas (`settings.budget_required_above`, vazio = nao exige).
+
+## Fotos e anexos
+
+- Fotos de relatos e comprovantes aceitam PDF, JPG, PNG e WebP, ate 10 MB (`spring.servlet.multipart`). O conteudo do arquivo
+  e conferido (nao basta trocar a extensao) e os arquivos ficam em `PORTAL_UPLOAD_DIR` (disco persistente no Render).
+- O app usa `expo-image-picker` e `expo-document-picker`, entao camera, galeria e PDF funcionam no navegador e no celular.
+- Exportar a prestacao de contas (planilha e PDF) abre a folha de compartilhar do celular (`expo-print` + `expo-sharing`).
+
+## Avisos no celular (push)
+
+O servidor envia avisos pelo servico de push do Expo quando: um orcamento entra em votacao, a votacao termina, e o relato
+de um morador muda de situacao ou e resolvido. O aparelho so recebe depois que:
+
+1. o app e gerado para o celular com o EAS (`eas build`) e o `projectId` do EAS fica em `app.json` (`extra.eas.projectId`);
+2. o morador aceita receber avisos (o app registra o aparelho em `POST /api/push-tokens` ao entrar).
+
+Sem aparelho registrado nada e enviado. Para desligar no servidor: `PORTAL_PUSH_ENABLED=false`.
+
+## Migracoes do banco
+
+`MigrationsTest` roda todas as migracoes (`db/migration`) num banco em memoria e confere se as entidades batem com as
+tabelas. Mantenha as migracoes novas simples (uma coluna por `alter table`, tipos ANSI) para rodarem no PostgreSQL e no teste.

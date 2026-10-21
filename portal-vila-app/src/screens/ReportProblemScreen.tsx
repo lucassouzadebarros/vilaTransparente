@@ -33,14 +33,13 @@ import type { LucideIcon } from 'lucide-react-native';
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
+import { PickedFile, pickImage, pickerErrorMessage } from '../utils/filePicker';
 import { colors, spacing } from '../theme';
 import { ProblemReport } from '../types';
 
 const locations = ['Portão', 'Interfone', 'Corredor', 'Garagem', 'Área comum', 'Outro'];
 
-// The photo is not sent to the server yet (only its file name was kept), so the section stays hidden instead of
-// promising something that never arrives. Turn it on together with the real upload.
-const PHOTO_ATTACHMENT_ENABLED = false;
+const MAX_PHOTOS = 3;
 
 type FieldErrors = Partial<Record<'title' | 'location' | 'category' | 'description', string>>;
 
@@ -85,8 +84,8 @@ export function ReportProblemScreen() {
   const [priority, setPriority] = useState('Média');
   const [status, setStatus] = useState<ProblemReport['status']>('ABERTO');
   const [description, setDescription] = useState('');
-  const [photoName, setPhotoName] = useState('');
-  const [photoPreview, setPhotoPreview] = useState('');
+  const [photos, setPhotos] = useState<PickedFile[]>([]);
+  const [legacyAttachment, setLegacyAttachment] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -114,8 +113,8 @@ export function ReportProblemScreen() {
       setPriority(fromProblemPriority(editingReport.priority));
       setStatus(editingReport.status ?? 'ABERTO');
       setDescription(editingReport.description ?? '');
-      setPhotoName(editingReport.attachmentName ?? '');
-      setPhotoPreview('');
+      setPhotos([]);
+      setLegacyAttachment(editingReport.attachmentName ?? '');
       setError('');
       return;
     }
@@ -126,8 +125,8 @@ export function ReportProblemScreen() {
     setPriority('Média');
     setStatus('ABERTO');
     setDescription('');
-    setPhotoName('');
-    setPhotoPreview('');
+    setPhotos([]);
+    setLegacyAttachment('');
     setError('');
   }, [editingReport?.id, route.params?.formKey]);
 
@@ -155,27 +154,18 @@ export function ReportProblemScreen() {
     return Object.keys(next).length === 0;
   }
 
-  function pickPhoto(capture?: boolean) {
-    if (typeof document === 'undefined') {
-      Alert.alert('Relatar problema', 'Seleção de foto disponível na versão web publicada.');
+  async function addPhoto(source: 'camera' | 'library') {
+    if (photos.length >= MAX_PHOTOS) {
       return;
     }
-
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    if (capture) {
-      input.setAttribute('capture', 'environment');
-    }
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) {
-        return;
+    try {
+      const photo = await pickImage(source);
+      if (photo) {
+        setPhotos((current) => [...current, photo].slice(0, MAX_PHOTOS));
       }
-      setPhotoName(file.name);
-      setPhotoPreview(URL.createObjectURL(file));
-    };
-    input.click();
+    } catch (err) {
+      Alert.alert('Relatar problema', pickerErrorMessage(err));
+    }
   }
 
   async function submitReport() {
@@ -201,18 +191,33 @@ export function ReportProblemScreen() {
         priority: toProblemPriority(priority),
         status: isEditing ? status : 'ABERTO',
         description: description.trim(),
-        attachmentName: photoName || null
+        attachmentName: legacyAttachment || null
       };
 
+      let failedPhotos = 0;
       if (isEditing && editingReport?.id) {
         await api.updateProblemReport(editingReport.id, payload);
       } else {
-        await api.createProblemReport(payload);
+        const created = await api.createProblemReport(payload);
+        for (const photo of photos) {
+          try {
+            if (!created.id) {
+              throw new Error('sem id');
+            }
+            await api.uploadProblemPhoto(created.id, photo);
+          } catch {
+            failedPhotos += 1;
+          }
+        }
       }
 
       Alert.alert(
         isEditing ? 'Editar problema' : 'Relatar problema',
-        isEditing ? 'Relato atualizado para acompanhamento no aplicativo.' : 'Relato cadastrado para acompanhamento no aplicativo.'
+        isEditing
+          ? 'Relato atualizado para acompanhamento no aplicativo.'
+          : failedPhotos > 0
+            ? `Relato cadastrado, mas ${failedPhotos} foto(s) não foram enviadas. Abra o relato para tentar de novo.`
+            : 'Relato cadastrado para acompanhamento no aplicativo.'
       );
       navigation.navigate('ProblemReports', { refreshKey: Date.now() });
     } catch (err) {
@@ -384,39 +389,44 @@ export function ReportProblemScreen() {
           </View>
         </FormField>
 
-        {PHOTO_ATTACHMENT_ENABLED ? (
-        <View style={styles.attachmentsSection}>
-          <View>
-            <Text style={[styles.fieldLabel, compact ? styles.fieldLabelCompact : null]}>Anexos</Text>
-            <Text style={[styles.helpText, compact ? styles.helpTextCompact : null]}>Envie fotos que ajudem a entender melhor o problema.</Text>
-          </View>
-          <View style={[styles.attachmentsRow, compact ? styles.attachmentsRowCompact : null]}>
-            <View style={[styles.attachmentDrop, compact ? styles.attachmentDropCompact : null]}>
-              <ImagePlus color={colors.muted} size={compact ? 20 : 28} />
-              <Text style={[styles.attachmentText, compact ? styles.attachmentTextCompact : null]}>{photoName ? '1 foto anexada' : 'Nenhuma foto anexada'}</Text>
+        {!isEditing ? (
+          <View style={styles.attachmentsSection}>
+            <View>
+              <Text style={[styles.fieldLabel, compact ? styles.fieldLabelCompact : null]}>Fotos (opcional)</Text>
+              <Text style={[styles.helpText, compact ? styles.helpTextCompact : null]}>
+                Até {MAX_PHOTOS} fotos ajudam a administração a entender o problema.
+              </Text>
             </View>
-
-            <View style={[styles.thumbnail, compact ? styles.thumbnailCompact : null]}>
-              {photoPreview ? <Image source={{ uri: photoPreview }} style={styles.thumbnailImage} /> : <View style={styles.thumbnailPlaceholder} />}
-              {photoName ? (
-                <Pressable accessibilityRole="button" accessibilityLabel="Remover foto" onPress={() => { setPhotoName(''); setPhotoPreview(''); }} style={styles.removePhoto}>
-                  <X color={colors.muted} size={18} />
+            {photos.length > 0 ? (
+              <View style={styles.photoRow}>
+                {photos.map((photo, index) => (
+                  <View key={`${photo.uri}-${index}`} style={styles.photoSlot}>
+                    <Image source={{ uri: photo.uri }} style={styles.thumbnailImage} />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Remover foto"
+                      onPress={() => setPhotos((current) => current.filter((_, position) => position !== index))}
+                      style={styles.removePhoto}
+                    >
+                      <X color={colors.muted} size={18} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            {photos.length < MAX_PHOTOS ? (
+              <View style={[styles.photoActionsRow, compact ? styles.photoActionsRowCompact : null]}>
+                <Pressable accessibilityRole="button" onPress={() => addPhoto('camera')} style={[styles.photoButton, styles.photoButtonFlex, compact ? styles.photoButtonCompact : null]}>
+                  <Camera color={colors.blue} size={compact ? 18 : 22} />
+                  <Text style={[styles.photoButtonText, compact ? styles.photoButtonTextCompact : null]}>Tirar foto</Text>
                 </Pressable>
-              ) : null}
-            </View>
-
-            <View style={[styles.photoActions, compact ? styles.photoActionsCompact : null]}>
-              <Pressable accessibilityRole="button" onPress={() => pickPhoto()} style={[styles.photoButton, compact ? styles.photoButtonCompact : null]}>
-                <ImagePlus color={colors.blue} size={compact ? 18 : 22} />
-                <Text style={[styles.photoButtonText, compact ? styles.photoButtonTextCompact : null]}>Selecionar foto</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" onPress={() => pickPhoto(true)} style={[styles.photoButton, compact ? styles.photoButtonCompact : null]}>
-                <Camera color={colors.blue} size={compact ? 18 : 22} />
-                <Text style={[styles.photoButtonText, compact ? styles.photoButtonTextCompact : null]}>Tirar foto</Text>
-              </Pressable>
-            </View>
+                <Pressable accessibilityRole="button" onPress={() => addPhoto('library')} style={[styles.photoButton, styles.photoButtonFlex, compact ? styles.photoButtonCompact : null]}>
+                  <ImagePlus color={colors.blue} size={compact ? 18 : 22} />
+                  <Text style={[styles.photoButtonText, compact ? styles.photoButtonTextCompact : null]}>Da galeria</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
-        </View>
         ) : null}
 
         <View style={styles.successBanner}>
@@ -847,6 +857,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 21,
     fontWeight: '600'
+  },
+  photoRow: {
+    flexDirection: 'row',
+    gap: 10
+  },
+  photoSlot: {
+    width: '31%',
+    aspectRatio: 1,
+    borderRadius: 8,
+    backgroundColor: '#EEF4FA'
+  },
+  photoActionsRow: {
+    flexDirection: 'row',
+    gap: 13
+  },
+  photoActionsRowCompact: {
+    gap: 8
+  },
+  photoButtonFlex: {
+    flex: 1
   },
   attachmentsSection: {
     gap: 16

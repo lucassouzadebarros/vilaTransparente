@@ -6,6 +6,8 @@ import { ArrowLeft, CalendarDays, CreditCard, Eye, FileText, LucideIcon, Trash2,
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
+import { Camera as CameraIcon } from 'lucide-react-native';
+import { PickedFile, choosePhoto, nameWithoutExtension, pickPdf, pickerErrorMessage, previewPickedFile } from '../utils/filePicker';
 
 export function FinishServiceScreen() {
   const route = useRoute<any>();
@@ -18,7 +20,7 @@ export function FinishServiceScreen() {
   const [generateExpense, setGenerateExpense] = useState(true);
   const [documentName, setDocumentName] = useState('Nota Fiscal');
   const [documentUrl, setDocumentUrl] = useState('');
-  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentFile, setDocumentFile] = useState<PickedFile | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -85,34 +87,32 @@ export function FinishServiceScreen() {
   }
 
   function previewDocument() {
-    const previewUrl = documentFile ? URL.createObjectURL(documentFile) : documentUrl.trim();
+    if (documentFile) {
+      previewPickedFile(documentFile).catch(() => Alert.alert('Documento', 'Não consegui abrir o arquivo escolhido.'));
+      return;
+    }
+    const previewUrl = documentUrl.trim();
     if (!previewUrl) {
       Alert.alert('Documento', 'Informe o link do PDF da nota fiscal ou recibo.');
       return;
     }
-    api.openDocument(previewUrl).catch(() => Alert.alert('Documento', 'Não foi possível abrir o link informado.'));
+    api.openDocument(previewUrl).catch(() => Alert.alert('Documento', 'Não foi possível abrir o documento.'));
   }
 
-  function selectPdf() {
-    if (typeof document === 'undefined') {
-      Alert.alert('Documento', 'Seleção de arquivo disponível no app web.');
-      return;
-    }
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'application/pdf';
-    input.onchange = () => {
-      const file = input.files?.[0];
+  async function attachFile(pick: () => Promise<PickedFile | null>) {
+    try {
+      const file = await pick();
       if (!file) {
         return;
       }
       setDocumentFile(file);
       setDocumentUrl('');
       if (!documentName.trim() || documentName === 'Nota Fiscal') {
-        setDocumentName(file.name.replace(/\.pdf$/i, ''));
+        setDocumentName(nameWithoutExtension(file.name));
       }
-    };
-    input.click();
+    } catch (err) {
+      Alert.alert('Documento', pickerErrorMessage(err));
+    }
   }
 
   function clearDocument() {
@@ -180,7 +180,8 @@ export function FinishServiceScreen() {
         <FormField label="Link do PDF da nota fiscal/recibo" value={documentUrl} onChangeText={setDocumentUrl} placeholder="https://.../nota-fiscal.pdf" />
         {documentFile ? <Text style={styles.sectionHelp}>Arquivo selecionado: {documentFile.name}</Text> : null}
         <View style={styles.documentActions}>
-          <DocumentActionButton title="Selecionar PDF" icon={Upload} onPress={selectPdf} />
+          <DocumentActionButton title="Selecionar PDF" icon={Upload} onPress={() => attachFile(pickPdf)} />
+          <DocumentActionButton title="Enviar foto" icon={CameraIcon} onPress={() => attachFile(choosePhoto)} />
           <DocumentActionButton title="Visualizar PDF" icon={Eye} onPress={previewDocument} />
           <DocumentActionButton title="Limpar documento" icon={Trash2} danger onPress={clearDocument} />
         </View>

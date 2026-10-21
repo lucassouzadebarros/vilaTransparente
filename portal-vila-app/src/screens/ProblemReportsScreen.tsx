@@ -14,14 +14,16 @@ import {
   Plus,
   RefreshCw,
   Tag,
-  TriangleAlert
+  TriangleAlert,
+  Wrench
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
+import { DemandTabs } from '../components/DemandTabs';
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors } from '../theme';
-import { ProblemReport } from '../types';
+import { ProblemReport, ServiceOrder } from '../types';
 
 const filters: Array<{ key: string; label: string; icon?: LucideIcon }> = [
   { key: 'TODOS', label: 'Todos' },
@@ -38,6 +40,14 @@ const priorityLabels: Record<ProblemReport['priority'], string> = {
   URGENTE: 'Urgente'
 };
 
+const serviceStatusLabels: Record<ServiceOrder['status'], string> = {
+  PLANEJADO: 'planejado',
+  APROVADO: 'orçamento aprovado',
+  EM_ANDAMENTO: 'em andamento',
+  FINALIZADO: 'finalizado',
+  CANCELADO: 'cancelado'
+};
+
 const statusLabels: Record<ProblemReport['status'], string> = {
   ABERTO: 'Aberto',
   EM_ANALISE: 'Em análise',
@@ -47,9 +57,10 @@ const statusLabels: Record<ProblemReport['status'], string> = {
 
 export function ProblemReportsScreen() {
   const navigation = useNavigation<any>();
-  const { isAdmin } = useAuth();
+  const { isAdmin, canManageBudgets } = useAuth();
   const [status, setStatus] = useState('TODOS');
   const [items, setItems] = useState<ProblemReport[]>([]);
+  const [services, setServices] = useState<Record<number, ServiceOrder>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -57,7 +68,12 @@ export function ProblemReportsScreen() {
     setLoading(true);
     setError('');
     try {
-      setItems(await api.problemReports(nextStatus === 'TODOS' ? undefined : nextStatus));
+      const [reports, nextServices] = await Promise.all([
+        api.problemReports(nextStatus === 'TODOS' ? undefined : nextStatus),
+        api.services().catch(() => [] as ServiceOrder[])
+      ]);
+      setItems(reports);
+      setServices(Object.fromEntries(nextServices.filter((service) => service.id).map((service) => [service.id as number, service])));
     } catch (err) {
       setError(apiErrorMessage(err, 'Não consegui carregar os problemas.'));
     } finally {
@@ -83,6 +99,8 @@ export function ProblemReportsScreen() {
           <RefreshCw color={loading ? colors.muted : colors.blue} size={18} />
         </Pressable>
       </View>
+
+      <DemandTabs current="problems" />
 
       <Pressable
         accessibilityRole="button"
@@ -132,13 +150,11 @@ export function ProblemReportsScreen() {
               <ProblemCard
                 key={item.id}
                 item={item}
-                onPress={() => {
-                  if (isAdmin && item.id) {
-                    navigation.navigate('ReportProblem', { report: item, formKey: Date.now() });
-                    return;
-                  }
-                  Alert.alert(item.title, item.description || 'Sem descrição informada.');
-                }}
+                service={item.serviceId ? services[item.serviceId] : undefined}
+                canCreateService={canManageBudgets && !item.serviceId && (item.status === 'ABERTO' || item.status === 'EM_ANALISE')}
+                onCreateService={() => navigation.navigate('ServiceForm', { formMode: 'create', serviceId: null, budgetId: null, problemReportId: item.id, formKey: Date.now() })}
+                onOpenService={() => navigation.navigate('ServiceDetails', { id: item.serviceId, refreshKey: Date.now() })}
+                onPress={() => navigation.navigate('ProblemDetails', { id: item.id, refreshKey: Date.now() })}
               />
             ))
           : null}
@@ -168,7 +184,21 @@ function FilterButton({
   );
 }
 
-function ProblemCard({ item, onPress }: { item: ProblemReport; onPress: () => void }) {
+function ProblemCard({
+  item,
+  service,
+  canCreateService,
+  onCreateService,
+  onOpenService,
+  onPress
+}: {
+  item: ProblemReport;
+  service?: ServiceOrder;
+  canCreateService: boolean;
+  onCreateService: () => void;
+  onOpenService: () => void;
+  onPress: () => void;
+}) {
   const priorityColor = item.priority === 'URGENTE' || item.priority === 'ALTA' ? colors.red : item.priority === 'MEDIA' ? '#D98A10' : colors.green;
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.problemCard}>
@@ -183,7 +213,10 @@ function ProblemCard({ item, onPress }: { item: ProblemReport; onPress: () => vo
           </View>
           <View style={styles.categoryRow}>
             <Tag color={colors.muted} size={13} />
-            <Text style={styles.categoryText}>{item.category || 'Outro'}</Text>
+            <Text style={styles.categoryText}>
+              {item.category || 'Outro'}
+              {item.photoCount ? ` · ${item.photoCount} foto${item.photoCount > 1 ? 's' : ''}` : ''}
+            </Text>
           </View>
           <View style={[styles.statusPill, { backgroundColor: statusSoftColor(item.status) }]}>
             <View style={[styles.statusDot, { backgroundColor: statusColor(item.status) }]} />
@@ -200,6 +233,20 @@ function ProblemCard({ item, onPress }: { item: ProblemReport; onPress: () => vo
         <MetaItem icon={MapPin} label="Local" value={item.location || 'Sem local'} />
         <MetaItem icon={CalendarDays} label="Data" value={item.createdAt ? formatDate(item.createdAt) : 'Sem data'} />
       </View>
+      {item.serviceId ? (
+        <Pressable accessibilityRole="button" onPress={onOpenService} style={styles.linkRow}>
+          <Wrench color={colors.blue} size={16} />
+          <Text style={styles.linkText}>
+            Serviço #{item.serviceId}{service ? `: ${serviceStatusLabels[service.status] ?? service.status}` : ''}
+          </Text>
+          <ChevronRight color={colors.blue} size={16} />
+        </Pressable>
+      ) : canCreateService ? (
+        <Pressable accessibilityRole="button" onPress={onCreateService} style={styles.createRow}>
+          <Plus color={colors.blue} size={16} />
+          <Text style={styles.linkText}>Criar serviço a partir deste relato</Text>
+        </Pressable>
+      ) : null}
     </Pressable>
   );
 }
@@ -456,6 +503,32 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     fontWeight: '600'
+  },
+  linkRow: {
+    minHeight: 44,
+    borderRadius: 8,
+    backgroundColor: colors.blueSoft,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
+  createRow: {
+    minHeight: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.blue,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8
+  },
+  linkText: {
+    flex: 1,
+    color: colors.blue,
+    fontSize: 12,
+    fontWeight: '800'
   },
   problemDivider: {
     height: 1,

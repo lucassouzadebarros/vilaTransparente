@@ -9,7 +9,7 @@ import { FormField } from '../components/FormField';
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
-import { Budget, PortalDocument } from '../types';
+import { Budget, PortalDocument, ServiceOrder } from '../types';
 import {
   currencyFromNumber,
   dateBRToISO,
@@ -23,6 +23,8 @@ import {
   maskPhoneBR,
   parseCurrency
 } from '../utils/inputMasks';
+import { Camera as CameraIcon } from 'lucide-react-native';
+import { PickedFile, choosePhoto, nameWithoutExtension, pickPdf, pickerErrorMessage, previewPickedFile } from '../utils/filePicker';
 
 const statusOptions: Array<Budget['status']> = ['EM_ANALISE', 'APROVADO', 'REJEITADO', 'CANCELADO'];
 
@@ -48,15 +50,11 @@ function allowedStatuses(savedStatus: Budget['status'] | null): Array<Budget['st
   );
 }
 
-type FieldErrors = Partial<Record<'title' | 'supplier' | 'amount' | 'supplierDocument' | 'phone' | 'budgetDate' | 'validUntil' | 'expectedDate', string>>;
+type FieldErrors = Partial<Record<'title' | 'scope' | 'supplier' | 'amount' | 'supplierDocument' | 'phone' | 'budgetDate' | 'validUntil' | 'expectedDate', string>>;
 
 function positiveId(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function resetDocumentName(file?: File | null) {
-  return file?.name.replace(/\.pdf$/i, '') || 'Orçamento';
 }
 
 export function BudgetFormScreen() {
@@ -67,6 +65,7 @@ export function BudgetFormScreen() {
   const routeBudgetId = positiveId(route.params?.budgetId ?? route.params?.budget?.id);
   const editingBudgetId = formMode === 'create' ? null : routeBudgetId;
   const formKey = route.params?.formKey ?? route.key;
+  const routeServiceId = positiveId(route.params?.serviceId);
 
   const [budgetId, setBudgetId] = useState<number | null>(null);
   const [title, setTitle] = useState('');
@@ -76,6 +75,8 @@ export function BudgetFormScreen() {
   const [phone, setPhone] = useState('');
   const [loadedPhone, setLoadedPhone] = useState('');
   const [amount, setAmount] = useState('');
+  const [scope, setScope] = useState('');
+  const [forService, setForService] = useState<ServiceOrder | null>(null);
   const [budgetDate, setBudgetDate] = useState('');
   const [validUntil, setValidUntil] = useState('');
   const [expectedDate, setExpectedDate] = useState('');
@@ -84,7 +85,7 @@ export function BudgetFormScreen() {
   const [notes, setNotes] = useState('');
   const [documentName, setDocumentName] = useState('Orçamento');
   const [documentUrl, setDocumentUrl] = useState('');
-  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentFile, setDocumentFile] = useState<PickedFile | null>(null);
   const [existingDocument, setExistingDocument] = useState<PortalDocument | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -102,6 +103,8 @@ export function BudgetFormScreen() {
     setPhone('');
     setLoadedPhone('');
     setAmount('');
+    setScope('');
+    setForService(null);
     setBudgetDate('');
     setValidUntil('');
     setExpectedDate('');
@@ -127,6 +130,7 @@ export function BudgetFormScreen() {
     setPhone(maskedPhone);
     setLoadedPhone(maskedPhone);
     setAmount(currencyFromNumber(budget.amount));
+    setScope(budget.scope ?? '');
     setBudgetDate(isoToDateBR(budget.budgetDate));
     setValidUntil(isoToDateBR(budget.validUntil));
     setExpectedDate(isoToDateBR(budget.expectedDate));
@@ -154,10 +158,25 @@ export function BudgetFormScreen() {
             ]);
             if (active) {
               fillForm(nextBudget, nextDocuments);
+              if (nextBudget.serviceId) {
+                const linked = await api.service(nextBudget.serviceId).catch(() => null);
+                if (active) {
+                  setForService(linked);
+                }
+              }
             }
             return;
           }
           resetForm();
+          if (routeServiceId) {
+            const service = await api.service(routeServiceId);
+            if (!active) {
+              return;
+            }
+            setForService(service);
+            setTitle(service.title);
+            setScope(service.description ?? '');
+          }
         } catch (err) {
           if (active) {
             resetForm();
@@ -173,7 +192,7 @@ export function BudgetFormScreen() {
       return () => {
         active = false;
       };
-    }, [editingBudgetId, formKey])
+    }, [editingBudgetId, routeServiceId, formKey])
   );
 
   function clearFieldError(field: keyof FieldErrors) {
@@ -185,6 +204,9 @@ export function BudgetFormScreen() {
     const amountValue = parseCurrency(amount);
     if (!title.trim()) {
       next.title = 'Informe o título do orçamento.';
+    }
+    if (!isEditing && !scope.trim()) {
+      next.scope = 'Descreva o que o fornecedor vai fazer, para as casas saberem o que estão votando.';
     }
     if (!supplier.trim()) {
       next.supplier = 'Informe o nome do fornecedor.';
@@ -233,6 +255,8 @@ export function BudgetFormScreen() {
       const payload: Budget = {
         id: budgetId ?? undefined,
         title: title.trim(),
+        serviceId: isEditing ? undefined : routeServiceId,
+        scope: scope.trim() || undefined,
         supplier: supplier.trim(),
         supplierDocument: supplierDocument.trim() || undefined,
         phone: phone.trim() || undefined,
@@ -284,35 +308,33 @@ export function BudgetFormScreen() {
     }
   }
 
-  function selectPdf() {
-    if (typeof document === 'undefined') {
-      Alert.alert('Orçamento', 'Seleção de arquivo disponível no app web.');
+  function previewDocument() {
+    if (documentFile) {
+      previewPickedFile(documentFile).catch(() => Alert.alert('Orçamento', 'Não consegui abrir o arquivo escolhido.'));
       return;
     }
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'application/pdf';
-    input.onchange = () => {
-      const file = input.files?.[0];
+    const previewUrl = documentUrl.trim();
+    if (!previewUrl) {
+      Alert.alert('Orçamento', 'Informe o PDF ou link do orçamento.');
+      return;
+    }
+    api.openDocument(previewUrl).catch(() => Alert.alert('Orçamento', 'Não foi possível abrir o documento.'));
+  }
+
+  async function attachFile(pick: () => Promise<PickedFile | null>) {
+    try {
+      const file = await pick();
       if (!file) {
         return;
       }
       setDocumentFile(file);
       setDocumentUrl('');
       if (!documentName.trim() || documentName === 'Orçamento') {
-        setDocumentName(resetDocumentName(file));
+        setDocumentName(nameWithoutExtension(file.name));
       }
-    };
-    input.click();
-  }
-
-  function previewDocument() {
-    const previewUrl = documentFile ? URL.createObjectURL(documentFile) : documentUrl.trim();
-    if (!previewUrl) {
-      Alert.alert('Orçamento', 'Informe o PDF ou link do orçamento.');
-      return;
+    } catch (err) {
+      Alert.alert('Orçamento', pickerErrorMessage(err));
     }
-    api.openDocument(previewUrl).catch(() => Alert.alert('Orçamento', 'Não foi possível abrir o documento.'));
   }
 
   function cancel() {
@@ -356,7 +378,11 @@ export function BudgetFormScreen() {
         ) : (
           <View style={styles.infoBox}>
             <Info color={colors.blue} size={18} />
-            <Text style={styles.infoText}>Todo orçamento novo vai para a votação das casas. Ele é aprovado quando a maioria das casas votar "Aprovar".</Text>
+            <Text style={styles.infoText}>
+              {forService
+                ? `Cotação para o serviço "${forService.title}". Cada casa aprova só uma cotação do serviço: vence a que chegar primeiro à maioria, e as outras são encerradas.`
+                : 'Todo orçamento novo vai para a votação das casas. Ele é aprovado quando a maioria das casas votar "Aprovar".'}
+            </Text>
           </View>
         )}
 
@@ -382,6 +408,18 @@ export function BudgetFormScreen() {
             }}
             placeholder="Nome da empresa ou do prestador"
             error={fieldErrors.supplier}
+          />
+          <FormField
+            label="O que será feito"
+            required={!isEditing}
+            value={scope}
+            onChangeText={(value) => {
+              setScope(value);
+              clearFieldError('scope');
+            }}
+            placeholder="Descreva o serviço que o fornecedor vai executar."
+            multiline
+            error={fieldErrors.scope}
           />
           <FormField
             label="CPF ou CNPJ do fornecedor"
@@ -478,7 +516,8 @@ export function BudgetFormScreen() {
           {documentFile ? <Text style={styles.sectionHelp}>Arquivo selecionado: {documentFile.name}</Text> : null}
           {existingDocument && !documentFile ? <Text style={styles.sectionHelp}>Documento atual: {existingDocument.name}</Text> : null}
           <View style={styles.documentActions}>
-            <DocumentActionButton title="Selecionar PDF" icon={Upload} onPress={selectPdf} />
+            <DocumentActionButton title="Selecionar PDF" icon={Upload} onPress={() => attachFile(pickPdf)} />
+            <DocumentActionButton title="Enviar foto" icon={CameraIcon} onPress={() => attachFile(choosePhoto)} />
             <DocumentActionButton title="Visualizar PDF" icon={ExternalLink} onPress={previewDocument} />
             <DocumentActionButton title="Limpar documento" icon={Trash2} danger onPress={() => { setDocumentUrl(''); setDocumentFile(null); setExistingDocument(null); }} />
           </View>

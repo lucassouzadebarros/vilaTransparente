@@ -235,7 +235,8 @@ record SettingsResponse(
     String villageName,
     BigDecimal monthlyAmount,
     Integer paymentDueDay,
-    String gatewayProvider
+    String gatewayProvider,
+    BigDecimal budgetRequiredAbove
 ) {
     static SettingsResponse from(Settings settings) {
         return new SettingsResponse(
@@ -243,7 +244,11 @@ record SettingsResponse(
             settings.villageName,
             settings.monthlyAmount,
             settings.paymentDueDay,
-            settings.gatewayProvider
+            settings.gatewayProvider,
+            settings.budgetRequiredAbove
         );
     }
+}
+
+record BudgetRuleRequest(BigDecimal budgetRequiredAbove) {
 }

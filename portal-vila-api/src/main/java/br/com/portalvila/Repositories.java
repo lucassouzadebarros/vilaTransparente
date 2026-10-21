@@ -88,6 +88,7 @@ interface BudgetVoteRepository extends JpaRepository<BudgetVote, Long> {
 
 interface PortalDocumentRepository extends JpaRepository<PortalDocument, Long> {
     List<PortalDocument> findByRelatedTypeAndRelatedIdOrderByCreatedAtDesc(String relatedType, Long relatedId);
+    List<PortalDocument> findByRelatedType(String relatedType);
 }
 
 interface ExcludedGatewayPaymentRepository extends JpaRepository<ExcludedGatewayPayment, Long> {
@@ -101,4 +102,10 @@ interface AuditEntryRepository extends JpaRepository<AuditEntry, Long> {
 interface ProblemReportRepository extends JpaRepository<ProblemReport, Long> {
     List<ProblemReport> findAllByOrderByCreatedAtDesc();
     List<ProblemReport> findByStatusOrderByCreatedAtDesc(String status);
+}
+
+interface PushTokenRepository extends JpaRepository<PushToken, Long> {
+    Optional<PushToken> findByToken(String token);
+    List<PushToken> findByUserIdIn(java.util.Collection<Long> userIds);
+    void deleteByToken(String token);
 }

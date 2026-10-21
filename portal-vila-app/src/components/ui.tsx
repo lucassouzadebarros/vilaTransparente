@@ -62,7 +62,7 @@ export function Badge({ status }: { status: string }) {
   const palette =
     normalized.includes('INACTIVE') || normalized.includes('INATIVO')
       ? { bg: colors.redSoft, fg: colors.red }
-      : normalized.includes('ACTIVE') || normalized.includes('ATIVO') || normalized.includes('LIBERADA') || normalized.includes('PAID') || normalized.includes('APROVADO') || normalized.includes('FINALIZADO')
+      : normalized.includes('ACTIVE') || normalized.includes('ATIVO') || normalized.includes('LIBERADA') || normalized.includes('PAID') || normalized.includes('APROVADO') || normalized.includes('FINALIZADO') || normalized.includes('RESOLVIDO')
       ? { bg: colors.greenSoft, fg: colors.green }
       : normalized.includes('PENDING') || normalized.includes('ANALISE') || normalized.includes('PLANEJADO') || normalized.includes('VOTACAO')
         ? { bg: colors.amberSoft, fg: colors.amber }

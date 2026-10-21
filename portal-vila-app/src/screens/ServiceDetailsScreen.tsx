@@ -1,14 +1,25 @@
 import { ReactNode, useCallback, useMemo, useState } from 'react';
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../utils/alert';
 import { formatDateBR } from '../utils/format';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { CheckCircle2, ClipboardList, ExternalLink, FileText, Pencil, RefreshCw, XCircle } from 'lucide-react-native';
+import { CheckCircle2, ChevronRight, ClipboardList, Circle, CircleAlert, Clock3, ExternalLink, FileText, Pencil, Plus, RefreshCw, XCircle } from 'lucide-react-native';
 import { Badge, Button, Card, Label, Money, Row, Screen, Value, formatMoney } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
-import { Budget, PortalDocument, ServiceOrder } from '../types';
+import { Budget, BudgetVoting, Expense, PortalDocument, ProblemReport, ServiceOrder } from '../types';
+import { budgetBadgeStatus, lowestQuoteId, votingScore } from '../utils/budgetVoting';
+
+type StepState = 'done' | 'current' | 'todo' | 'skipped' | 'warn';
+
+type Step = {
+  key: string;
+  title: string;
+  detail: string;
+  state: StepState;
+  onPress?: () => void;
+};
 
 export function ServiceDetailsScreen() {
   const route = useRoute<any>();
@@ -18,16 +29,25 @@ export function ServiceDetailsScreen() {
   const [service, setService] = useState<ServiceOrder | null>(null);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [documents, setDocuments] = useState<PortalDocument[]>([]);
+  const [origin, setOrigin] = useState<ProblemReport | null>(null);
+  const [votings, setVotings] = useState<Record<number, BudgetVoting>>({});
+  const [expenses, setExpenses] = useState<Expense[]>([]);
 
   async function load() {
-    const [nextService, nextBudgets, nextDocuments] = await Promise.all([
+    const [nextService, nextBudgets, nextDocuments, reports, nextVotings, nextExpenses] = await Promise.all([
       api.service(id),
       api.serviceBudgets(id),
-      api.documents('SERVICE', id)
+      api.documents('SERVICE', id),
+      api.problemReports().catch(() => [] as ProblemReport[]),
+      api.budgetVotings().catch(() => [] as BudgetVoting[]),
+      api.expenses().catch(() => [] as Expense[])
     ]);
     setService(nextService);
     setBudgets(nextBudgets);
     setDocuments(nextDocuments);
+    setOrigin(nextService.problemReportId ? reports.find((report) => report.id === nextService.problemReportId) ?? null : null);
+    setVotings(Object.fromEntries(nextVotings.map((voting) => [voting.budgetId, voting])));
+    setExpenses(nextExpenses.filter((expense) => expense.serviceOrderId === id));
   }
 
   useFocusEffect(
@@ -47,6 +67,11 @@ export function ServiceDetailsScreen() {
   const fiscalDocument = useMemo(() => {
     return documents.find((doc) => doc.type === 'NOTA_FISCAL' || doc.type === 'RECIBO') ?? documents[0];
   }, [documents]);
+
+  const steps = useMemo(
+    () => (service ? buildSteps(service, origin, budgets, approvedBudget, expenses, Boolean(fiscalDocument), navigation) : []),
+    [service, origin, budgets, approvedBudget, expenses, fiscalDocument, navigation]
+  );
 
   function openDocument(document?: PortalDocument) {
     if (!document?.url) {
@@ -74,13 +99,20 @@ export function ServiceDetailsScreen() {
     ]);
   }
 
+  const isOpen = service ? service.status !== 'FINALIZADO' && service.status !== 'CANCELADO' : false;
+  const lowestId = lowestQuoteId(budgets);
+  const started = service?.status === 'EM_ANDAMENTO' || service?.status === 'FINALIZADO';
+
   return (
     <Screen title={service?.title ?? 'Detalhes do serviço'} subtitle="Detalhes do serviço" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       {service ? (
         <>
           <Card>
             <DetailLine label="Status">
-              <Badge status={service.status} />
+              <View style={styles.statusBlock}>
+                <Badge status={service.status} />
+                {started && !approvedBudget ? <Badge status="SEM VOTACAO" /> : null}
+              </View>
             </DetailLine>
             <DetailLine label="Valor previsto">
               <Money value={service.expectedValue ?? approvedBudget?.amount ?? 0} />
@@ -117,16 +149,67 @@ export function ServiceDetailsScreen() {
             </DetailLine>
           </Card>
 
-          <Value>Documento</Value>
-          <DocumentCard document={fiscalDocument} status={service.status} onPress={() => openDocument(fiscalDocument)} />
+          <Card>
+            <Value>Do problema ao pagamento</Value>
+            <View style={styles.timeline}>
+              {steps.map((step, index) => (
+                <TimelineStep key={step.key} step={step} last={index === steps.length - 1} />
+              ))}
+            </View>
+          </Card>
 
           <Card>
-            <Value>Orçamentos</Value>
-            <Label>{budgets.length} orçamento(s) vinculado(s). Para vincular, edite o serviço e escolha um orçamento aprovado pelas casas.</Label>
-            <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
-              <Button title="Ver orçamentos" icon={ClipboardList} variant="ghost" onPress={() => navigation.navigate('Budgets')} />
+            <Row>
+              <Value>Cotações</Value>
+              {budgets.length > 0 ? <Label>{budgets.length} cadastrada(s)</Label> : null}
             </Row>
+            {budgets.length === 0 ? (
+              <Label>
+                {isOpen
+                  ? 'Ainda não há cotações. Cadastre duas ou três para as casas escolherem a melhor.'
+                  : 'Este serviço não teve cotações cadastradas.'}
+              </Label>
+            ) : null}
+            {budgets.map((quote) => {
+              const voting = quote.id ? votings[quote.id] : undefined;
+              return (
+                <Pressable
+                  key={quote.id}
+                  accessibilityRole="button"
+                  onPress={() => navigation.navigate('BudgetDetails', { id: quote.id, refreshKey: Date.now() })}
+                  style={[styles.quoteRow, quote.id === approvedBudget?.id ? styles.quoteRowChosen : null]}
+                >
+                  <View style={styles.quoteCopy}>
+                    <Text style={styles.quoteSupplier}>{quote.supplier}</Text>
+                    <View style={styles.quoteTags}>
+                      <Badge status={budgetBadgeStatus(quote.status)} />
+                      {quote.id === lowestId && budgets.length > 1 ? <Badge status="MENOR VALOR" /> : null}
+                    </View>
+                    {voting?.open ? <Text style={styles.quoteVotes}>{votingScore(voting)}</Text> : null}
+                  </View>
+                  <View style={styles.quoteRight}>
+                    <Money value={quote.amount} />
+                    <ChevronRight color={colors.muted} size={16} />
+                  </View>
+                </Pressable>
+              );
+            })}
+            {canManageBudgets && isOpen && !service.approvedBudgetId ? (
+              <Button
+                title="Adicionar cotação"
+                icon={Plus}
+                variant="ghost"
+                onPress={() => navigation.navigate('BudgetForm', { formMode: 'create', budgetId: null, serviceId: service.id, formKey: Date.now() })}
+              />
+            ) : null}
+            <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+              <Button title="Todos os orçamentos" icon={ClipboardList} variant="ghost" onPress={() => navigation.navigate('Budgets')} />
+            </Row>
+            {isOpen ? <Label>Para usar um orçamento avulso já aprovado, edite o serviço e escolha em "Orçamento vinculado".</Label> : null}
           </Card>
+
+          <Value>Documento</Value>
+          <DocumentCard document={fiscalDocument} status={service.status} onPress={() => openDocument(fiscalDocument)} />
 
           {canManageBudgets ? (
             <Card>
@@ -134,7 +217,7 @@ export function ServiceDetailsScreen() {
               <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
                 <Button title="Editar" icon={Pencil} variant="ghost" onPress={() => navigation.navigate('ServiceForm', { formMode: 'edit', serviceId: service.id, formKey: Date.now() })} />
                 {isAdmin && service.status !== 'CANCELADO' ? <Button title={service.status === 'FINALIZADO' ? 'Corrigir dados / anexar nota' : 'Finalizar / anexar nota'} icon={CheckCircle2} onPress={() => navigation.navigate('FinishService', { id: service.id })} /> : null}
-                {service.status !== 'FINALIZADO' && service.status !== 'CANCELADO' ? <Button title="Cancelar serviço" icon={XCircle} variant="danger" onPress={confirmCancel} /> : null}
+                {isOpen ? <Button title="Cancelar serviço" icon={XCircle} variant="danger" onPress={confirmCancel} /> : null}
               </Row>
               {!isAdmin ? <Label>Finalizar o serviço gera uma despesa no caixa, por isso fica com o admin.</Label> : null}
             </Card>
@@ -142,6 +225,115 @@ export function ServiceDetailsScreen() {
         </>
       ) : null}
     </Screen>
+  );
+}
+
+function buildSteps(
+  service: ServiceOrder,
+  origin: ProblemReport | null,
+  budgets: Budget[],
+  approved: Budget | undefined,
+  expenses: Expense[],
+  hasDocument: boolean,
+  navigation: { navigate: (...args: any[]) => void }
+): Step[] {
+  const steps: Step[] = [];
+  const cancelled = service.status === 'CANCELADO';
+  const started = service.status === 'EM_ANDAMENTO' || service.status === 'FINALIZADO';
+  const finished = service.status === 'FINALIZADO';
+  const live = budgets.filter((budget) => budget.status === 'EM_ANALISE' || budget.status === 'APROVADO');
+  const voting = budgets.some((budget) => budget.status === 'EM_ANALISE');
+
+  if (service.problemReportId) {
+    steps.push({
+      key: 'report',
+      title: 'Problema relatado',
+      detail: origin ? origin.title : `Relato #${service.problemReportId}`,
+      state: 'done',
+      onPress: () => navigation.navigate('Mais', { screen: 'ProblemReports' })
+    });
+  }
+
+  steps.push({
+    key: 'quotes',
+    title: 'Cotações',
+    detail: budgets.length === 0
+      ? 'Nenhuma cotação cadastrada'
+      : `${budgets.length} cadastrada(s)${live.length ? `, a menor ${formatMoney(Math.min(...live.map((budget) => budget.amount)))}` : ''}`,
+    state: budgets.length > 0 ? 'done' : cancelled || started ? 'skipped' : 'todo'
+  });
+
+  steps.push({
+    key: 'vote',
+    title: 'Votação das casas',
+    detail: approved
+      ? `Aprovada: ${approved.supplier}, ${formatMoney(approved.amount)}`
+      : voting
+        ? 'Em votação'
+        : started
+          ? 'Sem votação: o serviço andou sem orçamento aprovado'
+          : 'Aguardando orçamento',
+    state: approved ? 'done' : voting ? 'current' : started ? 'warn' : cancelled ? 'skipped' : 'todo'
+  });
+
+  steps.push({
+    key: 'work',
+    title: 'Execução',
+    detail: finished
+      ? `Concluído${service.completedDate ? ` em ${formatDateBR(service.completedDate)}` : ''}`
+      : cancelled
+        ? 'Serviço cancelado'
+        : service.status === 'EM_ANDAMENTO'
+          ? 'Em andamento'
+          : service.plannedDate ? `Planejado para ${formatDateBR(service.plannedDate)}` : 'Ainda não começou',
+    state: finished ? 'done' : cancelled ? 'skipped' : service.status === 'EM_ANDAMENTO' ? 'current' : 'todo'
+  });
+
+  const booked = expenses.length > 0;
+  steps.push({
+    key: 'payment',
+    title: 'Pagamento no caixa',
+    detail: finished
+      ? `${formatMoney(service.finalValue ?? 0)}${booked ? ': despesa lançada no Caixa' : ': sem despesa lançada no Caixa'}`
+      : cancelled ? 'Sem pagamento' : 'Aguardando finalização',
+    state: finished ? (booked ? 'done' : 'warn') : cancelled ? 'skipped' : 'todo'
+  });
+
+  steps.push({
+    key: 'proof',
+    title: 'Nota ou comprovante',
+    detail: hasDocument ? 'Anexado' : finished ? 'Não anexado' : 'Anexado ao finalizar',
+    state: hasDocument ? 'done' : finished ? 'warn' : cancelled ? 'skipped' : 'todo'
+  });
+
+  return steps;
+}
+
+function TimelineStep({ step, last }: { step: Step; last: boolean }) {
+  const icon =
+    step.state === 'done' ? <CheckCircle2 color={colors.green} size={20} />
+      : step.state === 'current' ? <Clock3 color={colors.amber} size={20} />
+        : step.state === 'warn' ? <CircleAlert color={colors.red} size={20} />
+          : <Circle color={colors.muted} size={20} />;
+  const content = (
+    <View style={styles.stepRow}>
+      <View style={styles.stepIconColumn}>
+        {icon}
+        {last ? null : <View style={styles.stepLine} />}
+      </View>
+      <View style={styles.stepCopy}>
+        <Text style={[styles.stepTitle, step.state === 'skipped' ? styles.stepMuted : null]}>{step.title}</Text>
+        <Text style={[styles.stepDetail, step.state === 'warn' ? styles.stepWarn : null, step.state === 'skipped' ? styles.stepMuted : null]}>{step.detail}</Text>
+      </View>
+      {step.onPress ? <ChevronRight color={colors.muted} size={16} /> : null}
+    </View>
+  );
+  return step.onPress ? (
+    <Pressable accessibilityRole="button" onPress={step.onPress}>
+      {content}
+    </Pressable>
+  ) : (
+    content
   );
 }
 
@@ -213,6 +405,101 @@ const styles = StyleSheet.create({
   detailTextBlockRight: {
     gap: spacing.xs,
     alignItems: 'flex-end'
+  },
+  statusBlock: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    justifyContent: 'flex-end'
+  },
+  timeline: {
+    gap: 0
+  },
+  stepRow: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md
+  },
+  stepIconColumn: {
+    width: 22,
+    alignItems: 'center',
+    alignSelf: 'stretch'
+  },
+  stepLine: {
+    flex: 1,
+    width: 2,
+    marginTop: 2,
+    marginBottom: 2,
+    backgroundColor: colors.border
+  },
+  stepCopy: {
+    flex: 1,
+    minWidth: 0,
+    paddingBottom: spacing.md,
+    gap: 2
+  },
+  stepTitle: {
+    color: colors.ink,
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: '900'
+  },
+  stepDetail: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600'
+  },
+  stepWarn: {
+    color: colors.red,
+    fontWeight: '800'
+  },
+  stepMuted: {
+    color: colors.muted
+  },
+  quoteRow: {
+    minHeight: 60,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md
+  },
+  quoteRowChosen: {
+    borderColor: colors.green,
+    backgroundColor: colors.greenSoft
+  },
+  quoteCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 6
+  },
+  quoteSupplier: {
+    color: colors.ink,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '900'
+  },
+  quoteTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs
+  },
+  quoteVotes: {
+    color: colors.muted,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '700'
+  },
+  quoteRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs
   },
   documentLeft: {
     flex: 1,

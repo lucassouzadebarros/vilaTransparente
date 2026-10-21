@@ -2,14 +2,14 @@ import { ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../utils/alert';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { ArrowLeft, CalendarDays, Check, ClipboardList, ExternalLink, FileText, Flag, Link2, Save, Trash2, Upload, UserRound, X } from 'lucide-react-native';
+import { ArrowLeft, CalendarDays, Check, ClipboardList, ExternalLink, FileText, Flag, Info, Link2, Save, Trash2, Upload, UserRound, X } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { Badge, Card, Label, Money } from '../components/ui';
 import { FormField } from '../components/FormField';
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
-import { Budget, PortalDocument, ServiceOrder } from '../types';
+import { Budget, PortalDocument, ProblemReport, ServiceOrder } from '../types';
 import { formatMoneyBR } from '../utils/format';
 import {
   currencyFromNumber,
@@ -22,6 +22,8 @@ import {
   maskDocument,
   parseCurrency
 } from '../utils/inputMasks';
+import { Camera as CameraIcon } from 'lucide-react-native';
+import { PickedFile, choosePhoto, nameWithoutExtension, pickPdf, pickerErrorMessage, previewPickedFile } from '../utils/filePicker';
 
 const priorityOptions: Array<ServiceOrder['priority']> = ['BAIXA', 'MEDIA', 'ALTA', 'URGENTE'];
 
@@ -53,7 +55,11 @@ const priorityColors: Record<ServiceOrder['priority'], string> = {
   URGENTE: colors.red
 };
 
-const categorySuggestions = ['Manutenção', 'Limpeza', 'Segurança', 'Jardinagem', 'Iluminação', 'Elétrica', 'Hidráulica', 'Pintura'];
+// The first block is what a problem report can be about, so a service opened from a report keeps its category.
+const categorySuggestions = [
+  'Iluminação', 'Portão', 'Interfone', 'Limpeza', 'Estrutura', 'Vazamento',
+  'Manutenção', 'Segurança', 'Jardinagem', 'Elétrica', 'Hidráulica', 'Pintura'
+];
 
 type FieldErrors = Partial<Record<'title' | 'description' | 'supplierDocument' | 'plannedDate', string>>;
 
@@ -70,6 +76,7 @@ export function ServiceFormScreen() {
   const routeServiceId = positiveId(route.params?.serviceId ?? route.params?.service?.id);
   const editingServiceId = formMode === 'create' ? null : routeServiceId;
   const seedBudgetId = positiveId(route.params?.budgetId);
+  const routeReportId = positiveId(route.params?.problemReportId);
   const formKey = route.params?.formKey ?? route.key;
 
   const [serviceId, setServiceId] = useState<number | null>(null);
@@ -87,7 +94,7 @@ export function ServiceFormScreen() {
   const [notes, setNotes] = useState('');
   const [documentName, setDocumentName] = useState('Nota Fiscal');
   const [documentUrl, setDocumentUrl] = useState('');
-  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentFile, setDocumentFile] = useState<PickedFile | null>(null);
   const [existingDocument, setExistingDocument] = useState<PortalDocument | null>(null);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [selectedBudgetId, setSelectedBudgetId] = useState<number | null>(null);
@@ -95,6 +102,8 @@ export function ServiceFormScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [origin, setOrigin] = useState<ProblemReport | null>(null);
+  const [originId, setOriginId] = useState<number | null>(null);
 
   const selectedBudget = useMemo(() => {
     return budgets.find((budget) => budget.id === selectedBudgetId);
@@ -131,6 +140,8 @@ export function ServiceFormScreen() {
     setExistingDocument(null);
     setSelectedBudgetId(nextBudgetId);
     setFieldErrors({});
+    setOrigin(null);
+    setOriginId(null);
   }
 
   function fillForm(service: ServiceOrder, documents: PortalDocument[]) {
@@ -159,6 +170,7 @@ export function ServiceFormScreen() {
     setExistingDocument(document);
     setSelectedBudgetId(service.approvedBudgetId ?? seedBudgetId ?? null);
     setFieldErrors({});
+    setOriginId(service.problemReportId ?? null);
   }
 
   useFocusEffect(
@@ -181,6 +193,12 @@ export function ServiceFormScreen() {
             ]);
             if (active) {
               fillForm(nextService, nextDocuments);
+              if (nextService.problemReportId) {
+                const found = (await api.problemReports().catch(() => [] as ProblemReport[])).find((item) => item.id === nextService.problemReportId);
+                if (active) {
+                  setOrigin(found ?? null);
+                }
+              }
             }
             return;
           }
@@ -195,6 +213,24 @@ export function ServiceFormScreen() {
             setSupplier(seeded.supplier ?? '');
             setSupplierDocument(maskedDocument);
             setLoadedSupplierDocument(maskedDocument);
+          }
+          if (routeReportId) {
+            const found = (await api.problemReports()).find((item) => item.id === routeReportId);
+            if (!active) {
+              return;
+            }
+            if (found && !found.serviceId && (found.status === 'ABERTO' || found.status === 'EM_ANALISE')) {
+              setOrigin(found);
+              setOriginId(found.id ?? null);
+              setTitle(found.title);
+              setDescription(found.location ? `${found.description}
+
+Local: ${found.location}.` : found.description);
+              setCategory(found.category ?? '');
+              setPriority(found.priority);
+            } else {
+              setError('Este relato já virou serviço ou foi encerrado, então não dá para criar outro serviço a partir dele.');
+            }
           }
         } catch (err) {
           if (active) {
@@ -211,7 +247,7 @@ export function ServiceFormScreen() {
       return () => {
         active = false;
       };
-    }, [editingServiceId, seedBudgetId, formKey])
+    }, [editingServiceId, seedBudgetId, routeReportId, formKey])
   );
 
   function clearFieldError(field: keyof FieldErrors) {
@@ -279,6 +315,7 @@ export function ServiceFormScreen() {
         supplierDocument: supplierDocument.trim() || selectedBudget?.supplierDocument || undefined,
         plannedDate: dateBRToISO(plannedDate),
         approvedBudgetId: selectedBudgetId,
+        problemReportId: isEditing ? undefined : originId,
         notes: notes.trim() || undefined
       };
 
@@ -321,34 +358,32 @@ export function ServiceFormScreen() {
   }
 
   function previewDocument() {
-    const previewUrl = documentFile ? URL.createObjectURL(documentFile) : documentUrl.trim();
+    if (documentFile) {
+      previewPickedFile(documentFile).catch(() => Alert.alert('Documento fiscal', 'Não consegui abrir o arquivo escolhido.'));
+      return;
+    }
+    const previewUrl = documentUrl.trim();
     if (!previewUrl) {
       Alert.alert('Documento fiscal', 'Informe o link do PDF da nota fiscal ou recibo.');
       return;
     }
-    api.openDocument(previewUrl).catch(() => Alert.alert('Documento fiscal', 'Não foi possível abrir o link informado.'));
+    api.openDocument(previewUrl).catch(() => Alert.alert('Documento fiscal', 'Não foi possível abrir o documento.'));
   }
 
-  function selectPdf() {
-    if (typeof document === 'undefined') {
-      Alert.alert('Documento fiscal', 'Seleção de arquivo disponível no app web.');
-      return;
-    }
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'application/pdf';
-    input.onchange = () => {
-      const file = input.files?.[0];
+  async function attachFile(pick: () => Promise<PickedFile | null>) {
+    try {
+      const file = await pick();
       if (!file) {
         return;
       }
       setDocumentFile(file);
       setDocumentUrl('');
       if (!documentName.trim() || documentName === 'Nota Fiscal') {
-        setDocumentName(file.name.replace(/\.pdf$/i, ''));
+        setDocumentName(nameWithoutExtension(file.name));
       }
-    };
-    input.click();
+    } catch (err) {
+      Alert.alert('Documento fiscal', pickerErrorMessage(err));
+    }
   }
 
   function cancel() {
@@ -372,6 +407,16 @@ export function ServiceFormScreen() {
           <Card style={styles.errorCard}>
             <Label>{error}</Label>
           </Card>
+        ) : null}
+
+        {originId ? (
+          <View style={styles.infoBox}>
+            <Info color={colors.blue} size={18} />
+            <Text style={styles.infoText}>
+              {origin ? `Este serviço nasce do relato "${origin.title}".` : `Este serviço nasce do relato #${originId}.`}
+              {isEditing ? '' : ' Quando for finalizado e pago, o relato é marcado como Resolvido.'}
+            </Text>
+          </View>
         ) : null}
 
         <FormSection icon={ClipboardList} title="Identificação">
@@ -536,7 +581,8 @@ export function ServiceFormScreen() {
             {documentFile ? <Text style={styles.sectionHelp}>Arquivo selecionado: {documentFile.name}</Text> : null}
             {existingDocument && !documentFile ? <Text style={styles.sectionHelp}>Documento atual: {existingDocument.name}</Text> : null}
             <View style={styles.documentActions}>
-              <DocumentActionButton title="Selecionar PDF" icon={Upload} onPress={selectPdf} />
+              <DocumentActionButton title="Selecionar PDF" icon={Upload} onPress={() => attachFile(pickPdf)} />
+              <DocumentActionButton title="Enviar foto" icon={CameraIcon} onPress={() => attachFile(choosePhoto)} />
               <DocumentActionButton title="Visualizar PDF" icon={ExternalLink} onPress={previewDocument} />
               <DocumentActionButton title="Limpar documento" icon={Trash2} danger onPress={() => { setDocumentUrl(''); setDocumentFile(null); setExistingDocument(null); }} />
             </View>
@@ -699,6 +745,24 @@ const styles = StyleSheet.create({
   errorCard: {
     borderColor: colors.red,
     zIndex: 1
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#C9DAF2',
+    backgroundColor: colors.blueSoft,
+    padding: spacing.md,
+    zIndex: 1
+  },
+  infoText: {
+    flex: 1,
+    color: colors.ink,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600'
   },
   sectionCard: {
     backgroundColor: colors.surface,

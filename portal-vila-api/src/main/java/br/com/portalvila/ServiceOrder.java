@@ -34,6 +34,9 @@ public class ServiceOrder {
     public LocalDate completedDate;
     public Long approvedBudgetId;
 
+    /** The problem report this service was opened from, if any. */
+    public Long problemReportId;
+
     @Column(columnDefinition = "text")
     public String notes;
 

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { Linking, Platform } from 'react-native';
+import { PickedFile, toFormPart } from '../utils/filePicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   AuditEntry,
@@ -36,6 +37,14 @@ const baseURL = process.env.EXPO_PUBLIC_API_URL ?? webBaseURL;
 const publicBaseURL = baseURL.replace(/\/api\/?$/, '');
 
 export const apiClient = axios.create({ baseURL, timeout: 20000 });
+
+function appendFile(form: FormData, file: PickedFile) {
+  if (file.file) {
+    form.append('file', file.file, file.name);
+  } else {
+    form.append('file', toFormPart(file) as never);
+  }
+}
 
 const publicRequestPaths = new Set([
   '/auth/login',
@@ -182,7 +191,7 @@ export const api = {
   ),
   createDocument: (document: PortalDocument) => requestData<PortalDocument>(apiClient.post('/documents', document)),
   uploadDocument: (
-    file: File,
+    file: PickedFile,
     document: Pick<PortalDocument, 'name' | 'type' | 'relatedType' | 'relatedId' | 'description'>
   ) => {
     const form = new FormData();
@@ -197,8 +206,22 @@ export const api = {
     if (document.description) {
       form.append('description', document.description);
     }
-    form.append('file', file);
+    appendFile(form, file);
     return requestData<PortalDocument>(apiClient.post('/documents/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } }));
+  },
+  uploadProblemPhoto: (reportId: number, file: PickedFile) => {
+    const form = new FormData();
+    appendFile(form, file);
+    return requestData<PortalDocument>(
+      apiClient.post(`/problem-reports/${reportId}/photos`, form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 })
+    );
+  },
+  deleteProblemPhoto: (reportId: number, documentId: number) =>
+    requestData<{ status: string }>(apiClient.delete(`/problem-reports/${reportId}/photos/${documentId}`)),
+  /** A short-lived address a photo can be shown from (an <Image> cannot send the login header). */
+  documentAccessUrl: async (documentId: number) => {
+    const access = await requestData<{ path: string }>(apiClient.get(`/documents/${documentId}/access`));
+    return `${publicBaseURL}${access.path}`;
   },
   documentUrl: (url: string) => (url.startsWith('/') ? `${publicBaseURL}${url}` : url),
   /**
@@ -235,5 +258,7 @@ export const api = {
   sindico: () => requestData<Sindico>(apiClient.get('/admin/sindico')),
   chooseSindico: (residentId: number | null) => requestData<Sindico>(apiClient.put('/admin/sindico', { residentId })),
   settings: () => requestData(apiClient.get('/settings')),
+  setBudgetRule: (budgetRequiredAbove: number | null) => requestData(apiClient.put('/settings/budget-rule', { budgetRequiredAbove })),
+  registerPushToken: (token: string, platform: string) => requestData<{ status: string }>(apiClient.post('/push-tokens', { token, platform })),
   dashboardEventsUrl: () => `${baseURL.replace(/\/$/, '')}/events/dashboard`
 };

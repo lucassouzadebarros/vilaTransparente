@@ -17,6 +17,7 @@ import {
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { DemandTabs } from '../components/DemandTabs';
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -81,6 +82,8 @@ export function ServicesScreen() {
           <RefreshCw color={loading ? colors.muted : colors.blue} size={18} />
         </Pressable>
       </View>
+
+      <DemandTabs current="services" />
 
       {canManageBudgets ? (
         <Pressable
@@ -171,6 +174,11 @@ function ServiceCard({ item, onPress }: { item: ServiceOrder; onPress: () => voi
             <View style={[styles.statusDot, { backgroundColor: statusColor(item.status) }]} />
             <Text style={[styles.statusText, { color: statusColor(item.status) }]}>{statusLabels[item.status] ?? item.status}</Text>
           </View>
+          {(item.status === 'EM_ANDAMENTO' || item.status === 'FINALIZADO') && !item.approvedBudgetId ? (
+            <View style={styles.noVotePill}>
+              <Text style={styles.noVoteText}>Sem votação das casas</Text>
+            </View>
+          ) : null}
         </View>
       </View>
       <View style={styles.serviceDivider} />
@@ -448,6 +456,20 @@ const styles = StyleSheet.create({
     borderRadius: 999
   },
   statusText: {
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '800'
+  },
+  noVotePill: {
+    alignSelf: 'flex-start',
+    minHeight: 22,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    justifyContent: 'center',
+    backgroundColor: colors.amberSoft
+  },
+  noVoteText: {
+    color: colors.amber,
     fontSize: 10,
     lineHeight: 13,
     fontWeight: '800'

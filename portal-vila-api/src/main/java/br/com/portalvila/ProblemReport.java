@@ -29,6 +29,13 @@ public class ProblemReport {
     public String description;
 
     public String attachmentName;
+
+    /** The service opened to fix this problem, if any. */
+    public Long serviceId;
+
+    /** How many photos were sent with the report. Filled when listing; not stored. */
+    @Transient
+    public Integer photoCount;
     public Long residentId;
     public Long houseId;
     public Long createdBy;

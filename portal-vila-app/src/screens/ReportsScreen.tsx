@@ -51,15 +51,29 @@ export function ReportsScreen() {
     }
   }
 
-  function exportCsv() {
-    if (report && !downloadReportCsv(report)) {
-      Alert.alert('Baixar planilha', 'A planilha pode ser baixada na versão web do portal.');
+  async function exportCsv() {
+    if (!report) {
+      return;
+    }
+    try {
+      if (!(await downloadReportCsv(report))) {
+        Alert.alert('Baixar planilha', 'Este aparelho não consegue compartilhar arquivos.');
+      }
+    } catch {
+      Alert.alert('Baixar planilha', 'Não consegui gerar a planilha. Tente de novo.');
     }
   }
 
-  function print() {
-    if (report && !printReport(report)) {
-      Alert.alert('Imprimir', 'Libere pop-ups para este site e tente de novo. Na versão web dá para salvar como PDF.');
+  async function print() {
+    if (!report) {
+      return;
+    }
+    try {
+      if (!(await printReport(report))) {
+        Alert.alert('PDF', 'Libere pop-ups para este site e tente de novo, ou use um aparelho que compartilhe arquivos.');
+      }
+    } catch {
+      Alert.alert('PDF', 'Não consegui gerar o PDF. Tente de novo.');
     }
   }
 

@@ -153,6 +153,7 @@ export type ServiceOrder = {
   plannedDate?: string;
   completedDate?: string;
   approvedBudgetId?: number | null;
+  problemReportId?: number | null;
   notes?: string;
 };
 
@@ -169,6 +170,7 @@ export type Budget = {
   expectedDate?: string;
   status: 'EM_ANALISE' | 'APROVADO' | 'REJEITADO' | 'CANCELADO';
   documentId?: number;
+  scope?: string;
   notes?: string;
   votingClosedAt?: string | null;
 };
@@ -206,6 +208,8 @@ export type ProblemReport = {
   status: 'ABERTO' | 'EM_ANALISE' | 'RESOLVIDO' | 'CANCELADO';
   description: string;
   attachmentName?: string | null;
+  serviceId?: number | null;
+  photoCount?: number;
   residentId?: number | null;
   houseId?: number | null;
   createdBy?: number | null;
