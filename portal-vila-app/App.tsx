@@ -7,6 +7,9 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { ChangePasswordScreen } from './src/screens/ChangePasswordScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { colors } from './src/theme';
+import { setupWebAccessibility } from './src/utils/webAccessibility';
+
+setupWebAccessibility();
 
 function Entry() {
   const { session } = useAuth();

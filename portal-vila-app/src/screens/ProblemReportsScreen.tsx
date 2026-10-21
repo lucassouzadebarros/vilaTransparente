@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../utils/alert';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -19,6 +19,7 @@ import {
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { DemandTabs } from '../components/DemandTabs';
+import { EmptyFilter, FilterBar } from '../components/FilterBar';
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
@@ -57,12 +58,12 @@ export function ProblemReportsScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  async function load(nextStatus = status) {
+  async function load() {
     setLoading(true);
     setError('');
     try {
       const [reports, nextBudgets, nextServices] = await Promise.all([
-        api.problemReports(nextStatus === 'TODOS' ? undefined : nextStatus),
+        api.problemReports(),
         api.budgets().catch(() => [] as Budget[]),
         api.services().catch(() => [] as ServiceOrder[])
       ]);
@@ -79,15 +80,21 @@ export function ProblemReportsScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [status])
+    }, [])
   );
 
+  const options = useMemo(
+    () => filters.map((filter) => ({ key: filter.key, label: filter.label, count: filter.key === 'TODOS' ? items.length : items.filter((item) => item.status === filter.key).length })),
+    [items]
+  );
+  const visible = status === 'TODOS' ? items : items.filter((item) => item.status === status);
+
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView role="main" style={styles.screen} contentContainerStyle={styles.content}>
       <SoftBackdrop compact />
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Problemas</Text>
+          <Text role="heading" style={styles.title}>Problemas</Text>
           <Text style={styles.subtitle}>Relatos e acompanhamento</Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Atualizar problemas" onPress={() => load()} style={styles.refreshButton}>
@@ -106,18 +113,7 @@ export function ProblemReportsScreen() {
         <Text style={styles.newButtonText}>Novo relato</Text>
       </Pressable>
 
-      <View style={styles.filterGrid}>
-        {filters.map((filter) => (
-          <FilterButton
-            key={filter.key}
-            filterKey={filter.key}
-            label={filter.label}
-            icon={filter.icon}
-            selected={filter.key === status}
-            onPress={() => setStatus(filter.key)}
-          />
-        ))}
-      </View>
+      <FilterBar label="Situação do problema" options={options} value={status} onChange={setStatus} />
 
       <View style={styles.list}>
         {error ? (
@@ -140,8 +136,11 @@ export function ProblemReportsScreen() {
             <Text style={styles.emptyText}>Nenhum problema cadastrado.</Text>
           </View>
         ) : null}
+        {!loading && !error && items.length > 0 && visible.length === 0 ? (
+          <EmptyFilter message="Nenhum problema nesta situação." onClear={() => setStatus('TODOS')} />
+        ) : null}
         {!error
-          ? items.map((item) => (
+          ? visible.map((item) => (
               <ProblemCard
                 key={item.id}
                 item={item}
@@ -156,27 +155,6 @@ export function ProblemReportsScreen() {
           : null}
       </View>
     </ScrollView>
-  );
-}
-
-function FilterButton({
-  filterKey,
-  label,
-  icon: Icon,
-  selected,
-  onPress
-}: {
-  filterKey: string;
-  label: string;
-  icon?: LucideIcon;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.filterButton, filterWidth(filterKey), selected ? styles.filterSelected : null]}>
-      {Icon ? <Icon color={selected ? colors.surface : colors.blue} size={14} /> : null}
-      <Text style={[styles.filterText, selected ? styles.filterTextSelected : null]}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -356,14 +334,14 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     color: colors.muted,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 15,
     fontWeight: '600',
     marginTop: 2
   },
   refreshButton: {
     width: 40,
-    height: 40,
+    height: 44,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
@@ -430,8 +408,8 @@ const styles = StyleSheet.create({
   },
   filterText: {
     color: colors.ink,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '700'
   },
   filterTextSelected: {
@@ -493,8 +471,8 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     color: colors.muted,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '600'
   },
   statusPill: {
@@ -512,13 +490,13 @@ const styles = StyleSheet.create({
     borderRadius: 999
   },
   statusText: {
-    fontSize: 10,
-    lineHeight: 13,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '800'
   },
   description: {
     color: colors.muted,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 16,
     fontWeight: '600'
   },
@@ -586,13 +564,13 @@ const styles = StyleSheet.create({
   },
   metaLabel: {
     color: colors.muted,
-    fontSize: 9,
-    lineHeight: 12,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '600'
   },
   metaValue: {
     color: colors.ink,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 15,
     fontWeight: '900',
     textAlign: 'center'

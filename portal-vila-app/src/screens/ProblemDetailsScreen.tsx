@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { ArrowLeft, Camera, ChevronRight, ImagePlus, Pencil, Plus, RefreshCw, Send, Wrench, X, XCircle } from 'lucide-react-native';
-import { Badge, Button, Card, Label, Row, Screen, Value } from '../components/ui';
+import { Badge, Button, Card, Label, Row, Screen, Value, SectionTitle } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
@@ -199,7 +199,7 @@ export function ProblemDetailsScreen() {
 
           {photos.length > 0 || canChangePhotos ? (
             <Card>
-              <Value>Fotos</Value>
+              <SectionTitle>Fotos</SectionTitle>
               {photos.length === 0 ? <Label>Nenhuma foto neste relato.</Label> : null}
               {photos.length > 0 ? (
                 <View style={styles.photoGrid}>
@@ -233,7 +233,7 @@ export function ProblemDetailsScreen() {
 
           {budgets.length ? (
             <Card>
-              <Value>Orçamentos deste problema</Value>
+              <SectionTitle>Orçamentos deste problema</SectionTitle>
               {budgets.length > 1 ? <Label>Os que concorrem entre si disputam o mesmo trabalho: cada casa aprova só um.</Label> : null}
               {budgets.map((budget) => (
                 <Pressable
@@ -257,7 +257,7 @@ export function ProblemDetailsScreen() {
 
           {services.length ? (
             <Card>
-              <Value>Serviços deste problema</Value>
+              <SectionTitle>Serviços deste problema</SectionTitle>
               {services.map((service) => (
                 <Pressable
                   key={service.id}
@@ -277,7 +277,7 @@ export function ProblemDetailsScreen() {
           ) : null}
 
           <Card>
-            <Value>Histórico e comentários</Value>
+            <SectionTitle>Histórico e comentários</SectionTitle>
             {events.length === 0 ? <Label>Ainda sem registros.</Label> : null}
             <View style={styles.history}>
               {events.map((event) => (
@@ -313,7 +313,7 @@ export function ProblemDetailsScreen() {
 
           {canManageBudgets || isAdmin ? (
             <Card>
-              <Value>Ações administrativas</Value>
+              <SectionTitle>Ações administrativas</SectionTitle>
               <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
                 {canManageBudgets && open ? (
                   <Button
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
   },
   eventMeta: {
     color: colors.muted,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 15,
     fontWeight: '700'
   },

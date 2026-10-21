@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
     padding: 4,
     gap: 4
   },
-  segment: { flex: 1, minHeight: 38, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  segment: { flex: 1, minHeight: 44, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   segmentActive: { backgroundColor: colors.blue },
   segmentText: { color: colors.blue, fontSize: 13, fontWeight: '800' },
   segmentTextActive: { color: colors.surface, fontWeight: '900' },

@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
   },
   releasedText: {
     color: colors.muted,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 17,
     fontWeight: '700'
   },
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
   },
   confirmText: {
     color: colors.ink,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 17,
     fontWeight: '700'
   },

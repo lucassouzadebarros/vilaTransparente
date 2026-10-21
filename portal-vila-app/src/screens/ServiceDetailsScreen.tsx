@@ -4,7 +4,7 @@ import { Alert } from '../utils/alert';
 import { formatDateBR } from '../utils/format';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { CheckCircle2, ChevronRight, ClipboardList, Circle, CircleAlert, Clock3, ExternalLink, FileText, Pencil, RefreshCw, XCircle } from 'lucide-react-native';
-import { Badge, Button, Card, Label, Money, Row, Screen, Value, formatMoney } from '../components/ui';
+import { Badge, Button, Card, Label, Money, Row, Screen, Value, formatMoney, SectionTitle } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
@@ -169,7 +169,7 @@ export function ServiceDetailsScreen() {
           </Card>
 
           <Card>
-            <Value>Do problema ao pagamento</Value>
+            <SectionTitle>Do problema ao pagamento</SectionTitle>
             <View style={styles.timeline}>
               {steps.map((step, index) => (
                 <TimelineStep key={step.key} step={step} last={index === steps.length - 1} />
@@ -215,12 +215,12 @@ export function ServiceDetailsScreen() {
             </Card>
           ) : null}
 
-          <Value>Documento</Value>
+          <SectionTitle>Documento</SectionTitle>
           <DocumentCard document={fiscalDocument} status={service.status} onPress={() => openDocument(fiscalDocument)} />
 
           {canManageBudgets ? (
             <Card>
-              <Value>Ações administrativas</Value>
+              <SectionTitle>Ações administrativas</SectionTitle>
               <Row style={{ flexWrap: 'wrap', justifyContent: 'flex-start' }}>
                 <Button title="Editar" icon={Pencil} variant="ghost" onPress={() => navigation.navigate('ServiceForm', { formMode: 'edit', serviceId: service.id, formKey: Date.now() })} />
                 {isAdmin && service.status !== 'CANCELADO' ? <Button title={service.status === 'FINALIZADO' ? 'Corrigir dados / anexar nota' : 'Finalizar / anexar nota'} icon={CheckCircle2} onPress={() => navigation.navigate('FinishService', { id: service.id })} /> : null}
@@ -387,7 +387,7 @@ function DocumentCard({ document, status, onPress }: { document?: PortalDocument
             <Label>{document?.url ? document.url.split('/').pop() : documentHint(status)}</Label>
           </View>
         </View>
-        <Button title="" icon={ExternalLink} variant="ghost" onPress={onPress} disabled={!document?.url} />
+        <Button title="" accessibilityLabel="Abrir documento" icon={ExternalLink} variant="ghost" onPress={onPress} disabled={!document?.url} />
       </Row>
     </Card>
   );
@@ -490,7 +490,7 @@ const styles = StyleSheet.create({
   },
   emergencyHint: {
     color: colors.muted,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 15,
     fontWeight: '600'
   },
@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
   },
   emergencyPillText: {
     color: colors.red,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '900'
   },
   quoteRow: {
@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
   },
   quoteVotes: {
     color: colors.muted,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 15,
     fontWeight: '700'
   },

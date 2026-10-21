@@ -118,11 +118,11 @@ export function MoreScreen() {
   const visibleItems = menuItems.filter((item) => !item.adminOnly || isAdmin);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, compact ? styles.contentCompact : null]}>
+    <ScrollView role="main" style={styles.screen} contentContainerStyle={[styles.content, compact ? styles.contentCompact : null]}>
       <SoftBackdrop compact />
       <View style={[styles.menuCard, compact ? styles.menuCardCompact : null]}>
         <View style={styles.header}>
-          <Text style={[styles.title, compact ? styles.titleCompact : null]}>Menu</Text>
+          <Text role="heading" style={[styles.title, compact ? styles.titleCompact : null]}>Menu</Text>
           <Text style={[styles.subtitle, compact ? styles.subtitleCompact : null]}>Acesse as principais funcionalidades do sistema.</Text>
         </View>
         <View style={styles.list}>

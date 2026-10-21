@@ -68,12 +68,20 @@ export function FormField({
           maxLength={maxLength}
           multiline={multiline}
           accessibilityLabel={label}
+          accessibilityHint={error ?? hint}
+          {...(error || required ? ({ 'aria-invalid': error ? true : undefined, 'aria-required': required ? true : undefined } as object) : null)}
           style={[styles.input, multiline ? styles.inputMultiline : null, compactMultiline ? styles.inputCompactMultiline : null]}
           placeholderTextColor={colors.muted}
         />
         {right ? <View style={styles.inputAction}>{right}</View> : null}
       </View>
-      {error ? <Text style={styles.errorText}>{error}</Text> : hint ? <Text style={styles.hintText}>{hint}</Text> : null}
+      {error ? (
+        <Text accessibilityRole="alert" style={styles.errorText}>
+          {error}
+        </Text>
+      ) : hint ? (
+        <Text style={styles.hintText}>{hint}</Text>
+      ) : null}
     </View>
   );
 }
@@ -96,7 +104,7 @@ const styles = StyleSheet.create({
   inputFrame: {
     minHeight: 46,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
     borderRadius: 8,
     backgroundColor: colors.surface,
     flexDirection: 'row',
@@ -145,8 +153,8 @@ const styles = StyleSheet.create({
   },
   hintText: {
     color: colors.muted,
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '600'
   }
 });

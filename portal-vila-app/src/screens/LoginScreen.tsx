@@ -275,7 +275,7 @@ export function LoginScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.select({ ios: 'padding', default: undefined })} style={styles.keyboard}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView role="main" style={styles.container} contentContainerStyle={styles.content}>
         {mode === 'login' ? <LoginBackdrop /> : mode === 'register' ? <SoftBackdrop /> : null}
         <View style={styles.brand}>
           <View style={styles.logoMark}>
@@ -283,7 +283,7 @@ export function LoginScreen() {
             <Shield color={colors.surface} size={63} strokeWidth={2.3} style={styles.logoShieldInner} />
             <Home color={colors.surface} fill={colors.surface} size={28} style={styles.logoHome} />
           </View>
-          <Text style={styles.title}>Portal da Vila</Text>
+          <Text role="heading" style={styles.title}>Portal da Vila</Text>
           <Text style={styles.subtitle}>Mensalidades, Pix, serviços e orçamentos</Text>
         </View>
 
@@ -338,14 +338,14 @@ export function LoginScreen() {
                 }
               />
               <View style={styles.forgotRow}>
-                <Pressable accessibilityRole="button" onPress={openForgot}>
+                <Pressable accessibilityRole="button" onPress={openForgot} style={styles.inlineActionTarget}>
                   <Text style={styles.inlineAction}>Esqueci minha senha</Text>
                 </Pressable>
               </View>
               <LoginPrimaryButton title={loading ? 'Entrando...' : 'Entrar'} icon={LogIn} onPress={submit} disabled={!canSubmitLogin} />
               <View style={styles.loginFooterModern}>
                 <Text style={styles.loginHint}>Sem acesso ainda?</Text>
-                <Pressable accessibilityRole="button" onPress={openRegister}>
+                <Pressable accessibilityRole="button" onPress={openRegister} style={styles.inlineActionTarget}>
                   <Text style={styles.inlineAction}>Cadastrar minha casa</Text>
                 </Pressable>
               </View>
@@ -1147,8 +1147,8 @@ const styles = StyleSheet.create({
   },
   loginCardSubtitle: {
     color: colors.muted,
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '600'
   },
   muted: {
@@ -1209,7 +1209,7 @@ const styles = StyleSheet.create({
   },
   passwordToggle: {
     width: 34,
-    height: 34,
+    height: 44,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center'
@@ -1223,7 +1223,7 @@ const styles = StyleSheet.create({
     fontWeight: '900'
   },
   loginInputFrame: {
-    minHeight: 42,
+    minHeight: 44,
     borderWidth: 1.5,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -1250,14 +1250,14 @@ const styles = StyleSheet.create({
   },
   loginInputAction: {
     minWidth: 42,
-    height: 40,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingRight: spacing.sm
   },
   loginFieldHelp: {
     color: colors.muted,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 15,
     fontWeight: '600'
   },
@@ -1283,6 +1283,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     marginTop: -spacing.sm
   },
+  inlineActionTarget: {
+    minHeight: 44,
+    paddingHorizontal: 4,
+    justifyContent: 'center'
+  },
   forgotRow: {
     alignItems: 'flex-end',
     marginTop: -4,
@@ -1290,12 +1295,12 @@ const styles = StyleSheet.create({
   },
   loginHint: {
     color: colors.muted,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700'
   },
   inlineAction: {
     color: colors.blue,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '900'
   },
   loginPrimaryButton: {
@@ -1327,7 +1332,7 @@ const styles = StyleSheet.create({
     paddingTop: 2
   },
   loginGhostButton: {
-    minHeight: 42,
+    minHeight: 44,
     borderRadius: 9,
     borderWidth: 1.5,
     borderColor: colors.blue,
@@ -1340,7 +1345,7 @@ const styles = StyleSheet.create({
   },
   loginGhostButtonCompact: {
     flex: 1,
-    minHeight: 42,
+    minHeight: 44,
     minWidth: 0
   },
   loginGhostButtonText: {
@@ -1350,7 +1355,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0
   },
   loginGhostButtonTextCompact: {
-    fontSize: 11
+    fontSize: 12
   },
   supportCard: {
     padding: spacing.md,
@@ -1520,7 +1525,7 @@ const styles = StyleSheet.create({
   },
   houseStatusModern: {
     color: colors.muted,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 15,
     fontWeight: '700'
   },
@@ -1534,7 +1539,7 @@ const styles = StyleSheet.create({
     fontWeight: '900'
   },
   registerInputFrame: {
-    minHeight: 42,
+    minHeight: 44,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -1561,7 +1566,7 @@ const styles = StyleSheet.create({
   },
   registerInputAction: {
     minWidth: 40,
-    height: 40,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingRight: spacing.xs
@@ -1638,7 +1643,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
     width: 42,
-    height: 42,
+    height: 44,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
@@ -1692,7 +1697,7 @@ const styles = StyleSheet.create({
   },
   houseStatus: {
     color: colors.muted,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800'
   },
   houseStatusSelected: {

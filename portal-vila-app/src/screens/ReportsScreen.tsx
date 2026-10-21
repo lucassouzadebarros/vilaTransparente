@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { AlertTriangle, ChevronLeft, ChevronRight, Download, Lock, Printer, RefreshCw, Scale } from 'lucide-react-native';
-import { Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
+import { Button, Card, Label, Money, Row, Screen, Value, SectionTitle } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
@@ -103,7 +103,7 @@ export function ReportsScreen() {
       {report && !report.transparencyEnabled ? (
         <Card>
           <Row>
-            <Value>Desbloqueie a prestação de contas</Value>
+            <SectionTitle>Desbloqueie a prestação de contas</SectionTitle>
             <Lock color={colors.muted} size={20} />
           </Row>
           <Label>A prestação de contas é aberta para as casas que contribuem. Faça sua primeira contribuição para ver.</Label>
@@ -143,7 +143,7 @@ export function ReportsScreen() {
           ) : null}
 
           <Card>
-            <Value>De onde veio o dinheiro</Value>
+            <SectionTitle>De onde veio o dinheiro</SectionTitle>
             {report.incomeBySource.length === 0 ? <Label>Nenhuma entrada neste mês.</Label> : null}
             {report.incomeBySource.map((line) => (
               <LineWithBar key={line.label} line={line} total={report.totalIncome} color={colors.green} />
@@ -151,7 +151,7 @@ export function ReportsScreen() {
           </Card>
 
           <Card>
-            <Value>Para onde foi</Value>
+            <SectionTitle>Para onde foi</SectionTitle>
             {report.expensesByCategory.length === 0 ? <Label>Nenhuma saída neste mês.</Label> : null}
             {report.expensesByCategory.map((line) => (
               <LineWithBar key={line.label} line={line} total={totalOut} color={colors.red} />
@@ -159,7 +159,7 @@ export function ReportsScreen() {
           </Card>
 
           <Card>
-            <Value>Entradas do mês</Value>
+            <SectionTitle>Entradas do mês</SectionTitle>
             {report.incomes.length === 0 ? <Label>Nenhuma entrada neste mês.</Label> : null}
             {report.incomes.map((income, index) => (
               <View key={`${income.date}-${index}`} style={styles.entry}>
@@ -173,7 +173,7 @@ export function ReportsScreen() {
           </Card>
 
           <Card>
-            <Value>Saídas do mês</Value>
+            <SectionTitle>Saídas do mês</SectionTitle>
             {report.expenses.length === 0 ? <Label>Nenhuma saída neste mês.</Label> : null}
             {report.expenses.map((expense) => (
               <View key={expense.id} style={styles.entry}>
@@ -193,7 +193,7 @@ export function ReportsScreen() {
           </Card>
 
           <Card>
-            <Value>Levar com você</Value>
+            <SectionTitle>Levar com você</SectionTitle>
             <Label>Planilha para abrir no Excel ou página para imprimir e salvar em PDF.</Label>
             <Button title="Baixar planilha (CSV)" icon={Download} variant="ghost" onPress={exportCsv} />
             <Button title="Imprimir / salvar em PDF" icon={Printer} variant="ghost" onPress={print} />
@@ -204,7 +204,7 @@ export function ReportsScreen() {
       {isAdmin ? (
         <Card>
           <Row>
-            <Value>Conferência com o Asaas</Value>
+            <SectionTitle>Conferência com o Asaas</SectionTitle>
             <Scale color={colors.blue} size={20} />
           </Row>
           <Label>Compara o saldo do portal com o saldo que o Asaas informa agora. Só consulta, não altera nada.</Label>

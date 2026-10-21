@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
   },
   passwordToggle: {
     width: 38,
-    height: 38,
+    height: 44,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center'

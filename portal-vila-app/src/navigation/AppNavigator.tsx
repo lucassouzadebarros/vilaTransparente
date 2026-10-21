@@ -29,6 +29,35 @@ import { ServicesScreen } from '../screens/ServicesScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { WebhookEventsScreen } from '../screens/WebhookEventsScreen';
 
+/** The title of the browser tab and of the page for screen readers, by screen. */
+const screenTitles: Record<string, string> = {
+  Inicio: 'Início',
+  Caixa: 'Caixa',
+  Servicos: 'Serviços',
+  Docs: 'Documentos',
+  MoreMenu: 'Menu',
+  ProblemReports: 'Problemas',
+  ProblemDetails: 'Detalhe do problema',
+  ReportProblem: 'Novo relato',
+  Contributions: 'Contribuições',
+  PixPayment: 'Pagamento Pix',
+  Expenses: 'Despesas',
+  Budgets: 'Orçamentos',
+  BudgetForm: 'Orçamento',
+  BudgetDetails: 'Detalhe do orçamento',
+  ServiceForm: 'Serviço',
+  ServiceDetails: 'Detalhe do serviço',
+  FinishService: 'Finalizar serviço',
+  Residents: 'Moradores',
+  ReleaseHouse: 'Liberar casa',
+  Reports: 'Prestação de contas',
+  AdminPixCharges: 'Cobranças Pix',
+  WebhookEvents: 'Logs do webhook',
+  AuditLog: 'Histórico de alterações',
+  Settings: 'Configurações',
+  ChangePassword: 'Alterar senha'
+};
+
 const Tabs = createBottomTabNavigator();
 const MoreStack = createNativeStackNavigator();
 const hiddenTabOptions = {
@@ -68,8 +97,8 @@ function PortalTabs() {
           marginHorizontal: 2
         },
         tabBarLabelStyle: {
-          fontSize: 11,
-          lineHeight: 14,
+          fontSize: 12,
+          lineHeight: 16,
           marginTop: 1,
           paddingBottom: 2
         },
@@ -106,7 +135,9 @@ function PortalTabs() {
 
 export function AppNavigator() {
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      documentTitle={{ formatter: (_options, route) => `${(route && screenTitles[route.name]) ?? 'Portal da Vila'} · Portal da Vila` }}
+    >
       <PortalTabs />
     </NavigationContainer>
   );

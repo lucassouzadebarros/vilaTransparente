@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../utils/alert';
 import { useNavigation } from '@react-navigation/native';
 import { CheckCircle2, Home, Plus, RefreshCw, RotateCw, Users } from 'lucide-react-native';
+import { EmptyFilter, FilterBar, FilterOption } from '../components/FilterBar';
 import { PixChargeCard } from '../components/pix/PixChargeCard';
 import { Badge, Button, Card, Field, Label, Money, Row, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +13,7 @@ import { colors, spacing } from '../theme';
 import { currentMonth } from '../utils/month';
 
 type GenerationMode = 'all' | 'house';
+type ChargeFilter = 'TODAS' | 'PAID' | 'PENDING' | 'OVERDUE' | 'CANCELLED';
 
 function actionErrorMessage(error: unknown) {
   return apiErrorMessage(error, 'Não consegui falar com a API agora. Confira se o backend está rodando e se o app está apontando para a URL correta.');
@@ -32,6 +34,7 @@ export function AdminPixChargesScreen() {
   const [charges, setCharges] = useState<PixCharge[]>([]);
   const [residents, setResidents] = useState<Resident[]>([]);
   const [busy, setBusy] = useState(false);
+  const [chargeFilter, setChargeFilter] = useState<ChargeFilter>('TODAS');
 
   const activeResidents = useMemo(() => residents.filter((resident) => resident.status === 'ACTIVE'), [residents]);
   const selectedResident = activeResidents.find((resident) => resident.houseId === selectedHouseId);
@@ -49,6 +52,21 @@ export function AdminPixChargesScreen() {
     generated: charges.length,
     value: charges.reduce((sum, charge) => sum + (charge.status === 'PAID' ? charge.value : 0), 0)
   }), [charges]);
+
+  const chargeOptions = useMemo<Array<FilterOption<ChargeFilter>>>(() => {
+    const count = (status: string) => charges.filter((charge) => charge.status === status).length;
+    const list: Array<FilterOption<ChargeFilter>> = [
+      { key: 'TODAS', label: 'Todas', count: charges.length },
+      { key: 'PAID', label: 'Pagas', count: count('PAID') },
+      { key: 'PENDING', label: 'Pendentes', count: count('PENDING') },
+      { key: 'OVERDUE', label: 'Vencidas', count: count('OVERDUE') }
+    ];
+    if (count('CANCELLED') > 0) {
+      list.push({ key: 'CANCELLED', label: 'Canceladas', count: count('CANCELLED') });
+    }
+    return list;
+  }, [charges]);
+  const visibleCharges = chargeFilter === 'TODAS' ? charges : charges.filter((charge) => charge.status === chargeFilter);
 
   async function load() {
     if (!isAdmin) {
@@ -250,7 +268,9 @@ export function AdminPixChargesScreen() {
         <Row><Label>Vencidas</Label><Value>{totals.overdue}</Value></Row>
         <Row><Label>Recebido</Label><Money value={totals.value} /></Row>
       </Card>
-      {charges.map((charge) => (
+      {charges.length > 1 ? <FilterBar label="Situação da cobrança" options={chargeOptions} value={chargeFilter} onChange={setChargeFilter} /> : null}
+      {charges.length > 0 && visibleCharges.length === 0 ? <EmptyFilter message="Nenhuma cobrança nesta situação." onClear={() => setChargeFilter('TODAS')} /> : null}
+      {visibleCharges.map((charge) => (
         <PixChargeCard
           key={charge.id}
           charge={charge}
@@ -394,7 +414,7 @@ const styles = StyleSheet.create({
   },
   modeSubtitle: {
     color: colors.muted,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 16
   },
   houseSection: {
@@ -440,13 +460,13 @@ const styles = StyleSheet.create({
   },
   houseResident: {
     color: colors.muted,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 16,
     fontWeight: '700'
   },
   selectedHint: {
     color: colors.blue,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 17,
     fontWeight: '800'
   },

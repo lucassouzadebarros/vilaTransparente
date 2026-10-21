@@ -1,21 +1,38 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert } from '../utils/alert';
 import { useNavigation } from '@react-navigation/native';
 import { CheckCircle2, QrCode, RefreshCw } from 'lucide-react-native';
-import { Badge, Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
+import { EmptyFilter, FilterBar, FilterOption } from '../components/FilterBar';
+import { Badge, Button, Card, EmptyState, Label, Money, Row, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { Contribution } from '../types';
 import { currentMonth } from '../utils/month';
+
+type ContributionFilter = 'TODAS' | 'PAGAS' | 'PENDENTES' | 'CANCELADAS';
+
+/** Which filter an API status belongs to: an overdue charge is still a pending one. */
+function filterOf(status: string): ContributionFilter {
+  if (status === 'PAID') {
+    return 'PAGAS';
+  }
+  if (status === 'CANCELLED') {
+    return 'CANCELADAS';
+  }
+  return 'PENDENTES';
+}
 
 export function ContributionsScreen() {
   const navigation = useNavigation<any>();
   const { isAdmin } = useAuth();
   const [items, setItems] = useState<Contribution[]>([]);
   const [month] = useState(currentMonth());
+  const [loaded, setLoaded] = useState(false);
+  const [filter, setFilter] = useState<ContributionFilter>('TODAS');
 
   async function load() {
     setItems(await api.contributions(month));
+    setLoaded(true);
   }
 
   function manualPayment(item: Contribution) {
@@ -40,12 +57,30 @@ export function ContributionsScreen() {
   }
 
   useEffect(() => {
-    load();
+    load().catch(() => setLoaded(true));
   }, []);
+
+  const options = useMemo<Array<FilterOption<ContributionFilter>>>(() => {
+    const count = (key: ContributionFilter) => items.filter((item) => filterOf(item.status) === key).length;
+    const list: Array<FilterOption<ContributionFilter>> = [
+      { key: 'TODAS', label: 'Todas', count: items.length },
+      { key: 'PAGAS', label: 'Pagas', count: count('PAGAS') },
+      { key: 'PENDENTES', label: 'Pendentes', count: count('PENDENTES') }
+    ];
+    if (count('CANCELADAS') > 0) {
+      list.push({ key: 'CANCELADAS', label: 'Canceladas', count: count('CANCELADAS') });
+    }
+    return list;
+  }, [items]);
+
+  const visible = filter === 'TODAS' ? items : items.filter((item) => filterOf(item.status) === filter);
 
   return (
     <Screen title="Contribuições" subtitle="Casas e status Pix" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
-      {items.map((item) => (
+      {items.length > 1 ? <FilterBar label="Situação da contribuição" options={options} value={filter} onChange={setFilter} /> : null}
+      {loaded && items.length === 0 ? <EmptyState title="Nenhuma contribuição neste mês." /> : null}
+      {items.length > 0 && visible.length === 0 ? <EmptyFilter message="Nenhuma contribuição nesta situação." onClear={() => setFilter('TODAS')} /> : null}
+      {visible.map((item) => (
         <Card key={item.id}>
           <Row>
             <Value>{item.houseLabel}</Value>

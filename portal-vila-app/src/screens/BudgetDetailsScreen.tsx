@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { ExternalLink, Lock, Pencil, TriangleAlert, RefreshCw, ThumbsDown, ThumbsUp, Vote, Wrench, XCircle } from 'lucide-react-native';
-import { Badge, Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
+import { Badge, Button, Card, Label, Money, Row, Screen, Value, SectionTitle } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
@@ -209,7 +209,7 @@ export function BudgetDetailsScreen() {
       {budget && voting && showVoting ? (
         <Card>
           <Row>
-            <Value>Votação das casas</Value>
+            <SectionTitle>Votação das casas</SectionTitle>
             <Vote color={colors.blue} size={22} />
           </Row>
           <Label>
@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
     fontWeight: '900'
   },
   scoreLabel: {
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 15,
     fontWeight: '800'
   },
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
   },
   confirmText: {
     color: colors.ink,
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 17,
     fontWeight: '700'
   },

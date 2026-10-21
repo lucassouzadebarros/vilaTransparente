@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../utils/alert';
 import { Edit3, KeyRound, Plus, RefreshCw, Save, ShieldCheck, UserMinus, X } from 'lucide-react-native';
+import { EmptyFilter, FilterBar, FilterOption } from '../components/FilterBar';
 import { Badge, Button, Card, Field, Label, Row, Screen, Stack, Value } from '../components/ui';
 import { api, apiErrorMessage } from '../services/api';
 import { Resident, Sindico } from '../types';
@@ -20,6 +21,8 @@ export function ResidentsScreen() {
   const [resettingPasswordId, setResettingPasswordId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'TODOS' | 'ACTIVE' | 'INACTIVE'>('TODOS');
+  const [query, setQuery] = useState('');
   const [message, setMessage] = useState<{ residentId: number; text: string; type: 'success' | 'error' } | null>(null);
 
   async function load() {
@@ -192,6 +195,26 @@ export function ResidentsScreen() {
     load();
   }, []);
 
+  const options = useMemo<Array<FilterOption<'TODOS' | 'ACTIVE' | 'INACTIVE'>>>(
+    () => [
+      { key: 'TODOS', label: 'Todos', count: items.length },
+      { key: 'ACTIVE', label: 'Ativos', count: items.filter((item) => item.status === 'ACTIVE').length },
+      { key: 'INACTIVE', label: 'Inativos', count: items.filter((item) => item.status === 'INACTIVE').length }
+    ],
+    [items]
+  );
+
+  // The search matches the name, the e-mail or the house number, ignoring case and accents.
+  const visible = useMemo(() => {
+    const plain = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const needle = plain(query.trim());
+    return items.filter(
+      (item) =>
+        (filter === 'TODOS' || item.status === filter) &&
+        (!needle || plain(item.name).includes(needle) || plain(item.email ?? '').includes(needle) || String(item.houseId) === needle.replace(/\D/g, ''))
+    );
+  }, [items, filter, query]);
+
   return (
     <Screen title="Moradores" subtitle="11 casas da vila" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       <Button title="Novo morador" icon={Plus} onPress={startCreate} />
@@ -255,7 +278,16 @@ export function ResidentsScreen() {
           <Label>Cadastre os moradores reais para gerar clientes e cobranças no Asaas.</Label>
         </Card>
       ) : null}
-      {items.map((item) => (
+      {!loading && !loadError && items.length > 0 ? (
+        <>
+          <Field label="Buscar morador" value={query} onChangeText={setQuery} placeholder="Nome, e-mail ou número da casa" />
+          <FilterBar label="Situação do morador" options={options} value={filter} onChange={setFilter} />
+        </>
+      ) : null}
+      {!loading && !loadError && items.length > 0 && visible.length === 0 ? (
+        <EmptyFilter message="Nenhum morador encontrado." onClear={() => { setFilter('TODOS'); setQuery(''); }} />
+      ) : null}
+      {visible.map((item) => (
         <Card key={item.id}>
           <Row>
             <Value>{item.name}</Value>
@@ -427,7 +459,7 @@ const styles = StyleSheet.create({
     left: 4
   },
   switchText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '900'
   },
   switchTextActive: {

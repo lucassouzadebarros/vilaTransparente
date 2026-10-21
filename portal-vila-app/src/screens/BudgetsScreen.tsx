@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Eye, Pencil, Plus, RefreshCw, Vote } from 'lucide-react-native';
 import { DemandTabs } from '../components/DemandTabs';
+import { EmptyFilter, FilterBar, FilterOption } from '../components/FilterBar';
 import { Badge, Button, Card, EmptyState, Label, Money, Row, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
@@ -16,6 +17,17 @@ function sortBudgets(budgets: Budget[]) {
     return aOpen - bOpen || (b.id ?? 0) - (a.id ?? 0);
   });
 }
+
+type BudgetFilter = 'TODOS' | 'MEU_VOTO' | 'EM_ANALISE' | 'APROVADO' | 'REJEITADO' | 'CANCELADO';
+
+const emptyMessages: Record<BudgetFilter, string> = {
+  TODOS: 'Nenhum orçamento cadastrado.',
+  MEU_VOTO: 'Nenhum orçamento aguardando o voto da sua casa.',
+  EM_ANALISE: 'Nenhum orçamento em votação agora.',
+  APROVADO: 'Nenhum orçamento aprovado.',
+  REJEITADO: 'Nenhum orçamento recusado.',
+  CANCELADO: 'Nenhum orçamento cancelado.'
+};
 
 /** Where the budget came from: the problem it answers, or the service it quotes (older records). */
 function originLabel(item: Budget, problemTitles: Record<number, string>, serviceTitles: Record<number, string>) {
@@ -38,6 +50,7 @@ export function BudgetsScreen() {
   const [problemTitles, setProblemTitles] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [filter, setFilter] = useState<BudgetFilter>('TODOS');
 
   async function load() {
     setLoading(true);
@@ -66,6 +79,39 @@ export function BudgetsScreen() {
     }, [])
   );
 
+  const matches = useCallback(
+    (item: Budget, key: BudgetFilter) => {
+      if (key === 'TODOS') {
+        return true;
+      }
+      if (key === 'MEU_VOTO') {
+        return item.status === 'EM_ANALISE' && awaitingMyVote(item.id ? votings[item.id] : undefined);
+      }
+      return item.status === key;
+    },
+    [votings]
+  );
+
+  // "Aguardando meu voto" is only offered to someone whose house can vote at all.
+  const canVoteAnywhere = useMemo(() => Object.values(votings).some((voting) => voting.canVote), [votings]);
+
+  const options = useMemo<Array<FilterOption<BudgetFilter>>>(() => {
+    const count = (key: BudgetFilter) => items.filter((item) => matches(item, key)).length;
+    const list: Array<FilterOption<BudgetFilter>> = [{ key: 'TODOS', label: 'Todos', count: items.length }];
+    if (canVoteAnywhere) {
+      list.push({ key: 'MEU_VOTO', label: 'Aguardando meu voto', count: count('MEU_VOTO') });
+    }
+    list.push(
+      { key: 'EM_ANALISE', label: 'Em votação', count: count('EM_ANALISE') },
+      { key: 'APROVADO', label: 'Aprovados', count: count('APROVADO') },
+      { key: 'REJEITADO', label: 'Recusados', count: count('REJEITADO') },
+      { key: 'CANCELADO', label: 'Cancelados', count: count('CANCELADO') }
+    );
+    return list;
+  }, [items, matches, canVoteAnywhere]);
+
+  const visible = useMemo(() => items.filter((item) => matches(item, filter)), [items, matches, filter]);
+
   return (
     <Screen title="Orçamentos" subtitle="Cotações e votação das casas" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       <DemandTabs current="budgets" />
@@ -78,8 +124,12 @@ export function BudgetsScreen() {
         </Card>
       ) : null}
       {loading ? <Label>Carregando orçamentos...</Label> : null}
+      {items.length > 0 ? <FilterBar label="Situação do orçamento" options={options} value={filter} onChange={setFilter} /> : null}
       {!loading && !error && items.length === 0 ? <EmptyState title="Nenhum orçamento cadastrado." /> : null}
-      {items.map((item) => {
+      {!loading && !error && items.length > 0 && visible.length === 0 ? (
+        <EmptyFilter message={emptyMessages[filter]} onClear={filter === 'TODOS' ? undefined : () => setFilter('TODOS')} />
+      ) : null}
+      {visible.map((item) => {
         const voting = item.id ? votings[item.id] : undefined;
         const openDetails = () => navigation.navigate('BudgetDetails', { id: item.id, refreshKey: Date.now() });
         return (
