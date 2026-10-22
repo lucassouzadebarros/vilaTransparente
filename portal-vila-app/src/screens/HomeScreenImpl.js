@@ -264,7 +264,7 @@ function MonthlyCard({ contribution, charge, month, navigation }) {
       </View>
       <View style={styles.monthlyCopy}>
         <View style={styles.cardHeaderRow}>
-          <View>
+          <View style={styles.cardHeaderTitle}>
             <Text style={styles.cardTitle}>Minha mensalidade</Text>
             <Text style={styles.cardMonth}>{contribution?.month ? monthLabel(contribution.month) : monthLabel(month)}</Text>
           </View>
@@ -623,11 +623,17 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: 7
   },
+  // On a 360px phone the title and the status do not fit side by side: the status goes below instead of past the card.
   cardHeaderRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 8
+  },
+  cardHeaderTitle: {
+    flexShrink: 1,
+    minWidth: 0
   },
   cardTitle: {
     color: colors.ink,
