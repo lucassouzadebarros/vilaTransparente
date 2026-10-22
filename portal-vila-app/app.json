@@ -13,7 +13,7 @@
       "backgroundColor": "#0B5C6B"
     },
     "assetBundlePatterns": [
-      "**/*"
+      "assets/**/*"
     ],
     "plugins": [
       [
