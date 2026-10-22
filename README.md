@@ -122,6 +122,21 @@ Sem aparelho registrado nada e enviado. Para desligar no servidor: `PORTAL_PUSH_
   casa, que pode receber novo convite. A conta de administrador nao se exclui pelo app (409). A acao entra no historico
   (`ACCOUNT_ERASED`) sem o e-mail antigo. Teste: `AccountErasureTest`.
 
+## Modo demonstracao
+
+O login tem o botao "Ver demonstracao": abre o app inteiro com dados de exemplo (um "Condominio Exemplo" inventado), sem conta e sem
+rede. Serve para quem quer conhecer o app e para o revisor da Google Play (instrucao em "Detalhes do login" da Play Console).
+
+- `src/demo/demoMode.ts`: liga/desliga o modo e cria a sessao de exemplo (so em memoria, nunca gravada; `Session.demo`).
+- `src/demo/demoAdapter.ts`: no lugar da rede, o `apiClient` (em `services/api.ts`) usa este adaptador enquanto o modo esta ligado.
+  Leituras devolvem os dados de exemplo; gravacoes nao mudam nada (devolvem o que foi enviado). Fica so na memoria o que a pessoa fez
+  na demonstracao (voto em orcamento, comentario), e some ao sair.
+- `src/demo/demoData.ts`: os dados de exemplo, que acompanham o mes de hoje. Tem as visoes de administracao e de morador (Casa 01).
+- `src/components/DemoBanner.tsx`: faixa fixa "Modo demonstracao" com troca de visao e saida. O push e o `EventSource` ficam desligados.
+- **Novo endpoint em `api.ts`?** Acrescente o caso em `read` (GET) ou `write` (POST/PUT/DELETE) do adaptador e os dados em `demoData.ts`;
+  uma leitura sem caso responde 404 "Esta tela nao tem dados de exemplo".
+- Testado: nenhuma requisicao sai do navegador (API apontada para uma porta morta), sem erros no console, celular de 360 px.
+
 ## Migracoes do banco
 
 `MigrationsTest` roda todas as migracoes (`db/migration`) num banco em memoria e confere se as entidades batem com as

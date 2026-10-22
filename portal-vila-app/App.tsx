@@ -2,6 +2,7 @@ import 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { Platform, StyleSheet, View } from 'react-native';
 import { AlertHost } from './src/components/AlertHost';
+import { DemoBanner } from './src/components/DemoBanner';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { ChangePasswordScreen } from './src/screens/ChangePasswordScreen';
@@ -23,7 +24,8 @@ function Entry() {
     <View style={styles.host}>
       <View style={[styles.appFrame, useWideFrame ? styles.appFrameWide : null]}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
-        {session?.mustChangePassword ? <ChangePasswordScreen forced /> : session ? <AppNavigator /> : <LoginScreen />}
+        {session?.demo ? <DemoBanner /> : null}
+        {session?.mustChangePassword ? <ChangePasswordScreen forced /> : session ? <AppNavigator key={session.demo ? session.role : 'app'} /> : <LoginScreen />}
         <AlertHost />
       </View>
     </View>

@@ -25,6 +25,7 @@ import {
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { useAuth } from '../context/AuthContext';
+import { isDemoMode } from '../demo/demoMode';
 import { api } from '../services/api';
 import { colors, spacing } from '../theme';
 import { currentMonth, monthLabel } from '../utils/month';
@@ -86,7 +87,7 @@ export function HomeScreen() {
       load();
       const interval = setInterval(load, 15000);
       let events = null;
-      if (typeof window !== 'undefined' && typeof window.EventSource === 'function') {
+      if (!isDemoMode() && typeof window !== 'undefined' && typeof window.EventSource === 'function') {
         events = new window.EventSource(api.dashboardEventsUrl());
         events.addEventListener('dashboard-changed', load);
       }

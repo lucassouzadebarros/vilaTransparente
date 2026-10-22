@@ -3,6 +3,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { BarChart3, Eye, Home, Lock, Plus, QrCode, RefreshCw } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Badge, Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
+import { isDemoMode } from '../demo/demoMode';
 import { api } from '../services/api';
 import { Contribution, Dashboard, Expense, Movement, PixCharge, PortalDocument } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -88,7 +89,7 @@ export function CashBoxScreen() {
       const interval = setInterval(refresh, 15000);
 
       let events: EventSource | null = null;
-      if (typeof window !== 'undefined' && typeof window.EventSource === 'function') {
+      if (!isDemoMode() && typeof window !== 'undefined' && typeof window.EventSource === 'function') {
         events = new window.EventSource(api.dashboardEventsUrl());
         events.addEventListener('dashboard-changed', refresh);
       }
