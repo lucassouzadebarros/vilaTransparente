@@ -991,13 +991,13 @@ class ResidentController {
     }
 
     /** For the administration: every active house, whether it already has a resident and whether it has an open invitation. */
-    @GetMapping("/registration-houses")
+    @GetMapping("/houses")
     @PreAuthorize("hasRole('ADMIN')")
-    List<RegistrationHouseOption> registrationHouses() {
+    List<HouseOption> houseOptions() {
         java.util.Set<Long> invited = new java.util.HashSet<>();
         invites.open().forEach(invite -> invited.add(invite.houseId));
         return houses.findByActiveTrueOrderByNumberAsc().stream()
-            .map(house -> new RegistrationHouseOption(
+            .map(house -> new HouseOption(
                 house.id,
                 house.number,
                 house.label,
@@ -1081,7 +1081,6 @@ class ResidentController {
             request.phone(),
             request.documentNumber(),
             request.password(),
-            true,
             false
         );
         invites.markUsed(invite, saved.id);
@@ -1114,7 +1113,6 @@ class ResidentController {
             resident.phone,
             resident.documentNumber,
             temporaryPassword,
-            true,
             true
         );
         saved.temporaryPassword = temporaryPassword;
@@ -1173,15 +1171,11 @@ class ResidentController {
         String phone,
         String documentNumber,
         String password,
-        boolean allowAnyHouse,
         boolean mustChangePassword
     ) {
         House house = houses.findById(houseId)
             .filter(candidate -> candidate.active)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Casa não encontrada."));
-        if (!allowAnyHouse && (house.number == null || house.number < 2 || house.number > 11)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cadastro publico permitido apenas para as casas 02 a 11.");
-        }
         if (residents.findFirstByHouseIdAndStatusOrderByCreatedAtDesc(house.id, "ACTIVE").isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Casa ja possui morador cadastrado.");
         }

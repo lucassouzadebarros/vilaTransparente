@@ -8,8 +8,9 @@ import { PixChargeCard } from '../components/pix/PixChargeCard';
 import { Badge, Button, Card, Field, Label, Money, Row, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
-import { PixCharge, Resident } from '../types';
+import { HouseOption, PixCharge, Resident } from '../types';
 import { colors, spacing } from '../theme';
+import { houseLabelOf } from '../utils/houses';
 import { currentMonth } from '../utils/month';
 
 type GenerationMode = 'all' | 'house';
@@ -33,6 +34,7 @@ export function AdminPixChargesScreen() {
   const [selectedHouseId, setSelectedHouseId] = useState<number | null>(null);
   const [charges, setCharges] = useState<PixCharge[]>([]);
   const [residents, setResidents] = useState<Resident[]>([]);
+  const [houses, setHouses] = useState<HouseOption[]>([]);
   const [busy, setBusy] = useState(false);
   const [chargeFilter, setChargeFilter] = useState<ChargeFilter>('TODAS');
 
@@ -72,12 +74,14 @@ export function AdminPixChargesScreen() {
     if (!isAdmin) {
       return;
     }
-    const [nextCharges, nextResidents] = await Promise.all([
+    const [nextCharges, nextResidents, nextHouses] = await Promise.all([
       api.pixCharges(month),
-      api.residents()
+      api.residents(),
+      api.houses()
     ]);
     setCharges(nextCharges);
     setResidents(nextResidents);
+    setHouses(nextHouses);
     if (!selectedHouseId) {
       setSelectedHouseId(nextResidents.find((resident) => resident.status === 'ACTIVE')?.houseId ?? null);
     }
@@ -233,7 +237,7 @@ export function AdminPixChargesScreen() {
                     >
                       <View style={styles.houseInfo}>
                         <Text style={[styles.houseTitle, selected ? styles.houseTitleSelected : null]}>
-                          Casa {String(resident.houseId).padStart(2, '0')}
+                          {houseLabelOf(houses, resident.houseId)}
                         </Text>
                         <Text style={styles.houseResident}>{resident.name}</Text>
                       </View>
@@ -247,7 +251,7 @@ export function AdminPixChargesScreen() {
             )}
             {selectedResident ? (
               <Text style={styles.selectedHint}>
-                Gerando uma cobrança para Casa {String(selectedResident.houseId).padStart(2, '0')} - {selectedResident.name}.
+                Gerando uma cobrança para {houseLabelOf(houses, selectedResident.houseId)} - {selectedResident.name}.
               </Text>
             ) : null}
           </View>

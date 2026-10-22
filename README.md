@@ -114,6 +114,16 @@ Sem aparelho registrado nada e enviado. Para desligar no servidor: `PORTAL_PUSH_
 
 `MigrationsTest` roda todas as migracoes (`db/migration`) num banco em memoria e confere se as entidades batem com as
 tabelas. Mantenha as migracoes novas simples (uma coluna por `alter table`, tipos ANSI) para rodarem no PostgreSQL e no teste.
+`CondominiumMigrationTest` aplica V1 a V23, grava dados no formato da Vila, aplica a V24 e confere que nada se perdeu.
+
+## Varios condominios (em andamento)
+
+O app esta sendo preparado para atender mais de um condominio, sem mudar nada para a Vila. A V24 cria `condominiums`, cadastra
+a Vila como condominio 1 (com o nome que ja estava em `settings`) e coloca `condominium_id` nas 20 tabelas de dados. Toda linha
+que ja existia e toda linha nova ficam com a Vila (`default 1`), com chave estrangeira e indice. O numero da casa passa a ser
+unico dentro do condominio (`houses.number` deixou de ser unico no sistema todo). Os proximos passos gravam o condominio de
+forma explicita em cada insercao, filtram toda leitura por ele e tiram o `default`. As telas de administrador usam a lista de
+casas da API (`GET /api/residents/houses`) e mostram o rotulo da casa, nunca o id.
 
 ## Prazo da votacao e historico do relato
 

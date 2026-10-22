@@ -254,7 +254,7 @@ export type Resident = {
 };
 
 /** For the administration: a house, whether it still has nobody in it, and whether it has an open invite. */
-export type RegistrationHouseOption = {
+export type HouseOption = {
   houseId: number;
   number: number;
   label: string;
