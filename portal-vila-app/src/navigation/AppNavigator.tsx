@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { View } from 'react-native';
-import { NavigationContainer, ParamListBase, createNavigationContainerRef, getFocusedRouteNameFromRoute } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, NavigationContainer, ParamListBase, createNavigationContainerRef, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { BottomTabBar, BottomTabBarProps, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ClipboardList, FileText, Home, MoreHorizontal, WalletCards } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { Sidebar } from '../components/Sidebar';
-import { colors } from '../theme';
+import { colors, isDark } from '../theme';
 import { useWideLayout } from '../utils/layout';
 import { AdminPixChargesScreen } from '../screens/AdminPixChargesScreen';
 import { AuditLogScreen } from '../screens/AuditLogScreen';
@@ -128,6 +128,13 @@ function MoreStackNavigator() {
 
 const navigationRef = createNavigationContainerRef<ParamListBase>();
 
+/** The navigator's own colors (screen background, bottom bar) follow the app palette, light or dark. */
+const baseTheme = isDark ? DarkTheme : DefaultTheme;
+const navigationTheme = {
+  ...baseTheme,
+  colors: { ...baseTheme.colors, primary: colors.blue, background: colors.bg, card: colors.surface, text: colors.ink, border: colors.border, notification: colors.red }
+};
+
 function PortalTabs({ wide }: { wide: boolean }) {
   return (
     <Tabs.Navigator
@@ -198,6 +205,7 @@ export function AppNavigator() {
       <View style={{ flex: 1, minWidth: 0 }}>
         <NavigationContainer
           ref={navigationRef}
+          theme={navigationTheme}
           onReady={syncCurrent}
           onStateChange={syncCurrent}
           documentTitle={{ formatter: (_options, route) => (route && screenTitles[route.name] ? `${screenTitles[route.name]} · Portal da Vila` : 'Portal da Vila') }}

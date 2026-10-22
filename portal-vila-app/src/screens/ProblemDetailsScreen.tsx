@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
     maxWidth: '33%',
     aspectRatio: 1,
     borderRadius: 8,
-    backgroundColor: '#EEF1EF'
+    backgroundColor: colors.pressed
   },
   photoPress: {
     flex: 1,
@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
     minHeight: 60,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#C5CDC9',
+    borderColor: colors.border,
     backgroundColor: colors.blueSoft,
     paddingHorizontal: spacing.md,
     flexDirection: 'row',

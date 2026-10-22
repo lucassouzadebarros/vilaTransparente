@@ -578,7 +578,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#16202A',
+    shadowColor: colors.ink,
     shadowOpacity: 0,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
@@ -591,7 +591,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: 12,
     gap: 10,
-    shadowColor: '#16202A',
+    shadowColor: colors.ink,
     shadowOpacity: 0,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
@@ -639,7 +639,7 @@ const styles = StyleSheet.create({
   inputFrame: {
     minHeight: 44,
     borderWidth: 1,
-    borderColor: '#C5CDC9',
+    borderColor: colors.border,
     borderRadius: 7,
     backgroundColor: colors.surface,
     justifyContent: 'center'
@@ -695,7 +695,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 8,
-    backgroundColor: '#F8F9F8',
+    backgroundColor: colors.surfaceAlt,
     padding: 10,
     gap: 9
   },
@@ -764,7 +764,7 @@ const styles = StyleSheet.create({
     gap: 8
   },
   documentActionButtonDanger: {
-    borderColor: '#F0C4BF'
+    borderColor: colors.dangerBorder
   },
   documentActionText: {
     color: colors.blue,
@@ -820,7 +820,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     gap: 10,
-    shadowColor: '#16202A',
+    shadowColor: colors.ink,
     shadowOpacity: 0,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 7 },

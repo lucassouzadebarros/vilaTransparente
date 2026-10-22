@@ -15,9 +15,10 @@ import {
   WalletCards
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { useAuth } from '../context/AuthContext';
+import { ThemeSwitch } from '../components/ThemeSwitch';
 import { colors, spacing } from '../theme';
 
 type MenuItem = {
@@ -161,6 +162,14 @@ export function MoreScreen() {
             </View>
           );
         })}
+        {Platform.OS === 'web' ? (
+          <View style={styles.group}>
+            <Text role="heading" aria-level={2} style={styles.groupTitle}>
+              Aparência
+            </Text>
+            <ThemeSwitch />
+          </View>
+        ) : null}
       </View>
     </ScrollView>
   );
@@ -229,7 +238,7 @@ const styles = StyleSheet.create({
     width: '100%',
     padding: 0,
     gap: 24,
-    shadowColor: '#16202A',
+    shadowColor: colors.ink,
     shadowOpacity: 0,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },

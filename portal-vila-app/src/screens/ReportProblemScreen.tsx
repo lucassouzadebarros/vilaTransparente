@@ -55,14 +55,14 @@ const categories = [
 
 const priorities = [
   { label: 'Baixa', icon: CircleArrowDown, color: colors.green },
-  { label: 'Média', icon: CircleMinus, color: '#8A5200' },
-  { label: 'Alta', icon: CircleArrowUp, color: '#B45309' },
+  { label: 'Média', icon: CircleMinus, color: colors.amber },
+  { label: 'Alta', icon: CircleArrowUp, color: colors.amber },
   { label: 'Urgente', icon: CircleAlert, color: colors.red }
 ];
 
 const statusOptions: Array<{ value: ProblemReport['status']; label: string; icon: LucideIcon; color: string }> = [
   { value: 'ABERTO', label: 'Aberto', icon: CircleAlert, color: colors.blue },
-  { value: 'EM_ANALISE', label: 'Em análise', icon: Clock3, color: '#8A5200' },
+  { value: 'EM_ANALISE', label: 'Em análise', icon: Clock3, color: colors.amber },
   { value: 'RESOLVIDO', label: 'Resolvido', icon: CheckCircle2, color: colors.green },
   { value: 'CANCELADO', label: 'Cancelado', icon: CircleX, color: colors.red }
 ];
@@ -631,10 +631,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#EEF1EF',
+    borderColor: colors.pressed,
     padding: 34,
     gap: 22,
-    shadowColor: '#16202A',
+    shadowColor: colors.ink,
     shadowOpacity: 0,
     shadowRadius: 22,
     shadowOffset: { width: 0, height: 10 },
@@ -728,7 +728,7 @@ const styles = StyleSheet.create({
     minHeight: 66,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#C5CDC9',
+    borderColor: colors.border,
     backgroundColor: colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
@@ -816,7 +816,7 @@ const styles = StyleSheet.create({
     width: '48%'
   },
   chipSelected: {
-    backgroundColor: '#F2F4F2'
+    backgroundColor: colors.surfaceAlt
   },
   chipPressed: {
     opacity: 0.8
@@ -866,7 +866,7 @@ const styles = StyleSheet.create({
     width: '31%',
     aspectRatio: 1,
     borderRadius: 8,
-    backgroundColor: '#EEF1EF'
+    backgroundColor: colors.pressed
   },
   photoActionsRow: {
     flexDirection: 'row',
@@ -906,7 +906,7 @@ const styles = StyleSheet.create({
     height: 122,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#C5CDC9',
+    borderColor: colors.border,
     borderStyle: 'dashed',
     backgroundColor: colors.surface,
     flexDirection: 'row',
@@ -932,7 +932,7 @@ const styles = StyleSheet.create({
     width: 172,
     height: 122,
     borderRadius: 8,
-    backgroundColor: '#EEF1EF',
+    backgroundColor: colors.pressed,
     overflow: 'visible'
   },
   thumbnailCompact: {
@@ -947,7 +947,7 @@ const styles = StyleSheet.create({
   thumbnailPlaceholder: {
     flex: 1,
     borderRadius: 8,
-    backgroundColor: '#EEF1EF'
+    backgroundColor: colors.pressed
   },
   removePhoto: {
     position: 'absolute',
@@ -961,7 +961,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#16202A',
+    shadowColor: colors.ink,
     shadowOpacity: 0,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
@@ -1006,8 +1006,8 @@ const styles = StyleSheet.create({
     minHeight: 70,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#B8E2D1',
-    backgroundColor: '#EAF8F2',
+    borderColor: colors.greenBorder,
+    backgroundColor: colors.greenSoft,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 17,

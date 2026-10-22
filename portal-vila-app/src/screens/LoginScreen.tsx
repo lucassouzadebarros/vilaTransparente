@@ -948,7 +948,7 @@ const styles = StyleSheet.create({
     width: 430,
     height: 220,
     borderRadius: 220,
-    backgroundColor: '#EEF1EF',
+    backgroundColor: colors.pressed,
     opacity: 0.78
   },
   backdropCloud: {
@@ -956,7 +956,7 @@ const styles = StyleSheet.create({
     width: 54,
     height: 15,
     borderRadius: 999,
-    backgroundColor: '#EEF1EF',
+    backgroundColor: colors.pressed,
     opacity: 0.45
   },
   backdropCloudLeft: {
@@ -992,7 +992,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 10,
     borderRadius: 999,
-    backgroundColor: '#C8E0E4'
+    backgroundColor: colors.blueBorder
   },
   backdropLeafOne: {
     top: 2,
@@ -1023,13 +1023,13 @@ const styles = StyleSheet.create({
   backdropHouse: {
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
-    backgroundColor: '#E3E8E5'
+    backgroundColor: colors.track
   },
   backdropHouseSoft: {
-    backgroundColor: '#EEF1EF'
+    backgroundColor: colors.pressed
   },
   backdropHouseMuted: {
-    backgroundColor: '#DCE1DE'
+    backgroundColor: colors.border
   },
   brand: {
     alignItems: 'center',
@@ -1076,9 +1076,9 @@ const styles = StyleSheet.create({
   },
   raisedCard: {
     borderRadius: 14,
-    borderColor: '#E3E8E5',
+    borderColor: colors.track,
     padding: 14,
-    shadowColor: '#16202A',
+    shadowColor: colors.ink,
     shadowOpacity: 0,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
@@ -1207,7 +1207,7 @@ const styles = StyleSheet.create({
   },
   loginInputFrameError: {
     borderColor: colors.red,
-    backgroundColor: '#FFF8F8'
+    backgroundColor: colors.redSoft
   },
   loginInputIcon: {
     width: 40,
@@ -1399,10 +1399,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E3E8E5',
+    borderColor: colors.track,
     padding: 14,
     gap: 10,
-    shadowColor: '#16202A',
+    shadowColor: colors.ink,
     shadowOpacity: 0,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
@@ -1457,17 +1457,17 @@ const styles = StyleSheet.create({
   },
   houseSelectedModern: {
     borderColor: colors.blue,
-    backgroundColor: '#F2F4F2'
+    backgroundColor: colors.surfaceAlt
   },
   houseDisabledModern: {
     opacity: 0.72,
-    backgroundColor: '#F8F9F8'
+    backgroundColor: colors.surfaceAlt
   },
   houseIconBox: {
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: '#EAF9F3',
+    backgroundColor: colors.greenSoft,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -1475,7 +1475,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.blueSoft
   },
   houseIconBoxDisabled: {
-    backgroundColor: '#EEF1EF'
+    backgroundColor: colors.pressed
   },
   houseCopy: {
     gap: 2
@@ -1523,7 +1523,7 @@ const styles = StyleSheet.create({
   },
   registerInputFrameError: {
     borderColor: colors.red,
-    backgroundColor: '#FFF8F8'
+    backgroundColor: colors.redSoft
   },
   registerInputIcon: {
     width: 38,
@@ -1579,8 +1579,8 @@ const styles = StyleSheet.create({
     minHeight: 58,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#B8E7D4',
-    backgroundColor: '#E7F8F0',
+    borderColor: colors.greenBorder,
+    backgroundColor: colors.greenSoft,
     padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',

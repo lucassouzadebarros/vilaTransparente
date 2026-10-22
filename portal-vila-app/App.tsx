@@ -6,7 +6,7 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { ChangePasswordScreen } from './src/screens/ChangePasswordScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
-import { colors } from './src/theme';
+import { colors, isDark } from './src/theme';
 import { useWideLayout } from './src/utils/layout';
 import { setupWebAccessibility } from './src/utils/webAccessibility';
 import { setupWebFont } from './src/utils/webFont';
@@ -22,7 +22,7 @@ function Entry() {
   return (
     <View style={styles.host}>
       <View style={[styles.appFrame, useWideFrame ? styles.appFrameWide : null]}>
-        <StatusBar style="dark" />
+        <StatusBar style={isDark ? 'light' : 'dark'} />
         {session?.mustChangePassword ? <ChangePasswordScreen forced /> : session ? <AppNavigator /> : <LoginScreen />}
         <AlertHost />
       </View>

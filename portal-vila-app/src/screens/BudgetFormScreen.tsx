@@ -746,7 +746,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#C5CDC9',
+    borderColor: colors.border,
     backgroundColor: colors.blueSoft,
     padding: spacing.md,
     zIndex: 1
@@ -765,7 +765,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 13,
     gap: 10,
-    shadowColor: '#16202A',
+    shadowColor: colors.ink,
     shadowOpacity: 0,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 5 },

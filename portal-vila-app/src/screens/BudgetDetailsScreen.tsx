@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
   },
   quoteRowCurrent: {
     borderColor: colors.blue,
-    backgroundColor: '#F2F4F2'
+    backgroundColor: colors.surfaceAlt
   },
   quoteCopy: {
     flex: 1,

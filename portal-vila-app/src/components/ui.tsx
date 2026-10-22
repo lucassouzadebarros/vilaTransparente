@@ -77,7 +77,7 @@ const toneStyle: Record<Tone, { bg: string; fg: string; Icon: LucideIcon }> = {
   ok: { bg: colors.greenSoft, fg: colors.green, Icon: CheckCircle2 },
   wait: { bg: colors.amberSoft, fg: colors.amber, Icon: Clock3 },
   bad: { bg: colors.redSoft, fg: colors.red, Icon: CircleAlert },
-  off: { bg: '#ECEFED', fg: colors.muted, Icon: Circle },
+  off: { bg: colors.track, fg: colors.muted, Icon: Circle },
   info: { bg: colors.blueSoft, fg: colors.blue, Icon: Circle }
 };
 
@@ -158,7 +158,7 @@ export function Button({ title, onPress, icon: Icon, variant = 'primary', disabl
   // Danger is a quiet red outline, not a solid block: a destructive action should be findable, not the loudest thing.
   const bg = variant === 'primary' ? colors.blue : colors.surface;
   const fg = variant === 'primary' ? colors.surface : variant === 'danger' ? colors.red : colors.blue;
-  const border = iconOnly ? 'transparent' : variant === 'primary' ? colors.blue : variant === 'danger' ? '#F0C4BF' : colors.border;
+  const border = iconOnly ? 'transparent' : variant === 'primary' ? colors.blue : variant === 'danger' ? colors.dangerBorder : colors.border;
   return (
     <Pressable
       accessibilityRole="button"
