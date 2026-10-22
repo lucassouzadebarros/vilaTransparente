@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
 import { InviteCheck } from '../types';
+import { openExternal, PRIVACY_URL } from '../utils/links';
 import { MIN_PASSWORD_LENGTH } from '../utils/password';
 
 type Mode = 'login' | 'register' | 'forgot' | 'reset' | 'resetDone';
@@ -364,6 +365,12 @@ export function LoginScreen() {
                 <LoginGhostButton title="Limpar sessão" icon={Trash2} onPress={clearSession} compact />
               </View>
             </Card>
+
+            <View style={styles.legalRow}>
+              <Pressable accessibilityRole="link" onPress={() => openExternal(PRIVACY_URL)} style={styles.inlineActionTarget}>
+                <Text style={styles.inlineAction}>Política de privacidade</Text>
+              </Pressable>
+            </View>
           </View>
         ) : mode === 'register' ? (
           <View style={styles.registerStackModern}>
@@ -1393,6 +1400,9 @@ const styles = StyleSheet.create({
   },
   supportCardModern: {
     gap: 12
+  },
+  legalRow: {
+    alignItems: 'center'
   },
   supportHeaderModern: {
     minHeight: 28,

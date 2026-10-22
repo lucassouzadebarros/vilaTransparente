@@ -21,6 +21,9 @@ record PasswordResetRequest(@NotBlank String email) {
 record PasswordResetConfirmRequest(@NotBlank String email, @NotBlank String code, @NotBlank String password) {
 }
 
+record DeleteAccountRequest(@NotBlank String password) {
+}
+
 record ChangePasswordRequest(@NotBlank String currentPassword, @NotBlank String newPassword) {
 }
 

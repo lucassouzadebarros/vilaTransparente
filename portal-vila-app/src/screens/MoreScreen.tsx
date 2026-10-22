@@ -11,6 +11,8 @@ import {
   LockOpen,
   ReceiptText,
   Settings,
+  ShieldCheck,
+  UserX,
   Users,
   WalletCards
 } from 'lucide-react-native';
@@ -20,12 +22,15 @@ import { SoftBackdrop } from '../components/SoftBackdrop';
 import { useAuth } from '../context/AuthContext';
 import { ThemeSwitch } from '../components/ThemeSwitch';
 import { colors, spacing } from '../theme';
+import { openExternal, PRIVACY_URL } from '../utils/links';
 
 type MenuItem = {
   title: string;
   description: string;
   icon: LucideIcon;
   route: string;
+  /** An address outside the app: the row opens it instead of a screen. */
+  url?: string;
   adminOnly?: boolean;
   danger?: boolean;
 };
@@ -36,6 +41,19 @@ const menuItems: MenuItem[] = [
     description: 'Atualize sua senha de acesso ao sistema.',
     icon: KeyRound,
     route: 'ChangePassword'
+  },
+  {
+    title: 'Excluir minha conta',
+    description: 'Apague seus dados pessoais do portal.',
+    icon: UserX,
+    route: 'DeleteAccount'
+  },
+  {
+    title: 'Política de privacidade',
+    description: 'Quais dados guardamos e seus direitos.',
+    icon: ShieldCheck,
+    route: 'PrivacyPolicy',
+    url: PRIVACY_URL
   },
   {
     title: 'Contribuições',
@@ -117,7 +135,7 @@ const menuGroups: Array<{ title: string; routes: string[] }> = [
   { title: 'Demandas', routes: ['ProblemReports', 'Budgets'] },
   { title: 'Moradores', routes: ['Residents', 'ReleaseHouse'] },
   { title: 'Administração', routes: ['Settings', 'AuditLog', 'WebhookEvents'] },
-  { title: 'Minha conta', routes: ['ChangePassword'] }
+  { title: 'Minha conta', routes: ['ChangePassword', 'DeleteAccount', 'PrivacyPolicy'] }
 ];
 
 export function MoreScreen() {
@@ -155,7 +173,7 @@ export function MoreScreen() {
                     first={index === 0}
                     last={index === items.length - 1}
                     compact={compact}
-                    onPress={() => navigation.navigate(item.route)}
+                    onPress={() => (item.url ? openExternal(item.url) : navigation.navigate(item.route))}
                   />
                 ))}
               </View>

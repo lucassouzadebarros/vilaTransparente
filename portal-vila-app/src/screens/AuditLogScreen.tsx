@@ -33,7 +33,8 @@ const actionLabels: Record<string, string> = {
   SINDICO_CHANGED: 'Síndico alterado',
   INVITE_CREATED: 'Convite de casa criado',
   INVITE_USED: 'Convite usado (morador criou o acesso)',
-  INVITE_REVOKED: 'Convite cancelado'
+  INVITE_REVOKED: 'Convite cancelado',
+  ACCOUNT_ERASED: 'Dados pessoais apagados'
 };
 
 const dangerActions = new Set(['EXPENSE_DELETED', 'PIX_CANCELLED', 'SERVICE_CANCELLED', 'BUDGET_CANCELADO', 'HOUSE_RELEASED', 'INVITE_REVOKED']);

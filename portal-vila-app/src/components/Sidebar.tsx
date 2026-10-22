@@ -15,6 +15,7 @@ import {
   Settings,
   Shield,
   TriangleAlert,
+  UserX,
   Users,
   WalletCards,
   Wrench
@@ -79,7 +80,10 @@ const sections: Section[] = [
   },
   {
     title: 'Minha conta',
-    entries: [{ label: 'Alterar senha', icon: KeyRound, route: 'ChangePassword', match: ['ChangePassword'] }]
+    entries: [
+      { label: 'Alterar senha', icon: KeyRound, route: 'ChangePassword', match: ['ChangePassword'] },
+      { label: 'Excluir minha conta', icon: UserX, route: 'DeleteAccount', match: ['DeleteAccount'] }
+    ]
   }
 ];
 

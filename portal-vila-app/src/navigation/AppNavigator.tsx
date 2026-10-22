@@ -14,6 +14,7 @@ import { BudgetDetailsScreen } from '../screens/BudgetDetailsScreen';
 import { BudgetFormScreen } from '../screens/BudgetFormScreen';
 import { BudgetsScreen } from '../screens/BudgetsScreen';
 import { ChangePasswordScreen } from '../screens/ChangePasswordScreen';
+import { DeleteAccountScreen } from '../screens/DeleteAccountScreen';
 import { CashBoxScreen } from '../screens/CashBoxScreen';
 import { ContributionsScreen } from '../screens/ContributionsScreen';
 import { DocumentsScreen } from '../screens/DocumentsScreen';
@@ -61,7 +62,8 @@ const screenTitles: Record<string, string> = {
   WebhookEvents: 'Logs do webhook',
   AuditLog: 'Histórico de alterações',
   Settings: 'Configurações',
-  ChangePassword: 'Alterar senha'
+  ChangePassword: 'Alterar senha',
+  DeleteAccount: 'Excluir conta'
 };
 
 /** A tab icon with a short bar above it on the current tab, so the place you are in does not depend on color alone. */
@@ -95,7 +97,8 @@ const tabOf: Record<string, string> = {
   WebhookEvents: 'Mais',
   AuditLog: 'Mais',
   Settings: 'Mais',
-  ChangePassword: 'Mais'
+  ChangePassword: 'Mais',
+  DeleteAccount: 'Mais'
 };
 
 /** The bottom bar, with the tab of the current screen marked even when the screen is not one of the five. */
@@ -192,6 +195,7 @@ function PortalTabs({ wide }: { wide: boolean }) {
       <Tabs.Screen name="AuditLog" component={AuditLogScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="Settings" component={SettingsScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="ChangePassword" component={ChangePasswordScreen} options={hiddenTabOptions} />
+      <Tabs.Screen name="DeleteAccount" component={DeleteAccountScreen} options={hiddenTabOptions} />
     </Tabs.Navigator>
   );
 }

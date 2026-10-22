@@ -110,6 +110,18 @@ de um morador muda de situacao ou e resolvido. O aparelho so recebe depois que:
 
 Sem aparelho registrado nada e enviado. Para desligar no servidor: `PORTAL_PUSH_ENABLED=false`.
 
+## Privacidade e exclusao de conta
+
+- Paginas publicas, servidas pelo mesmo site do app: `portal-vila-app/public/privacidade.html` (politica, LGPD) e
+  `public/excluir-conta.html` (como apagar a conta). O Expo copia a pasta `public/` para o `dist`. Os enderecos ficam em
+  `src/utils/links.ts` e vao para a Play Console (politica de privacidade e URL de exclusao de conta).
+- No app: Menu, Minha conta, Excluir minha conta (`POST /api/auth/delete-account`, pede a senha, limite de tentativas).
+  O administrador apaga os dados de um morador que pediu por e-mail em Moradores (`POST /api/admin/residents/{id}/erase`).
+- `AccountErasureService` apaga o que identifica a pessoa (nome, e-mail, telefone, CPF/CNPJ, senha, codigos de aviso, o e-mail no
+  historico de alteracoes) e desativa o acesso. Mensalidades, pagamentos, despesas, votos e relatos ficam, sem o nome, ligados a
+  casa, que pode receber novo convite. A conta de administrador nao se exclui pelo app (409). A acao entra no historico
+  (`ACCOUNT_ERASED`) sem o e-mail antigo. Teste: `AccountErasureTest`.
+
 ## Migracoes do banco
 
 `MigrationsTest` roda todas as migracoes (`db/migration`) num banco em memoria e confere se as entidades batem com as

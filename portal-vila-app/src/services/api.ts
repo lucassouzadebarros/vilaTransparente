@@ -146,6 +146,8 @@ export const api = {
     requestData<PasswordResetResponse>(apiClient.post('/auth/password-reset/request', { email })),
   confirmPasswordReset: (email: string, code: string, password: string) =>
     requestData<PasswordResetResponse>(apiClient.post('/auth/password-reset/confirm', { email, code, password })),
+  deleteAccount: (password: string) => requestData<{ status: string }>(apiClient.post('/auth/delete-account', { password })),
+  eraseResident: (id: number) => requestData<Resident>(apiClient.post(`/admin/residents/${id}/erase`)),
   changePassword: (currentPassword: string, newPassword: string) =>
     requestData<PasswordResetResponse>(apiClient.post('/auth/change-password', { currentPassword, newPassword })),
   checkInvite: (code: string) => requestData<InviteCheck>(apiClient.post('/residents/invite-check', { code })),
