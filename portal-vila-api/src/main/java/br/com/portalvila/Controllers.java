@@ -45,6 +45,7 @@ class AuthController {
     private final PasswordResetService passwordResetService;
     private final CurrentUserService currentUser;
     private final LoginAttemptLimiter loginLimiter;
+    private final AccountErasureService erasure;
 
     AuthController(
         AppUserRepository users,
@@ -55,8 +56,10 @@ class AuthController {
         PixGatewayClient gatewayClient,
         PasswordResetService passwordResetService,
         CurrentUserService currentUser,
-        LoginAttemptLimiter loginLimiter
+        LoginAttemptLimiter loginLimiter,
+        AccountErasureService erasure
     ) {
+        this.erasure = erasure;
         this.loginLimiter = loginLimiter;
         this.users = users;
         this.residents = residents;
@@ -66,6 +69,24 @@ class AuthController {
         this.gatewayClient = gatewayClient;
         this.passwordResetService = passwordResetService;
         this.currentUser = currentUser;
+    }
+
+    /** The signed-in resident deletes their own account (Google Play requires this inside the app). The password confirms it. */
+    @PostMapping("/delete-account")
+    Map<String, String> deleteAccount(@Valid @RequestBody DeleteAccountRequest request, HttpServletRequest http) {
+        AppUser user = currentUser.current();
+        String attemptKey = LoginAttemptLimiter.key("delete", user.email, http);
+        loginLimiter.check(attemptKey);
+        try {
+            erasure.eraseOwn(user, request.password());
+        } catch (ResponseStatusException ex) {
+            if (ex.getStatusCode() == HttpStatus.FORBIDDEN) {
+                loginLimiter.fail(attemptKey);
+            }
+            throw ex;
+        }
+        loginLimiter.succeed(attemptKey);
+        return Map.of("status", "EXCLUIDA");
     }
 
     @PostMapping("/login")
@@ -1302,6 +1323,24 @@ class AdminHouseController {
 
         audit.record("HOUSE_RELEASED", "HOUSE", house.id, house.label + " liberada - morador: " + resident.name);
         return resident;
+    }
+}
+
+@RestController
+@CrossOrigin
+@RequestMapping("/api/admin/residents")
+@PreAuthorize("hasRole('ADMIN')")
+class AdminResidentErasureController {
+    private final AccountErasureService erasure;
+
+    AdminResidentErasureController(AccountErasureService erasure) {
+        this.erasure = erasure;
+    }
+
+    /** Erases the personal data of a resident (a deletion request that came by e-mail). Financial records stay, without a name. */
+    @PostMapping("/{id}/erase")
+    Resident erase(@PathVariable Long id) {
+        return erasure.eraseResident(id);
     }
 }
 

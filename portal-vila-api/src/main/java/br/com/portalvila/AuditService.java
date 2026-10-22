@@ -44,6 +44,19 @@ class AuditService {
         entries.save(entry);
     }
 
+    /** For an entry whose author must not be the signed-in e-mail (an account that has just been erased). */
+    void recordAs(String actorEmail, String actorRole, String action, String entityType, Long entityId, String summary) {
+        AuditEntry entry = new AuditEntry();
+        entry.actorEmail = actorEmail;
+        entry.actorRole = actorRole;
+        entry.action = action;
+        entry.entityType = entityType;
+        entry.entityId = entityId;
+        entry.summary = summary == null ? null : summary.length() > SUMMARY_LIMIT ? summary.substring(0, SUMMARY_LIMIT) : summary;
+        entry.createdAt = LocalDateTime.now();
+        entries.save(entry);
+    }
+
     List<AuditEntry> latest() {
         return entries.findTop200ByOrderByCreatedAtDescIdDesc();
     }

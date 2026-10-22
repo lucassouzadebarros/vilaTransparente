@@ -31,7 +31,7 @@ Confirmar com o Lucas antes de enviar; na dúvida, declarar.
 ## Práticas de segurança
 
 - Dados criptografados em trânsito: **sim** (HTTPS).
-- O usuário pode pedir a exclusão dos dados: **sim**. Dentro do app (Minha conta, excluir conta) e por página na web (endereço a preencher na Play Console).
+- O usuário pode pedir a exclusão dos dados: **sim**. Dentro do app (Minha conta, excluir conta) e por página na web: `https://portal-vila-app.onrender.com/excluir-conta.html` (campo "URL de exclusão de conta" da Play Console).
 - Senhas guardadas com hash; código de convite guardado só como hash; CPF/CNPJ nunca volta para o app depois de salvo (só os 2 últimos dígitos).
 
 ## O que a exclusão apaga e o que fica
@@ -46,4 +46,4 @@ Confirmar com o Lucas antes de enviar; na dúvida, declarar.
 - **Recursos financeiros**: o app gera cobranças Pix de mensalidade condominial; não oferece empréstimo, investimento nem criptomoeda. Marcar como "outros recursos financeiros" e descrever.
 - **Anúncios**: não.
 - **Público-alvo**: 18+.
-- **Política de privacidade**: URL pública (a criar).
+- **Política de privacidade**: `https://portal-vila-app.onrender.com/privacidade.html` (publicada junto com o site; só colar na Play Console depois do deploy).

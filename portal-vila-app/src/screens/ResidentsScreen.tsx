@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../utils/alert';
-import { Edit3, KeyRound, Plus, RefreshCw, Save, ShieldCheck, UserMinus, X } from 'lucide-react-native';
+import { Edit3, KeyRound, Plus, RefreshCw, Save, ShieldCheck, UserMinus, UserX, X } from 'lucide-react-native';
 import { EmptyFilter, FilterBar, FilterOption } from '../components/FilterBar';
 import { InvitesCard } from '../components/InvitesCard';
 import { Badge, Button, Card, Field, Label, Row, Screen, Stack, Value, Facts } from '../components/ui';
@@ -24,6 +24,7 @@ export function ResidentsScreen() {
   const [saving, setSaving] = useState(false);
   const [syncingId, setSyncingId] = useState<number | null>(null);
   const [resettingPasswordId, setResettingPasswordId] = useState<number | null>(null);
+  const [erasingId, setErasingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   // The invitations card shows the houses with nobody in them: it starts over whenever the residents are reloaded or created.
@@ -166,6 +167,35 @@ export function ResidentsScreen() {
       Alert.alert('Asaas', text);
     } finally {
       setSyncingId(null);
+    }
+  }
+
+  function confirmErase(item: Resident) {
+    Alert.alert(
+      'Excluir dados pessoais',
+      `Apagar nome, e-mail, telefone, CPF/CNPJ e o acesso de ${item.name}? Isso não tem volta. As cobranças e os pagamentos continuam no caixa, sem o nome.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Excluir dados', style: 'destructive', onPress: () => eraseResident(item) }
+      ]
+    );
+  }
+
+  async function eraseResident(item: Resident) {
+    if (!item.id) {
+      return;
+    }
+    setErasingId(item.id);
+    setMessage(null);
+    try {
+      const saved = await api.eraseResident(item.id);
+      setItems((current) => current.map((resident) => (resident.id === saved.id ? saved : resident)));
+      setMessage({ residentId: item.id, type: 'success', text: 'Dados pessoais apagados. A casa já pode receber um novo convite.' });
+      setInvitesVersion((current) => current + 1);
+    } catch (error) {
+      setMessage({ residentId: item.id, type: 'error', text: apiErrorMessage(error, 'Não consegui apagar os dados.') });
+    } finally {
+      setErasingId(null);
     }
   }
 
@@ -370,6 +400,15 @@ export function ResidentsScreen() {
                   onPress={() => syncAsaas(item)}
                   disabled={syncingId === item.id || saving || !item.documentRegistered}
                 />
+                {item.name !== 'Morador removido' ? (
+                  <Button
+                    title={erasingId === item.id ? 'Apagando...' : 'Excluir dados pessoais'}
+                    icon={UserX}
+                    variant="danger"
+                    onPress={() => confirmErase(item)}
+                    disabled={erasingId === item.id}
+                  />
+                ) : null}
                 {item.status === 'ACTIVE' && sindico?.residentId !== item.id ? (
                   <Button
                     title={savingSindico ? 'Salvando...' : 'Definir como síndico'}

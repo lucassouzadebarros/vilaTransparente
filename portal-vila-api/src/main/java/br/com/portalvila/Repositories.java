@@ -101,6 +101,7 @@ interface ExcludedGatewayPaymentRepository extends JpaRepository<ExcludedGateway
 
 interface AuditEntryRepository extends JpaRepository<AuditEntry, Long> {
     List<AuditEntry> findTop200ByOrderByCreatedAtDescIdDesc();
+    List<AuditEntry> findByActorEmailIgnoreCase(String actorEmail);
 }
 
 interface ProblemReportRepository extends JpaRepository<ProblemReport, Long> {
