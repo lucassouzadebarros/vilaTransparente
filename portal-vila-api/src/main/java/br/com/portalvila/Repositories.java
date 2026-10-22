@@ -117,3 +117,9 @@ interface PushTokenRepository extends JpaRepository<PushToken, Long> {
 interface ProblemReportEventRepository extends JpaRepository<ProblemReportEvent, Long> {
     List<ProblemReportEvent> findByReportIdOrderByCreatedAtAscIdAsc(Long reportId);
 }
+
+interface HouseInviteRepository extends JpaRepository<HouseInvite, Long> {
+    Optional<HouseInvite> findByCodeHash(String codeHash);
+    List<HouseInvite> findByHouseIdAndUsedAtIsNullAndRevokedAtIsNull(Long houseId);
+    List<HouseInvite> findByUsedAtIsNullAndRevokedAtIsNullOrderByCreatedAtDesc();
+}

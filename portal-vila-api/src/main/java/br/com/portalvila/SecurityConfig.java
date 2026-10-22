@@ -47,7 +47,7 @@ class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
                     "/api/auth/login",
-                    "/api/auth/register-resident",
+
                     "/api/auth/password-reset/request",
                     "/api/auth/password-reset/confirm",
                     "/api/webhooks/asaas",
@@ -55,8 +55,8 @@ class SecurityConfig {
                     "/error"
                 ).permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/events/dashboard").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/residents/registration-houses").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/residents/self-registration").permitAll()
+                // Joining needs a code the administration made for the house: these two are the only open doors.
+                .requestMatchers(HttpMethod.POST, "/api/residents/invite-check", "/api/residents/register-with-invite").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/documents/*/file").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()

@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../utils/alert';
 import { Edit3, KeyRound, Plus, RefreshCw, Save, ShieldCheck, UserMinus, X } from 'lucide-react-native';
 import { EmptyFilter, FilterBar, FilterOption } from '../components/FilterBar';
+import { InvitesCard } from '../components/InvitesCard';
 import { Badge, Button, Card, Field, Label, Row, Screen, Stack, Value, Facts } from '../components/ui';
 import { api, apiErrorMessage } from '../services/api';
 import { Resident, Sindico } from '../types';
@@ -21,6 +22,8 @@ export function ResidentsScreen() {
   const [resettingPasswordId, setResettingPasswordId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // The invitations card shows the houses with nobody in them: it starts over whenever the residents are reloaded or created.
+  const [invitesVersion, setInvitesVersion] = useState(0);
   const [filter, setFilter] = useState<'TODOS' | 'ACTIVE' | 'INACTIVE'>('TODOS');
   const [query, setQuery] = useState('');
   const [message, setMessage] = useState<{ residentId: number; text: string; type: 'success' | 'error' } | null>(null);
@@ -35,6 +38,7 @@ export function ResidentsScreen() {
       ]);
       setItems(nextResidents);
       setSindico(nextSindico);
+      setInvitesVersion((current) => current + 1);
     } catch (error) {
       setLoadError(apiErrorMessage(error, 'Não consegui carregar os moradores.'));
     } finally {
@@ -120,6 +124,7 @@ export function ResidentsScreen() {
       setCreating(false);
       setEditingId(null);
       setDraft(null);
+      setInvitesVersion((current) => current + 1);
       setMessage({ residentId: saved.id ?? draft.id ?? 0, type: 'success', text: 'Dados salvos e cliente sincronizado.' });
       if (saved.temporaryPassword) {
         Alert.alert(
@@ -234,6 +239,7 @@ export function ResidentsScreen() {
           )}
         </Card>
       ) : null}
+      {!loading && !loadError ? <InvitesCard key={invitesVersion} /> : null}
       {creating && draft ? (
         <Card>
           <Value>Cadastrar morador</Value>

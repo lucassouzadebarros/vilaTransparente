@@ -27,7 +27,33 @@ record ChangePasswordRequest(@NotBlank String currentPassword, @NotBlank String 
 record PasswordResetResponse(String message, String debugCode) {
 }
 
-record RegistrationHouseOption(Long houseId, Integer number, String label, boolean available) {
+record RegistrationHouseOption(Long houseId, Integer number, String label, boolean available, boolean invited) {
+}
+
+record CreateInviteRequest(@NotNull Long houseId) {
+}
+
+record InviteCheckRequest(@NotBlank String code) {
+}
+
+record InviteCheckResponse(String houseLabel, Integer houseNumber) {
+}
+
+record InviteRegistrationRequest(
+    @NotBlank String code,
+    @NotBlank String name,
+    @NotBlank String email,
+    @NotBlank String phone,
+    @NotBlank String documentNumber,
+    @NotBlank String password
+) {
+}
+
+/** The code is only here, in the answer that creates it: it is not kept in a readable form. */
+record InviteIssuedResponse(Long id, Long houseId, Integer houseNumber, String houseLabel, String code, java.time.LocalDateTime expiresAt) {
+}
+
+record InviteResponse(Long id, Long houseId, Integer houseNumber, String houseLabel, java.time.LocalDateTime createdAt, java.time.LocalDateTime expiresAt, String createdBy) {
 }
 
 record ResidentRegistrationRequest(

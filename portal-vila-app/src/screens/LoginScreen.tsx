@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, CheckCircle2, Eye, EyeOff, Home, IdCard, KeyRound, LockKeyhole, LogIn, Mail, Phone, Shield, ShieldCheck, Trash2, UserPlus, UserRound } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
@@ -7,7 +7,7 @@ import { SoftBackdrop } from '../components/SoftBackdrop';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
-import { RegistrationHouseOption } from '../types';
+import { InviteCheck } from '../types';
 import { MIN_PASSWORD_LENGTH } from '../utils/password';
 
 type Mode = 'login' | 'register' | 'forgot' | 'reset' | 'resetDone';
@@ -29,9 +29,9 @@ export function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const [houses, setHouses] = useState<RegistrationHouseOption[]>([]);
-  const [housesLoading, setHousesLoading] = useState(false);
-  const [selectedHouseId, setSelectedHouseId] = useState<number | null>(null);
+  // First access: the code the administration made for the house comes first; it tells which house this is.
+  const [inviteCode, setInviteCode] = useState('');
+  const [inviteHouse, setInviteHouse] = useState<InviteCheck | null>(null);
   const [name, setName] = useState('');
   const [registerEmail, setRegisterEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -46,8 +46,9 @@ export function LoginScreen() {
   const documentError = documentFieldError(documentNumber);
   const passwordError = passwordFieldError(registerPassword);
   const confirmPasswordError = confirmPasswordFieldError(registerPassword, confirmPassword);
+  const inviteCodeReady = inviteCodeDigits(inviteCode).length === INVITE_CODE_LENGTH;
   const registrationIssues = [
-    selectedHouseId ? '' : 'selecione a casa',
+    inviteHouse ? '' : 'código da casa',
     name.trim() ? '' : 'nome',
     registerEmail.trim() ? registerEmailError : 'email',
     phone.trim() ? phoneError : 'telefone',
@@ -55,7 +56,7 @@ export function LoginScreen() {
     registerPassword ? passwordError : 'senha',
     confirmPassword ? confirmPasswordError : 'confirmação da senha'
   ].filter(Boolean);
-  const canSubmitRegistration = registrationIssues.length === 0 && !loading && !housesLoading;
+  const canSubmitRegistration = registrationIssues.length === 0 && !loading;
   const loginEmailError = emailFieldError(email);
   const loginPasswordError = password ? '' : '';
   const canSubmitLogin = Boolean(email.trim() && password && !loginEmailError && !loading);
@@ -71,36 +72,6 @@ export function LoginScreen() {
       && resetPassword === resetConfirmPassword
       && !loading
   );
-
-  useEffect(() => {
-    if (mode !== 'register') {
-      return;
-    }
-    loadRegistrationHouses();
-  }, [mode]);
-
-  async function loadRegistrationHouses() {
-    return refreshRegistrationHouses(true);
-  }
-
-  async function refreshRegistrationHouses(clearMessage: boolean) {
-    setHousesLoading(true);
-    if (clearMessage) {
-      setErrorMessage('');
-    }
-    try {
-      const options = await api.registrationHouses();
-      setHouses(options);
-      const selectedStillAvailable = options.some((house) => house.houseId === selectedHouseId && house.available);
-      if (!selectedHouseId || !selectedStillAvailable) {
-        setSelectedHouseId(options.find((house) => house.available)?.houseId ?? null);
-      }
-    } catch (error) {
-      setErrorMessage(apiErrorMessage(error, 'Não consegui carregar as casas disponíveis.'));
-    } finally {
-      setHousesLoading(false);
-    }
-  }
 
   async function submit() {
     const validation = validateLogin();
@@ -141,8 +112,8 @@ export function LoginScreen() {
     setLoading(true);
     setErrorMessage('');
     try {
-      await api.registerResident({
-        houseId: selectedHouseId as number,
+      await api.registerWithInvite({
+        code: inviteCode,
         name: name.trim(),
         email: normalizeEmail(registerEmail),
         phone: onlyDigits(phone),
@@ -152,7 +123,26 @@ export function LoginScreen() {
       await login(normalizeEmail(registerEmail), registerPassword);
     } catch (error) {
       setErrorMessage(apiErrorMessage(error, 'Não consegui concluir o cadastro. Confira os dados e tente novamente.'));
-      await refreshRegistrationHouses(false);
+      // A code that stopped working (used, cancelled, expired) sends the person back to type another one.
+      if ((error as { response?: { status?: number } }).response?.status === 404) {
+        setInviteHouse(null);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submitInviteCode() {
+    if (!inviteCodeReady) {
+      setErrorMessage('Digite os 8 caracteres do código que a administração te passou.');
+      return;
+    }
+    setLoading(true);
+    setErrorMessage('');
+    try {
+      setInviteHouse(await api.checkInvite(inviteCode));
+    } catch (error) {
+      setErrorMessage(apiErrorMessage(error, 'Não consegui conferir o código. Tente de novo.'));
     } finally {
       setLoading(false);
     }
@@ -162,8 +152,8 @@ export function LoginScreen() {
     const documentDigits = onlyDigits(documentNumber);
     const phoneDigits = onlyDigits(phone);
     const emailToValidate = normalizeEmail(registerEmail);
-    if (!selectedHouseId) {
-      return 'Selecione a casa referente ao cadastro.';
+    if (!inviteHouse) {
+      return 'Digite o código da sua casa para continuar.';
     }
     if (!name.trim() || !registerEmail.trim() || !phone.trim()) {
       return 'Preencha nome, e-mail e telefone.';
@@ -193,6 +183,7 @@ export function LoginScreen() {
 
   function openRegister() {
     setMode('register');
+    setInviteHouse(null);
     setErrorMessage('');
   }
 
@@ -344,9 +335,9 @@ export function LoginScreen() {
               </View>
               <LoginPrimaryButton title={loading ? 'Entrando...' : 'Entrar'} icon={LogIn} onPress={submit} disabled={!canSubmitLogin} />
               <View style={styles.loginFooterModern}>
-                <Text style={styles.loginHint}>Sem acesso ainda?</Text>
+                <Text style={styles.loginHint}>Primeiro acesso?</Text>
                 <Pressable accessibilityRole="button" onPress={openRegister} style={styles.inlineActionTarget}>
-                  <Text style={styles.inlineAction}>Cadastrar minha casa</Text>
+                  <Text style={styles.inlineAction}>Tenho um código da minha casa</Text>
                 </Pressable>
               </View>
             </Card>
@@ -357,11 +348,11 @@ export function LoginScreen() {
                   <Home color={colors.blue} size={29} strokeWidth={2.1} />
                 </View>
                 <View style={styles.signupCopy}>
-                  <Text style={styles.signupTitle}>Cadastrar minha casa</Text>
-                  <Text style={styles.signupText}>Moradores das casas 02 a 11 podem criar o acesso da própria casa.</Text>
+                  <Text style={styles.signupTitle}>Primeiro acesso</Text>
+                  <Text style={styles.signupText}>O acesso é só para moradores. A administração do condomínio te passa um código da sua casa: com ele você cria seu acesso.</Text>
                 </View>
               </View>
-              <LoginGhostButton title="Começar cadastro" icon={UserPlus} onPress={openRegister} />
+              <LoginGhostButton title="Tenho um código" icon={KeyRound} onPress={openRegister} />
             </Card>
 
             <Card style={[styles.raisedCard, styles.supportCardModern]}>
@@ -378,58 +369,62 @@ export function LoginScreen() {
           <View style={styles.registerStackModern}>
             <View style={styles.registerPanel}>
               <View style={styles.registerHeaderModern}>
-                <Pressable accessibilityRole="button" onPress={openLogin} style={styles.registerBackButton}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={inviteHouse ? 'Voltar e digitar outro código' : 'Voltar para entrar'}
+                  onPress={inviteHouse ? () => { setInviteHouse(null); setErrorMessage(''); } : openLogin}
+                  style={styles.registerBackButton}
+                >
                   <ArrowLeft color={colors.blue} size={21} />
                 </Pressable>
                 <View style={styles.headerCopy}>
-                  <Text style={styles.registerTitle}>Cadastro da casa</Text>
-                  <Text style={styles.registerSubtitle}>Escolha sua casa e preencha os dados do responsável.</Text>
+                  <Text role="heading" style={styles.registerTitle}>{inviteHouse ? `Cadastro da ${inviteHouse.houseLabel}` : 'Primeiro acesso'}</Text>
+                  <Text style={styles.registerSubtitle}>
+                    {inviteHouse ? 'Preencha os dados do responsável pela casa.' : 'Digite o código da sua casa, que a administração te passou.'}
+                  </Text>
                 </View>
               </View>
 
               {errorMessage ? (
                 <View style={styles.errorBanner}>
-                  <Text style={styles.errorBannerTitle}>Não consegui concluir o cadastro</Text>
+                  <Text style={styles.errorBannerTitle}>{inviteHouse ? 'Não consegui concluir o cadastro' : 'Não consegui conferir o código'}</Text>
                   <Text style={styles.errorBannerText}>{errorMessage}</Text>
                 </View>
               ) : null}
 
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Casa</Text>
-                {housesLoading ? <Text style={styles.muted}>Carregando casas...</Text> : null}
-                <View style={styles.houseGridModern}>
-                  {houses.map((house) => {
-                    const selected = selectedHouseId === house.houseId;
-                    return (
-                      <Pressable
-                        key={house.houseId}
-                        accessibilityRole="button"
-                        disabled={!house.available}
-                        onPress={() => setSelectedHouseId(house.houseId)}
-                        style={[
-                          styles.houseOptionModern,
-                          selected ? styles.houseSelectedModern : null,
-                          !house.available ? styles.houseDisabledModern : null
-                        ]}
-                      >
-                        <View style={[styles.houseIconBox, selected ? styles.houseIconBoxSelected : !house.available ? styles.houseIconBoxDisabled : null]}>
-                          <Home color={selected ? colors.blue : !house.available ? colors.muted : colors.teal} size={22} />
-                        </View>
-                        <Text style={[styles.houseLabel, selected ? styles.houseLabelSelected : null]}>
-                          Casa {String(house.number).padStart(2, '0')}
-                        </Text>
-                        <Text style={[styles.houseStatus, selected ? styles.houseStatusSelected : null]}>
-                    {house.available ? (selected ? 'Selecionada' : 'Disponível') : 'Já cadastrada'}
-                        </Text>
-                        {selected ? (
-                          <View style={styles.houseCheck}>
-                            <CheckCircle2 color={colors.surface} size={16} />
-                          </View>
-                        ) : null}
-                      </Pressable>
-                    );
-                  })}
+              {!inviteHouse ? (
+                <>
+                  <RegisterField
+                    icon={KeyRound}
+                    label="Código da casa"
+                    value={inviteCode}
+                    onChangeText={(value) => {
+                      setInviteCode(formatInviteCode(value));
+                      setErrorMessage('');
+                    }}
+                    autoCapitalize="characters"
+                    placeholder="XXXX-XXXX"
+                    onSubmitEditing={submitInviteCode}
+                  />
+                  <View style={styles.signupNoticeModern}>
+                    <ShieldCheck color={colors.teal} size={19} />
+                    <Text style={styles.noticeTextModern}>
+                      O código é de uso único e vale por alguns dias. Não tem um? Peça à administração do condomínio: ela gera o código da sua casa.
+                    </Text>
+                  </View>
+                  <LoginPrimaryButton title={loading ? 'Conferindo...' : 'Continuar'} icon={LogIn} onPress={submitInviteCode} disabled={!inviteCodeReady || loading} />
+                </>
+              ) : (
+              <>
+              <View style={styles.houseConfirmed}>
+                <View style={styles.houseConfirmedIcon}>
+                  <Home color={colors.blue} size={22} />
                 </View>
+                <View style={styles.headerCopy}>
+                  <Text style={styles.houseLabel}>{inviteHouse.houseLabel}</Text>
+                  <Text style={styles.houseStatus}>Código conferido</Text>
+                </View>
+                <CheckCircle2 color={colors.green} size={22} />
               </View>
 
               <RegisterField icon={UserRound} label="Nome do responsável" value={name} onChangeText={setName} placeholder="Digite o nome completo" />
@@ -507,10 +502,12 @@ export function LoginScreen() {
 
               <View style={styles.signupNoticeModern}>
                 <CheckCircle2 color={colors.teal} size={19} />
-                <Text style={styles.noticeTextModern}>Ao salvar, o cadastro da casa será criado e ela ficará bloqueada para novo cadastro.</Text>
+                <Text style={styles.noticeTextModern}>Ao salvar, o acesso da casa é criado e o código deixa de funcionar.</Text>
               </View>
 
               <LoginPrimaryButton title={loading ? 'Cadastrando...' : 'Cadastrar e entrar'} icon={UserPlus} onPress={submitRegistration} disabled={!canSubmitRegistration} />
+              </>
+              )}
             </View>
           </View>
         ) : mode === 'forgot' ? (
@@ -684,7 +681,8 @@ function RegisterField({
   secureTextEntry,
   autoCapitalize,
   errorText,
-  right
+  right,
+  onSubmitEditing
 }: {
   label: string;
   value: string;
@@ -696,6 +694,7 @@ function RegisterField({
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   errorText?: string;
   right?: ReactNode;
+  onSubmitEditing?: () => void;
 }) {
   return (
     <View style={styles.registerField}>
@@ -707,6 +706,7 @@ function RegisterField({
         <TextInput
           value={value}
           onChangeText={onChangeText}
+          onSubmitEditing={onSubmitEditing}
           placeholder={placeholder}
           keyboardType={keyboardType}
           secureTextEntry={secureTextEntry}
@@ -825,6 +825,19 @@ function LoginGhostButton({
 
 function onlyDigits(value: string) {
   return value.replace(/\D/g, '');
+}
+
+const INVITE_CODE_LENGTH = 8;
+
+/** The letters and numbers of a typed code, upper case, without dash or spaces. */
+function inviteCodeDigits(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, INVITE_CODE_LENGTH);
+}
+
+/** XXXX-XXXX while typing, however the code was typed or pasted. */
+function formatInviteCode(value: string) {
+  const chars = inviteCodeDigits(value);
+  return chars.length > 4 ? `${chars.slice(0, 4)}-${chars.slice(4)}` : chars;
 }
 
 function normalizeEmail(value: string) {
@@ -1437,71 +1450,25 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '600'
   },
-  houseGridModern: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm
-  },
-  houseOptionModern: {
-    width: '31%',
-    minWidth: 0,
-    minHeight: 76,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    padding: spacing.sm,
-    justifyContent: 'center',
-    gap: 4,
-    position: 'relative'
-  },
-  houseSelectedModern: {
-    borderColor: colors.blue,
-    backgroundColor: colors.surfaceAlt
-  },
-  houseDisabledModern: {
-    opacity: 0.72,
-    backgroundColor: colors.surfaceAlt
-  },
-  houseIconBox: {
-    width: 38,
-    height: 38,
+  houseConfirmed: {
+    minHeight: 64,
     borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.greenBorder,
     backgroundColor: colors.greenSoft,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md
+  },
+  houseConfirmedIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: colors.blueSoft,
     alignItems: 'center',
     justifyContent: 'center'
-  },
-  houseIconBoxSelected: {
-    backgroundColor: colors.blueSoft
-  },
-  houseIconBoxDisabled: {
-    backgroundColor: colors.pressed
-  },
-  houseCopy: {
-    gap: 2
-  },
-  houseCheck: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 20,
-    height: 20,
-    borderRadius: 999,
-    backgroundColor: colors.blue,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  houseLabelModern: {
-    color: colors.ink,
-    fontWeight: '700',
-    fontSize: 14,
-    lineHeight: 18
-  },
-  houseStatusModern: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 15,
-    fontWeight: '600'
   },
   registerField: {
     gap: 4
@@ -1636,46 +1603,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700'
   },
-  houseGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm
-  },
-  houseOption: {
-    width: '31%',
-    minWidth: 96,
-    minHeight: 72,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    padding: spacing.sm,
-    justifyContent: 'center',
-    gap: spacing.xs
-  },
-  houseSelected: {
-    borderColor: colors.blue,
-    backgroundColor: colors.blueSoft
-  },
-  houseDisabled: {
-    opacity: 0.5,
-    backgroundColor: colors.bg
-  },
   houseLabel: {
     color: colors.ink,
     fontWeight: '700',
     fontSize: 14
   },
-  houseLabelSelected: {
-    color: colors.blue
-  },
   houseStatus: {
     color: colors.muted,
     fontSize: 12,
     fontWeight: '700'
-  },
-  houseStatusSelected: {
-    color: colors.blue
   },
   recoveryHero: {
     minHeight: 74,

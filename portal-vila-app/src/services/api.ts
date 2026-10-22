@@ -12,6 +12,9 @@ import {
   Contribution,
   Dashboard,
   Expense,
+  Invite,
+  InviteCheck,
+  InviteIssued,
   PasswordResetResponse,
   PixCharge,
   PortalDocument,
@@ -49,10 +52,10 @@ function appendFile(form: FormData, file: PickedFile) {
 
 const publicRequestPaths = new Set([
   '/auth/login',
-  '/auth/register-resident',
   '/auth/password-reset/request',
   '/auth/password-reset/confirm',
-  '/residents/registration-houses'
+  '/residents/invite-check',
+  '/residents/register-with-invite'
 ]);
 
 function isPublicRequest(url?: string) {
@@ -145,9 +148,13 @@ export const api = {
     requestData<PasswordResetResponse>(apiClient.post('/auth/password-reset/confirm', { email, code, password })),
   changePassword: (currentPassword: string, newPassword: string) =>
     requestData<PasswordResetResponse>(apiClient.post('/auth/change-password', { currentPassword, newPassword })),
+  checkInvite: (code: string) => requestData<InviteCheck>(apiClient.post('/residents/invite-check', { code })),
+  registerWithInvite: (registration: ResidentRegistration) =>
+    requestData<ResidentRegistrationResponse>(apiClient.post('/residents/register-with-invite', registration)),
   registrationHouses: () => requestData<RegistrationHouseOption[]>(apiClient.get('/residents/registration-houses')),
-  registerResident: (registration: ResidentRegistration) =>
-    requestData<ResidentRegistrationResponse>(apiClient.post('/auth/register-resident', registration)),
+  invites: () => requestData<Invite[]>(apiClient.get('/residents/invites')),
+  createInvite: (houseId: number) => requestData<InviteIssued>(apiClient.post('/residents/invites', { houseId })),
+  revokeInvite: (id: number) => requestData<{ status: string }>(apiClient.delete(`/residents/invites/${id}`)),
   dashboard: (month: string) => requestData<Dashboard>(apiClient.get('/dashboard', { params: { month } })),
   monthlyReport: (month: string) => requestData<MonthlyReport>(apiClient.get('/reports/monthly', { params: { month } })),
   reconciliation: () => requestData<Reconciliation>(apiClient.get('/admin/reconciliation')),

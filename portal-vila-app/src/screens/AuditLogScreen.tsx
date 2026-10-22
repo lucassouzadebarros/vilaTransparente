@@ -30,10 +30,13 @@ const actionLabels: Record<string, string> = {
   BUDGET_REJEITADO: 'Orçamento recusado',
   BUDGET_CANCELADO: 'Orçamento cancelado',
   HOUSE_RELEASED: 'Casa liberada',
-  SINDICO_CHANGED: 'Síndico alterado'
+  SINDICO_CHANGED: 'Síndico alterado',
+  INVITE_CREATED: 'Convite de casa criado',
+  INVITE_USED: 'Convite usado (morador criou o acesso)',
+  INVITE_REVOKED: 'Convite cancelado'
 };
 
-const dangerActions = new Set(['EXPENSE_DELETED', 'PIX_CANCELLED', 'SERVICE_CANCELLED', 'BUDGET_CANCELADO', 'HOUSE_RELEASED']);
+const dangerActions = new Set(['EXPENSE_DELETED', 'PIX_CANCELLED', 'SERVICE_CANCELLED', 'BUDGET_CANCELADO', 'HOUSE_RELEASED', 'INVITE_REVOKED']);
 
 type AuditFilter = 'TODOS' | 'DINHEIRO' | 'DEMANDAS' | 'ACESSOS' | 'ALERTAS';
 
