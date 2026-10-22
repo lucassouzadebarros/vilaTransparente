@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useCallback, useRef, useState } from 'react';
+import { Fragment, useCallback, useRef, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import {
   ArrowDown,
@@ -22,7 +22,7 @@ import {
   Vote,
   Wrench
 } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -226,23 +226,24 @@ export function HomeScreen() {
 }
 
 function AdminHome({ dashboard, month, navigation }) {
+  const { width } = useWindowDimensions();
   return (
     <>
       <LocalCard style={styles.adminBalanceCard}>
         <View style={styles.adminBalanceCopy}>
           <Text style={styles.summaryLabel}>Saldo atual</Text>
-          <Text style={styles.balanceValue}>{formatCurrency(dashboard?.balance ?? 0)}</Text>
+          <Text style={[styles.balanceValue, width < NARROW_PHONE ? styles.balanceValueNarrow : null]}>{formatCurrency(dashboard?.balance ?? 0)}</Text>
         </View>
       </LocalCard>
       <LocalCard style={styles.transparencyCard}>
         <Text style={styles.cardTitle}>Mensalidades do mês</Text>
-        <View style={styles.metricGrid}>
-          <MetricCard label="Arrecadado" value={formatCurrency(dashboard?.collected ?? 0)} caption={monthLabel(month)} />
-          <View style={styles.metricDivider} />
-          <MetricCard label="Casas pagas" value={String(dashboard?.paidHouses ?? 0)} />
-          <View style={styles.metricDivider} />
-          <MetricCard label="Pendentes" value={String(dashboard?.pendingHouses ?? 0)} tone="red" />
-        </View>
+        <MetricGrid
+          items={[
+            { label: 'Arrecadado', value: formatCurrency(dashboard?.collected ?? 0), caption: monthLabel(month) },
+            { label: 'Casas pagas', value: String(dashboard?.paidHouses ?? 0) },
+            { label: 'Pendentes', value: String(dashboard?.pendingHouses ?? 0), tone: 'red' }
+          ]}
+        />
         <Pressable style={styles.primaryAction} onPress={() => navigation.navigate('AdminPixCharges')}>
           <QrCode color={colors.surface} size={18} />
           <Text style={styles.primaryActionText}>Gerenciar Pix</Text>
@@ -319,29 +320,58 @@ function TransparencyLockedCard() {
 }
 
 function TransparencyOpenCard({ dashboard, navigation }) {
+  const { width } = useWindowDimensions();
   const totalCollected = dashboard?.totalCollected ?? dashboard?.collected ?? 0;
   const expenses = dashboard?.expenses ?? 0;
   const balance = dashboard?.balance ?? 0;
   return (
     <LocalCard style={styles.transparencyCard}>
       <Text style={styles.cardTitle}>Saldo acumulado da vila</Text>
-      <Text style={styles.balanceOpenValue}>{formatCurrency(balance)}</Text>
-      <View style={styles.metricGrid}>
-        <MetricCard
-          icon={TrendingUp}
-          tone="blue"
-          label="Arrecadado total"
-          value={formatCurrency(totalCollected)}
-          caption={`Mês ${formatCurrency(dashboard?.collected ?? 0)}`}
-        />
-        <MetricCard icon={ArrowDown} tone="red" label="Despesas" value={formatCurrency(expenses)} />
-        <MetricCard icon={Users} tone="lilac" label="Casas pagas" value={String(dashboard?.paidHouses ?? 0)} />
-      </View>
+      <Text style={[styles.balanceOpenValue, width < NARROW_PHONE ? styles.balanceValueNarrow : null]}>{formatCurrency(balance)}</Text>
+      <MetricGrid
+        items={[
+          { label: 'Arrecadado total', value: formatCurrency(totalCollected), caption: `Mês ${formatCurrency(dashboard?.collected ?? 0)}` },
+          { label: 'Despesas', value: formatCurrency(expenses) },
+          { label: 'Casas pagas', value: String(dashboard?.paidHouses ?? 0) }
+        ]}
+      />
       <Pressable style={styles.primaryAction} onPress={() => navigation.navigate('Caixa')}>
         <BarChart3 color={colors.surface} size={18} />
         <Text style={styles.primaryActionText}>Ver transparência</Text>
       </Pressable>
     </LocalCard>
+  );
+}
+
+/** Below this width (a phone) the figures are made smaller and stacked so that no word is broken in two. */
+const NARROW_PHONE = 360;
+const SIDE_BY_SIDE_FROM = 480;
+
+/**
+ * Figures side by side on a wide screen. On a phone there is no room for three columns ("Arrecadad/o", "R$ 800/,20"
+ * were broken across lines), so the first figure gets a row of its own and the other two share the next one.
+ */
+function MetricGrid({ items }) {
+  const { width } = useWindowDimensions();
+  const cards = (list) =>
+    list.map((item, index) => (
+      <Fragment key={item.label}>
+        {index ? <View style={styles.metricDivider} /> : null}
+        <MetricCard {...item} />
+      </Fragment>
+    ));
+  if (width >= SIDE_BY_SIDE_FROM || items.length < 3) {
+    return <View style={styles.metricGrid}>{cards(items)}</View>;
+  }
+  const [first, ...rest] = items;
+  return (
+    <View style={styles.metricStack}>
+      <View style={styles.metricGrid}>
+        <MetricCard {...first} />
+      </View>
+      <View style={styles.metricRowDivider} />
+      <View style={styles.metricGrid}>{cards(rest)}</View>
+    </View>
   );
 }
 
@@ -689,6 +719,17 @@ const styles = StyleSheet.create({
   metricGrid: {
     flexDirection: 'row',
     alignItems: 'stretch'
+  },
+  metricStack: {
+    gap: 8
+  },
+  metricRowDivider: {
+    height: 1,
+    backgroundColor: colors.border
+  },
+  balanceValueNarrow: {
+    fontSize: 27,
+    lineHeight: 32
   },
   metricDivider: {
     width: 1,
