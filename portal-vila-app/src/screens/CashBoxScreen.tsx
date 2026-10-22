@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: colors.border },
   segmented: {
     flexDirection: 'row',
-    backgroundColor: '#E8EBE9',
+    backgroundColor: colors.track,
     borderRadius: 10,
     padding: 3,
     gap: 2

@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
     gap: 2,
     padding: 3,
     borderRadius: 10,
-    backgroundColor: '#E8EBE9',
+    backgroundColor: colors.track,
     zIndex: 1
   },
   tab: {

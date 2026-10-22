@@ -22,6 +22,7 @@ import {
 import type { LucideIcon } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { colors, radius, spacing, TOUCH_TARGET } from '../theme';
+import { ThemeSwitch } from './ThemeSwitch';
 
 type Entry = {
   label: string;
@@ -140,6 +141,10 @@ export function Sidebar({ navigationRef, current }: Props) {
           );
         })}
       </ScrollView>
+      <View style={styles.theme}>
+        <Text style={styles.sectionTitle}>Aparência</Text>
+        <ThemeSwitch />
+      </View>
       <Pressable accessibilityRole="button" accessibilityLabel="Sair" onPress={logout} style={({ pressed }) => [styles.item, styles.logout, pressed ? styles.itemPressed : null]}>
         <LogOut color={colors.muted} size={18} />
         <Text style={styles.itemText}>Sair</Text>
@@ -201,7 +206,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.blueSoft
   },
   itemPressed: {
-    backgroundColor: '#EEF1EF'
+    backgroundColor: colors.pressed
   },
   itemText: {
     color: colors.ink,
@@ -212,6 +217,10 @@ const styles = StyleSheet.create({
   itemTextActive: {
     color: colors.blue,
     fontWeight: '700'
+  },
+  theme: {
+    gap: spacing.xs,
+    paddingTop: spacing.sm
   },
   logout: {
     borderTopWidth: 1,

@@ -358,11 +358,11 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#C5CDC9',
+    borderColor: colors.border,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#16202A',
+    shadowColor: colors.ink,
     shadowOpacity: 0,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 14,
     gap: 12,
-    shadowColor: '#16202A',
+    shadowColor: colors.ink,
     shadowOpacity: 0,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 7 },
@@ -438,7 +438,7 @@ const styles = StyleSheet.create({
   inputFrame: {
     minHeight: 46,
     borderWidth: 1,
-    borderColor: '#C5CDC9',
+    borderColor: colors.border,
     borderRadius: 8,
     backgroundColor: colors.surface,
     flexDirection: 'row',
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
   switchCard: {
     minHeight: 64,
     borderWidth: 1,
-    borderColor: '#C5CDC9',
+    borderColor: colors.border,
     borderRadius: 8,
     backgroundColor: colors.surface,
     paddingHorizontal: 14,
@@ -526,7 +526,7 @@ const styles = StyleSheet.create({
     gap: 8
   },
   documentActionButtonDanger: {
-    borderColor: '#F0C4BF'
+    borderColor: colors.dangerBorder
   },
   documentActionText: {
     color: colors.blue,

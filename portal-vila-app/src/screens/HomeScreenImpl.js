@@ -531,7 +531,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
     padding: spacing.xs,
-    shadowColor: '#16202A',
+    shadowColor: colors.ink,
     shadowOpacity: 0,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
@@ -565,7 +565,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: 14,
-    shadowColor: '#16202A',
+    shadowColor: colors.ink,
     shadowOpacity: 0,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 5 },
@@ -582,7 +582,7 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 999,
-    backgroundColor: '#E3F7ED',
+    backgroundColor: colors.greenSoft,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0
@@ -672,7 +672,7 @@ const styles = StyleSheet.create({
     color: colors.green
   },
   statusTextPending: {
-    color: '#B45309'
+    color: colors.amber
   },
   statusTextOverdue: {
     color: colors.red
@@ -758,7 +758,7 @@ const styles = StyleSheet.create({
   disabledInfo: {
     minHeight: 40,
     borderRadius: 8,
-    backgroundColor: '#E3E8E5',
+    backgroundColor: colors.track,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.md
@@ -844,7 +844,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 9,
-    backgroundColor: '#EEF1EF',
+    backgroundColor: colors.pressed,
     alignItems: 'center',
     justifyContent: 'center'
   },

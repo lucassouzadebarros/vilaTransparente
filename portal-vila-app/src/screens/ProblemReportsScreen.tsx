@@ -190,7 +190,7 @@ function ProblemCard({
   onCreateService: () => void;
   onPress: () => void;
 }) {
-  const priorityColor = item.priority === 'URGENTE' || item.priority === 'ALTA' ? colors.red : item.priority === 'MEDIA' ? '#8A5200' : colors.green;
+  const priorityColor = item.priority === 'URGENTE' || item.priority === 'ALTA' ? colors.red : item.priority === 'MEDIA' ? colors.amber : colors.green;
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.problemCard}>
       <View style={styles.problemTop}>
@@ -277,7 +277,7 @@ function statusColor(status: string) {
     return colors.red;
   }
   if (status === 'EM_ANALISE') {
-    return '#8A5200';
+    return colors.amber;
   }
   return colors.blue;
 }
@@ -290,7 +290,7 @@ function statusSoftColor(status: string) {
     return colors.redSoft;
   }
   if (status === 'EM_ANALISE') {
-    return '#FFF4D8';
+    return colors.amberSoft;
   }
   return colors.blueSoft;
 }
@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#16202A',
+    shadowColor: colors.ink,
     shadowOpacity: 0,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: 14,
     gap: 12,
-    shadowColor: '#16202A',
+    shadowColor: colors.ink,
     shadowOpacity: 0,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 5 },
@@ -584,7 +584,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    shadowColor: '#16202A',
+    shadowColor: colors.ink,
     shadowOpacity: 0,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
@@ -594,7 +594,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 10,
-    backgroundColor: '#EEF1EF',
+    backgroundColor: colors.pressed,
     alignItems: 'center',
     justifyContent: 'center'
   },

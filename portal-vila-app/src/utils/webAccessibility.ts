@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { colors } from '../theme';
+import { colors, isDark } from '../theme';
 
 /**
  * Web-only accessibility setup that React Native for Web does not do on its own:
@@ -10,6 +10,9 @@ export function setupWebAccessibility() {
     return;
   }
   document.documentElement.lang = 'pt-BR';
+  // Lets the browser draw scrollbars and form controls to match the palette in use.
+  document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+  document.body.style.backgroundColor = colors.bg;
 
   if (document.getElementById('vila-a11y')) {
     return;
