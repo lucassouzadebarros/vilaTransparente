@@ -55,7 +55,11 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiUrl": "http://localhost:8080/api"
-    }
+      "apiUrl": "http://localhost:8080/api",
+      "eas": {
+        "projectId": "931647b7-12b0-4fd6-843b-146fd78910f6"
+      }
+    },
+    "owner": "portal-da-vila"
   }
 }
