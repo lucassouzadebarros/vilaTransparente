@@ -13,6 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -105,76 +106,6 @@ class AuthController {
     @PostMapping("/change-password")
     PasswordResetResponse changePassword(@Valid @RequestBody ChangePasswordRequest request) {
         return passwordResetService.changePassword(currentUser.current(), request);
-    }
-
-    @PostMapping("/register-resident")
-    ResidentRegistrationResponse registerResident(@Valid @RequestBody ResidentRegistrationRequest request) {
-        House house = houses.findById(request.houseId())
-            .filter(candidate -> candidate.active)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Casa não encontrada."));
-        if (house.number == null || house.number < 2 || house.number > 11) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cadastro publico permitido apenas para as casas 02 a 11.");
-        }
-        if (residents.findFirstByHouseIdAndStatusOrderByCreatedAtDesc(house.id, "ACTIVE").isPresent()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Casa ja possui morador cadastrado.");
-        }
-        String normalizedEmail = request.email().trim().toLowerCase();
-        users.findByEmailIgnoreCase(normalizedEmail).ifPresent(user -> {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "E-mail já cadastrado.");
-        });
-        if (request.password().trim().length() < 8) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A senha precisa ter pelo menos 8 caracteres.");
-        }
-
-        Resident resident = new Resident();
-        resident.houseId = house.id;
-        resident.name = request.name().trim();
-        resident.email = normalizedEmail;
-        resident.phone = request.phone().trim();
-        resident.documentNumber = onlyDigits(request.documentNumber());
-        validateDocument(resident.documentNumber);
-        resident.documentMasked = maskDocument(resident.documentNumber);
-        resident.status = "ACTIVE";
-
-        GatewayCustomer customer = gatewayClient.createOrUpdateCustomer(resident);
-        resident.gatewayCustomerId = customer.id();
-        Resident saved = residents.save(resident);
-        users.save(new AppUser(
-            saved.name,
-            saved.email,
-            passwordEncoder.encode(request.password()),
-            "RESIDENT",
-            saved.id
-        ));
-
-        return new ResidentRegistrationResponse(
-            saved.id,
-            saved.houseId,
-            house.number,
-            house.label,
-            saved.name,
-            saved.email,
-            saved.gatewayCustomerId
-        );
-    }
-
-    private String onlyDigits(String value) {
-        return value == null ? "" : value.replaceAll("\\D", "");
-    }
-
-    private void validateDocument(String document) {
-        if (!(document.length() == 11 || document.length() == 14)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe CPF com 11 digitos ou CNPJ com 14 digitos.");
-        }
-    }
-
-    private String maskDocument(String document) {
-        if (document.length() <= 11) {
-            String suffix = document.length() < 2 ? document : document.substring(document.length() - 2);
-            return "***.***.***-" + suffix;
-        }
-        String suffix = document.substring(Math.max(0, document.length() - 2));
-        return "**.***.***/****-" + suffix;
     }
 }
 
@@ -1036,6 +967,8 @@ class ResidentController {
     private final PasswordEncoder passwordEncoder;
     private final PixGatewayClient gatewayClient;
     private final PasswordResetService passwordResetService;
+    private final HouseInviteService invites;
+    private final LoginAttemptLimiter inviteLimiter;
 
     ResidentController(
         ResidentRepository residents,
@@ -1043,7 +976,9 @@ class ResidentController {
         AppUserRepository users,
         PasswordEncoder passwordEncoder,
         PixGatewayClient gatewayClient,
-        PasswordResetService passwordResetService
+        PasswordResetService passwordResetService,
+        HouseInviteService invites,
+        LoginAttemptLimiter inviteLimiter
     ) {
         this.residents = residents;
         this.houses = houses;
@@ -1051,32 +986,94 @@ class ResidentController {
         this.passwordEncoder = passwordEncoder;
         this.gatewayClient = gatewayClient;
         this.passwordResetService = passwordResetService;
+        this.invites = invites;
+        this.inviteLimiter = inviteLimiter;
     }
 
+    /** For the administration: every active house, whether it already has a resident and whether it has an open invitation. */
     @GetMapping("/registration-houses")
+    @PreAuthorize("hasRole('ADMIN')")
     List<RegistrationHouseOption> registrationHouses() {
+        java.util.Set<Long> invited = new java.util.HashSet<>();
+        invites.open().forEach(invite -> invited.add(invite.houseId));
         return houses.findByActiveTrueOrderByNumberAsc().stream()
-            .filter(house -> house.number != null && house.number >= 2 && house.number <= 11)
             .map(house -> new RegistrationHouseOption(
                 house.id,
                 house.number,
                 house.label,
-                residents.findFirstByHouseIdAndStatusOrderByCreatedAtDesc(house.id, "ACTIVE").isEmpty()
+                residents.findFirstByHouseIdAndStatusOrderByCreatedAtDesc(house.id, "ACTIVE").isEmpty(),
+                invited.contains(house.id)
             ))
             .toList();
     }
 
-    @PostMapping("/self-registration")
-    ResidentRegistrationResponse selfRegistration(@Valid @RequestBody ResidentRegistrationRequest request) {
-        House house = houses.findById(request.houseId())
-            .filter(candidate -> candidate.active)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Casa não encontrada."));
-        if (house.number == null || house.number < 2 || house.number > 11) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cadastro publico permitido apenas para as casas 02 a 11.");
-        }
+    @PostMapping("/invites")
+    @PreAuthorize("hasRole('ADMIN')")
+    InviteIssuedResponse createInvite(@Valid @RequestBody CreateInviteRequest request) {
+        HouseInviteService.Issued issued = invites.issue(request.houseId());
+        return new InviteIssuedResponse(
+            issued.invite().id,
+            issued.house().id,
+            issued.house().number,
+            issued.house().label,
+            HouseInviteService.display(issued.code()),
+            issued.invite().expiresAt
+        );
+    }
+
+    @GetMapping("/invites")
+    @PreAuthorize("hasRole('ADMIN')")
+    List<InviteResponse> openInvites() {
+        return invites.open().stream()
+            .map(invite -> {
+                House house = houses.findById(invite.houseId).orElse(null);
+                return new InviteResponse(
+                    invite.id,
+                    invite.houseId,
+                    house == null ? null : house.number,
+                    house == null ? "Casa" : house.label,
+                    invite.createdAt,
+                    invite.expiresAt,
+                    invite.createdBy
+                );
+            })
+            .toList();
+    }
+
+    @DeleteMapping("/invites/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    Map<String, String> revokeInvite(@PathVariable Long id) {
+        invites.revoke(id);
+        return Map.of("status", "CANCELADO");
+    }
+
+    /** Public: tells a person which house a code opens, and nothing else. Wrong, used and expired codes look the same. */
+    @PostMapping("/invite-check")
+    InviteCheckResponse checkInvite(@Valid @RequestBody InviteCheckRequest request, HttpServletRequest http) {
+        String attemptKey = LoginAttemptLimiter.key("invite", null, http);
+        inviteLimiter.check(attemptKey);
+        HouseInvite invite = invites.redeemable(request.code()).orElseThrow(() -> {
+            inviteLimiter.fail(attemptKey);
+            return new ResponseStatusException(HttpStatus.NOT_FOUND, HouseInviteService.INVALID_MESSAGE);
+        });
+        House house = houses.findById(invite.houseId).orElseThrow();
+        return new InviteCheckResponse(house.label, house.number);
+    }
+
+    /** Public: the person creates their own access, for the house the code opens, and the code is spent. */
+    @PostMapping("/register-with-invite")
+    @Transactional
+    ResidentRegistrationResponse registerWithInvite(@Valid @RequestBody InviteRegistrationRequest request, HttpServletRequest http) {
+        String attemptKey = LoginAttemptLimiter.key("invite", null, http);
+        inviteLimiter.check(attemptKey);
+        HouseInvite invite = invites.redeemable(request.code()).orElseThrow(() -> {
+            inviteLimiter.fail(attemptKey);
+            return new ResponseStatusException(HttpStatus.NOT_FOUND, HouseInviteService.INVALID_MESSAGE);
+        });
         if (request.password().trim().length() < 8) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A senha precisa ter pelo menos 8 caracteres.");
         }
+        House house = houses.findById(invite.houseId).orElseThrow();
         Resident saved = createResidentAccount(
             house.id,
             request.name(),
@@ -1084,9 +1081,11 @@ class ResidentController {
             request.phone(),
             request.documentNumber(),
             request.password(),
-            false,
+            true,
             false
         );
+        invites.markUsed(invite, saved.id);
+        inviteLimiter.succeed(attemptKey);
         return new ResidentRegistrationResponse(
             saved.id,
             saved.houseId,

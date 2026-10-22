@@ -14,6 +14,16 @@ Defina as duas antes de subir (sem `PORTAL_ADMIN_PASSWORD` o padrao inseguro `12
 Moradores criados pelo administrador recebem uma senha temporaria aleatoria, mostrada uma unica vez, e precisam troca-la
 no primeiro acesso. Senhas novas tem no minimo 8 caracteres.
 
+## Primeiro acesso por convite
+
+Ninguem cria acesso sozinho: o cadastro aberto foi removido. Em **Moradores > Convites de acesso** o administrador gera um
+codigo para uma casa sem morador (`POST /api/residents/invites`). O codigo (`XXXX-XXXX`) aparece uma unica vez, vale por
+`portal.invite.validity-days` dias (padrao 7), serve uma vez e so o hash fica no banco (`house_invites`). Um codigo novo
+para a mesma casa cancela o anterior. A pessoa toca em "Tenho um codigo" na tela de entrada, o codigo mostra qual e a casa
+(`POST /api/residents/invite-check`) e ela cria o proprio acesso (`POST /api/residents/register-with-invite`). Codigo errado,
+usado, cancelado ou vencido responde igual, e as tentativas por endereco sao limitadas (5 erros em 10 minutos). Criar,
+usar e cancelar convites entram no historico de alteracoes.
+
 ## Execucao rapida
 
 Backend:

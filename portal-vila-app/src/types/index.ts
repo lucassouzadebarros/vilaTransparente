@@ -253,15 +253,43 @@ export type Resident = {
   status: string;
 };
 
+/** For the administration: a house, whether it still has nobody in it, and whether it has an open invite. */
 export type RegistrationHouseOption = {
   houseId: number;
   number: number;
   label: string;
   available: boolean;
+  invited: boolean;
+};
+
+/** The answer to "which house does this code open?": nothing else about the invite is revealed. */
+export type InviteCheck = {
+  houseLabel: string;
+  houseNumber: number;
+};
+
+/** Only in the answer that creates the invite: the code is not kept in a readable form. */
+export type InviteIssued = {
+  id: number;
+  houseId: number;
+  houseNumber: number;
+  houseLabel: string;
+  code: string;
+  expiresAt: string;
+};
+
+export type Invite = {
+  id: number;
+  houseId: number;
+  houseNumber: number | null;
+  houseLabel: string;
+  createdAt: string;
+  expiresAt: string;
+  createdBy?: string | null;
 };
 
 export type ResidentRegistration = {
-  houseId: number;
+  code: string;
   name: string;
   email: string;
   phone: string;
