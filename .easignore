@@ -1,0 +1,25 @@
+# What the EAS build uploads to Expo. The build only compiles portal-vila-app, so the API, its Render
+# configuration and the design files stay out of the upload.
+# This file replaces .gitignore for the upload, so the rules of .gitignore are repeated below.
+
+portal-vila-api/
+wireframes/
+pdf_extract.txt
+render.yaml
+RENDER_DEPLOY.md
+portal-vila-app/store/
+
+node_modules/
+dist/
+target/
+uploads/
+.expo/
+.expo-shared/
+.env
+.env.*
+*.log
+*.tmp
+*.bak
+*.original
+.DS_Store
+Thumbs.db
