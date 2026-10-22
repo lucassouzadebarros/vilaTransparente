@@ -5,7 +5,7 @@ import { Copy, KeyRound, RefreshCw, X } from 'lucide-react-native';
 import { Button, Card, Label, Row, Value } from './ui';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
-import { Invite, InviteIssued, RegistrationHouseOption } from '../types';
+import { Invite, InviteIssued, HouseOption } from '../types';
 import { Alert } from '../utils/alert';
 import { formatDateBR } from '../utils/format';
 
@@ -14,7 +14,7 @@ import { formatDateBR } from '../utils/format';
  * person. The code is shown once, here, right after it is made; afterwards only the house and the expiry are listed.
  */
 export function InvitesCard({ onChanged }: { onChanged?: () => void }) {
-  const [houses, setHouses] = useState<RegistrationHouseOption[]>([]);
+  const [houses, setHouses] = useState<HouseOption[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [issued, setIssued] = useState<InviteIssued | null>(null);
   const [busyHouseId, setBusyHouseId] = useState<number | null>(null);
@@ -24,7 +24,7 @@ export function InvitesCard({ onChanged }: { onChanged?: () => void }) {
   const load = useCallback(async () => {
     setLoadError('');
     try {
-      const [nextHouses, nextInvites] = await Promise.all([api.registrationHouses(), api.invites()]);
+      const [nextHouses, nextInvites] = await Promise.all([api.houses(), api.invites()]);
       setHouses(nextHouses);
       setInvites(nextInvites);
     } catch (error) {
@@ -39,7 +39,7 @@ export function InvitesCard({ onChanged }: { onChanged?: () => void }) {
   const freeHouses = houses.filter((house) => house.available);
   const inviteOf = (houseId: number) => invites.find((invite) => invite.houseId === houseId);
 
-  async function issue(house: RegistrationHouseOption) {
+  async function issue(house: HouseOption) {
     setBusyHouseId(house.houseId);
     setMessage('');
     try {
@@ -55,7 +55,7 @@ export function InvitesCard({ onChanged }: { onChanged?: () => void }) {
     }
   }
 
-  function confirmIssue(house: RegistrationHouseOption) {
+  function confirmIssue(house: HouseOption) {
     if (!inviteOf(house.houseId)) {
       issue(house);
       return;

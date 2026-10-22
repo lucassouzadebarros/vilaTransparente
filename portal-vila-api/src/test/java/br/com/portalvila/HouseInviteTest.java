@@ -157,8 +157,8 @@ class HouseInviteTest {
         mvc.perform(post("/api/residents/invites").contentType(MediaType.APPLICATION_JSON).content("{\"houseId\":" + free.id + "}"))
             .andExpect(status().isUnauthorized());
         mvc.perform(get("/api/residents/invites").header("Authorization", resident)).andExpect(status().isForbidden());
-        mvc.perform(get("/api/residents/registration-houses")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/residents/registration-houses").header("Authorization", resident)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/residents/houses")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/residents/houses").header("Authorization", resident)).andExpect(status().isForbidden());
 
         String code = issue(free);
         String list = mvc.perform(get("/api/residents/invites").header("Authorization", admin))
@@ -167,7 +167,7 @@ class HouseInviteTest {
         // The list never carries the code or its hash.
         assertThat(list).doesNotContain(code).doesNotContain("codeHash");
 
-        String houses = mvc.perform(get("/api/residents/registration-houses").header("Authorization", admin))
+        String houses = mvc.perform(get("/api/residents/houses").header("Authorization", admin))
             .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(json.readTree(houses).findValuesAsText("label")).contains("Casa 07", "Casa 02");
     }

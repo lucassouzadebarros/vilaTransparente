@@ -6,11 +6,15 @@ import { EmptyFilter, FilterBar, FilterOption } from '../components/FilterBar';
 import { InvitesCard } from '../components/InvitesCard';
 import { Badge, Button, Card, Field, Label, Row, Screen, Stack, Value, Facts } from '../components/ui';
 import { api, apiErrorMessage } from '../services/api';
-import { Resident, Sindico } from '../types';
+import { HouseOption, Resident, Sindico } from '../types';
 import { colors, spacing } from '../theme';
+import { houseByNumber, houseLabelOf } from '../utils/houses';
 
 export function ResidentsScreen() {
   const [items, setItems] = useState<Resident[]>([]);
+  const [houses, setHouses] = useState<HouseOption[]>([]);
+  // The administration types the number of the house; the id behind it is found among the houses of the condominium.
+  const [houseNumber, setHouseNumber] = useState('');
   const [sindico, setSindico] = useState<Sindico | null>(null);
   const [savingSindico, setSavingSindico] = useState(false);
   const [sindicoMessage, setSindicoMessage] = useState<string | null>(null);
@@ -32,12 +36,14 @@ export function ResidentsScreen() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [nextResidents, nextSindico] = await Promise.all([
+      const [nextResidents, nextSindico, nextHouses] = await Promise.all([
         api.residents(),
-        api.sindico().catch(() => null)
+        api.sindico().catch(() => null),
+        api.houses()
       ]);
       setItems(nextResidents);
       setSindico(nextSindico);
+      setHouses(nextHouses);
       setInvitesVersion((current) => current + 1);
     } catch (error) {
       setLoadError(apiErrorMessage(error, 'Não consegui carregar os moradores.'));
@@ -79,11 +85,11 @@ export function ResidentsScreen() {
   }
 
   function startCreate() {
-    const usedHouses = new Set(items.filter((item) => item.status === 'ACTIVE').map((item) => item.houseId));
-    const nextHouse = Array.from({ length: 11 }, (_, index) => index + 1).find((house) => !usedHouses.has(house)) ?? 0;
+    const nextHouse = houses.find((house) => house.available);
     setCreating(true);
     setEditingId(null);
-    setDraft({ houseId: nextHouse, name: '', email: '', phone: '', documentNumber: '', status: 'ACTIVE' });
+    setHouseNumber(nextHouse ? String(nextHouse.number) : '');
+    setDraft({ houseId: nextHouse?.houseId ?? 0, name: '', email: '', phone: '', documentNumber: '', status: 'ACTIVE' });
     setMessage(null);
   }
 
@@ -98,7 +104,7 @@ export function ResidentsScreen() {
         return;
       }
       if (items.some((item) => item.houseId === draft.houseId && item.status === 'ACTIVE')) {
-        setMessage({ residentId: 0, type: 'error', text: `Casa ${String(draft.houseId).padStart(2, '0')} ja possui morador cadastrado.` });
+        setMessage({ residentId: 0, type: 'error', text: `${houseLabelOf(houses, draft.houseId)} ja possui morador cadastrado.` });
         return;
       }
     }
@@ -216,12 +222,16 @@ export function ResidentsScreen() {
     return items.filter(
       (item) =>
         (filter === 'TODOS' || item.status === filter) &&
-        (!needle || plain(item.name).includes(needle) || plain(item.email ?? '').includes(needle) || String(item.houseId) === needle.replace(/\D/g, ''))
+        (!needle
+          || plain(item.name).includes(needle)
+          || plain(item.email ?? '').includes(needle)
+          || plain(houseLabelOf(houses, item.houseId)).includes(needle)
+          || houseByNumber(houses, needle)?.houseId === item.houseId)
     );
-  }, [items, filter, query]);
+  }, [items, houses, filter, query]);
 
   return (
-    <Screen title="Moradores" subtitle="11 casas da vila" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
+    <Screen title="Moradores" subtitle={houses.length ? `${houses.length} casas` : ''} right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       <Button title="Novo morador" icon={Plus} onPress={startCreate} />
       {!loading && !loadError ? (
         <Card>
@@ -244,10 +254,14 @@ export function ResidentsScreen() {
         <Card>
           <Value>Cadastrar morador</Value>
           <Field
-            label="Casa"
-            value={draft.houseId ? String(draft.houseId) : ''}
-            onChangeText={(value) => changeDraft('houseId', Number(value.replace(/\D/g, '')) || 0)}
+            label="Número da casa"
+            value={houseNumber}
+            onChangeText={(value) => {
+              setHouseNumber(value);
+              changeDraft('houseId', houseByNumber(houses, value)?.houseId ?? 0);
+            }}
             keyboardType="numeric"
+            helpText={draft.houseId ? houseLabelOf(houses, draft.houseId) : 'Não existe casa com esse número neste condomínio.'}
           />
           <Field label="Nome" value={draft.name} onChangeText={(value) => changeDraft('name', value)} />
           <Field label="E-mail" value={draft.email} onChangeText={(value) => changeDraft('email', value)} keyboardType="email-address" />
@@ -302,7 +316,7 @@ export function ResidentsScreen() {
               <Badge status={item.status} />
             </View>
           </Row>
-          <Label>Casa {String(item.houseId).padStart(2, '0')}</Label>
+          <Label>{houseLabelOf(houses, item.houseId)}</Label>
           {editingId === item.id && draft ? (
             <Stack>
               <Field label="Nome" value={draft.name} onChangeText={(value) => changeDraft('name', value)} />

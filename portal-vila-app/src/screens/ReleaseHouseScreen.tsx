@@ -3,38 +3,43 @@ import { StyleSheet, Text, View } from 'react-native';
 import { CheckCircle2, LockOpen, RefreshCw, UserMinus } from 'lucide-react-native';
 import { Badge, Button, Card, Label, Row, Screen, Stack, Value } from '../components/ui';
 import { api, apiErrorMessage } from '../services/api';
-import { Resident } from '../types';
+import { HouseOption, Resident } from '../types';
 import { colors, spacing } from '../theme';
 
 type HouseState = {
   houseId: number;
+  label: string;
   active?: Resident;
   inactiveCount: number;
 };
 
 export function ReleaseHouseScreen() {
   const [residents, setResidents] = useState<Resident[]>([]);
+  const [houseList, setHouseList] = useState<HouseOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [releasingHouseId, setReleasingHouseId] = useState<number | null>(null);
   const [pendingRelease, setPendingRelease] = useState<HouseState | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const houses = useMemo<HouseState[]>(() => {
-    return Array.from({ length: 10 }, (_, index) => index + 2).map((houseId) => {
-      const houseResidents = residents.filter((resident) => resident.houseId === houseId);
+    return houseList.map((house) => {
+      const houseResidents = residents.filter((resident) => resident.houseId === house.houseId);
       return {
-        houseId,
+        houseId: house.houseId,
+        label: house.label,
         active: houseResidents.find((resident) => resident.status === 'ACTIVE'),
         inactiveCount: houseResidents.filter((resident) => resident.status !== 'ACTIVE').length
       };
     });
-  }, [residents]);
+  }, [residents, houseList]);
 
   async function load() {
     setLoading(true);
     setMessage(null);
     try {
-      setResidents(await api.residents());
+      const [nextResidents, nextHouses] = await Promise.all([api.residents(), api.houses()]);
+      setResidents(nextResidents);
+      setHouseList(nextHouses);
     } catch (error) {
       setMessage(apiErrorMessage(error, 'Não consegui carregar as casas.'));
     } finally {
@@ -51,13 +56,14 @@ export function ReleaseHouseScreen() {
   }
 
   async function releaseHouse(houseId: number) {
+    const label = houseList.find((house) => house.houseId === houseId)?.label ?? 'Casa';
     setReleasingHouseId(houseId);
     setMessage(null);
     try {
       await api.releaseHouse(houseId);
       setPendingRelease(null);
       await load();
-      setMessage(`Casa ${String(houseId).padStart(2, '0')} liberada para novo cadastro.`);
+      setMessage(`${label} liberada para novo cadastro.`);
     } catch (error) {
       setMessage(apiErrorMessage(error, 'Não consegui liberar a casa.'));
     } finally {
@@ -76,7 +82,7 @@ export function ReleaseHouseScreen() {
           <Value>Regra da liberação</Value>
           <LockOpen color={colors.blue} size={22} />
         </Row>
-        <Label>Use quando uma casa mudou de responsável. O morador atual fica inativo, o login dele é bloqueado e a casa volta para a tela de cadastro.</Label>
+        <Label>Use quando uma casa mudou de responsável. O morador atual fica inativo, o login dele é bloqueado e a casa fica livre para um novo convite.</Label>
       </Card>
 
       {message ? (
@@ -100,7 +106,7 @@ export function ReleaseHouseScreen() {
               <Card key={house.houseId}>
                 <Row>
                   <View style={styles.houseTitle}>
-                    <Value>Casa {String(house.houseId).padStart(2, '0')}</Value>
+                    <Value>{house.label}</Value>
                     {house.inactiveCount > 0 ? <Label>{house.inactiveCount} morador(es) antigo(s) no histórico</Label> : null}
                   </View>
                   <Badge status={released ? 'LIBERADA' : 'ACTIVE'} />
@@ -120,7 +126,7 @@ export function ReleaseHouseScreen() {
                     />
                     {pendingRelease?.houseId === house.houseId ? (
                       <View style={styles.confirmBox}>
-                        <Text style={styles.confirmTitle}>Confirmar liberação da Casa {String(house.houseId).padStart(2, '0')}</Text>
+                        <Text style={styles.confirmTitle}>Confirmar liberação da {house.label}</Text>
                         <Text style={styles.confirmText}>
                           {house.active.name} ficará inativo, não conseguirá mais entrar no portal e a casa ficará disponível para novo cadastro. O histórico financeiro será mantido.
                         </Text>
@@ -147,7 +153,7 @@ export function ReleaseHouseScreen() {
                     <CheckCircle2 color={colors.green} size={22} />
                     <View style={styles.releasedCopy}>
                       <Text style={styles.releasedTitle}>Disponível para cadastro</Text>
-                      <Text style={styles.releasedText}>A próxima pessoa pode se cadastrar escolhendo esta casa.</Text>
+                      <Text style={styles.releasedText}>A próxima pessoa entra com um convite desta casa (Moradores, Convites de acesso).</Text>
                     </View>
                   </View>
                 )}

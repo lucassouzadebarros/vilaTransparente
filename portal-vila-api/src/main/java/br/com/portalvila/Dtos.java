@@ -27,7 +27,7 @@ record ChangePasswordRequest(@NotBlank String currentPassword, @NotBlank String 
 record PasswordResetResponse(String message, String debugCode) {
 }
 
-record RegistrationHouseOption(Long houseId, Integer number, String label, boolean available, boolean invited) {
+record HouseOption(Long houseId, Integer number, String label, boolean available, boolean invited) {
 }
 
 record CreateInviteRequest(@NotNull Long houseId) {
