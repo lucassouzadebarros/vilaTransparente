@@ -151,11 +151,13 @@ function PortalTabs({ wide }: { wide: boolean }) {
           borderTopColor: colors.border
         },
         tabBarActiveBackgroundColor: 'transparent',
+        // No side padding or margin: on a 360px phone each of the five tabs has 72px, and "Demandas" was cut to "Deman...".
         tabBarItemStyle: {
           height: 58,
           paddingVertical: 2,
+          paddingHorizontal: 0,
           borderRadius: 12,
-          marginHorizontal: 2
+          marginHorizontal: 0
         },
         tabBarLabelStyle: {
           fontSize: 12,
