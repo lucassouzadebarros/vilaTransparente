@@ -990,6 +990,17 @@ class ResidentController {
         this.inviteLimiter = inviteLimiter;
     }
 
+    /**
+     * Not a list of houses any more: the public list went away with the open registration. Render's health check
+     * (render.yaml, healthCheckPath) was pointed at this address, and a deploy whose check fails is thrown away, so it keeps
+     * answering 200 with nothing in it. Point the check at /api/health and this can go.
+     */
+    @GetMapping("/registration-houses")
+    List<HouseOption> legacyHealthCheck() {
+        houses.count();
+        return List.of();
+    }
+
     /** For the administration: every active house, whether it already has a resident and whether it has an open invitation. */
     @GetMapping("/houses")
     @PreAuthorize("hasRole('ADMIN')")
@@ -1371,5 +1382,22 @@ class ApiExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     Map<String, String> notFound() {
             return Map.of("error", "Registro não encontrado.");
+    }
+}
+
+/** For the platform's health check: answers 200 only while the database answers, and says nothing about the data. */
+@RestController
+@RequestMapping("/api/health")
+class HealthController {
+    private final HouseRepository houses;
+
+    HealthController(HouseRepository houses) {
+        this.houses = houses;
+    }
+
+    @GetMapping
+    Map<String, String> health() {
+        houses.count();
+        return Map.of("status", "UP");
     }
 }

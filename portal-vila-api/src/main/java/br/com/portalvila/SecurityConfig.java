@@ -55,6 +55,8 @@ class SecurityConfig {
                     "/error"
                 ).permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/events/dashboard").permitAll()
+                // Health checks (no data): /api/health, and the old address render.yaml still points at.
+                .requestMatchers(HttpMethod.GET, "/api/health", "/api/residents/registration-houses").permitAll()
                 // Joining needs a code the administration made for the house: these two are the only open doors.
                 .requestMatchers(HttpMethod.POST, "/api/residents/invite-check", "/api/residents/register-with-invite").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/documents/*/file").permitAll()
