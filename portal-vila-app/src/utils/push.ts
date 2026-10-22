@@ -17,7 +17,7 @@ export async function registerForPush(): Promise<string | null> {
     return null;
   }
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false })
+    handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false })
   });
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
