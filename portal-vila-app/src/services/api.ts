@@ -1,5 +1,7 @@
-import axios from 'axios';
+import axios, { AxiosAdapter } from 'axios';
 import { Linking, Platform } from 'react-native';
+import { demoAdapter } from '../demo/demoAdapter';
+import { isDemoMode } from '../demo/demoMode';
 import { PickedFile, toFormPart } from '../utils/filePicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -40,7 +42,11 @@ const webBaseURL = isLocalWeb
 const baseURL = process.env.EXPO_PUBLIC_API_URL ?? webBaseURL;
 const publicBaseURL = baseURL.replace(/\/api\/?$/, '');
 
-export const apiClient = axios.create({ baseURL, timeout: 20000 });
+const networkAdapter = axios.getAdapter(axios.defaults.adapter);
+// In the demonstration the network is not used: example data answers instead (src/demo).
+const demoAwareAdapter: AxiosAdapter = (config) => (isDemoMode() ? demoAdapter(config) : networkAdapter(config));
+
+export const apiClient = axios.create({ baseURL, timeout: 20000, adapter: demoAwareAdapter });
 
 function appendFile(form: FormData, file: PickedFile) {
   if (file.file) {

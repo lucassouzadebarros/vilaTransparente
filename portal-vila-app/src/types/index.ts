@@ -65,6 +65,8 @@ export type Session = {
   role: Role;
   residentId?: number | null;
   mustChangePassword?: boolean;
+  /** The demonstration session: example data, never stored, nothing is saved. */
+  demo?: boolean;
 };
 
 export type PasswordResetResponse = {

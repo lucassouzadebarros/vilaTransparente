@@ -1,12 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
+import { resetDemoState } from '../demo/demoAdapter';
+import { demoSession, isDemoMode, startDemoMode, stopDemoMode } from '../demo/demoMode';
 import { api } from '../services/api';
-import { Session } from '../types';
+import { Role, Session } from '../types';
 import { registerForPush } from '../utils/push';
 
 type AuthContextValue = {
   session: Session | null;
   login: (email: string, password: string) => Promise<void>;
+  /** Opens the demonstration: example data, no account, nothing saved. Also switches between its two views. */
+  enterDemo: (role: Role) => void;
+  isDemo: boolean;
   logout: () => Promise<void>;
   markPasswordChanged: () => Promise<void>;
   isAdmin: boolean;
@@ -43,10 +48,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   // On a phone build, tell the server where to send notices. Nothing happens on the web.
   useEffect(() => {
-    if (session?.token) {
+    if (session?.token && !session.demo) {
       registerForPush().catch(() => undefined);
     }
-  }, [session?.token]);
+  }, [session?.token, session?.demo]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -62,7 +67,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
     isAdmin: session?.role === 'ADMIN',
     isSindico: session?.role === 'SINDICO',
     canManageBudgets: session?.role === 'ADMIN' || session?.role === 'SINDICO',
+    isDemo: Boolean(session?.demo),
+    enterDemo(role: Role) {
+      if (!isDemoMode()) {
+        resetDemoState();
+      }
+      startDemoMode(role);
+      setSession(demoSession(role));
+    },
     async login(email: string, password: string) {
+      stopDemoMode();
       await AsyncStorage.removeItem('portal-vila-session');
       setSession(null);
       const next = await api.login(email.trim(), password);
@@ -70,6 +84,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setSession(next);
     },
     async logout() {
+      stopDemoMode();
       setSession(null);
       await AsyncStorage.removeItem('portal-vila-session');
     },

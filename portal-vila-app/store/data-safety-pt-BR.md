@@ -42,8 +42,8 @@ Confirmar com o Lucas antes de enviar; na dúvida, declarar.
 
 ## Outras declarações da Play Console
 
-- **Acesso ao app**: o app exige login. Informar credenciais de um condomínio de demonstração (ainda a criar).
-- **Recursos financeiros**: o app gera cobranças Pix de mensalidade condominial; não oferece empréstimo, investimento nem criptomoeda. Marcar como "outros recursos financeiros" e descrever.
+- **Acesso ao app** (feito): o app exige login, mas há o **modo demonstração**: na tela de entrada, "Ver demonstração" abre o app com dados de exemplo, sem conta. As instruções (em inglês, sem usuário nem senha) estão em "Detalhes do login".
+- **Recursos financeiros** (decisão do Lucas em 2026-10-22): marcado "Meu app não oferece recursos financeiros". O app só mostra cobranças Pix geradas pelo Asaas, o pagamento acontece no banco do morador e o app não processa pagamento nem guarda dados de cartão ou conta. Se a Google questionar, a alternativa é "Outro", com essa descrição.
 - **Anúncios**: não.
 - **Público-alvo**: 18+.
 - **Política de privacidade**: `https://portal-vila-app.onrender.com/privacidade.html` (publicada junto com o site; só colar na Play Console depois do deploy).

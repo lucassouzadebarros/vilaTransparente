@@ -10,7 +10,7 @@ import { openExternal, PRIVACY_URL } from '../utils/links';
 
 /** Deleting the account from inside the app (Google Play requires it). The password confirms; a dialog asks once more. */
 export function DeleteAccountScreen() {
-  const { isAdmin, logout } = useAuth();
+  const { isAdmin, isDemo, logout } = useAuth();
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -43,6 +43,20 @@ export function DeleteAccountScreen() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (isDemo) {
+    return (
+      <Screen title="Excluir minha conta" subtitle="Modo demonstração">
+        <Card>
+          <Value>Na demonstração não há conta para excluir</Value>
+          <Label>
+            Esta é uma visão de exemplo, sem conta e sem dados pessoais. Quem tem uma conta de verdade encontra esta opção aqui e apaga os próprios dados com a senha.
+          </Label>
+          <Button title="Ver política de privacidade" icon={ShieldCheck} variant="ghost" onPress={() => openExternal(PRIVACY_URL)} />
+        </Card>
+      </Screen>
+    );
   }
 
   if (isAdmin) {

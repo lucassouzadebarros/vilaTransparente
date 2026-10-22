@@ -14,7 +14,7 @@ import { MIN_PASSWORD_LENGTH } from '../utils/password';
 type Mode = 'login' | 'register' | 'forgot' | 'reset' | 'resetDone';
 
 export function LoginScreen() {
-  const { login, logout } = useAuth();
+  const { login, logout, enterDemo } = useAuth();
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -354,6 +354,19 @@ export function LoginScreen() {
                 </View>
               </View>
               <LoginGhostButton title="Tenho um código" icon={KeyRound} onPress={openRegister} />
+            </Card>
+
+            <Card style={[styles.raisedCard, styles.signupCard]}>
+              <View style={styles.signupHeaderModern}>
+                <View style={styles.signupIconPanel}>
+                  <Eye color={colors.blue} size={29} strokeWidth={2.1} />
+                </View>
+                <View style={styles.signupCopy}>
+                  <Text style={styles.signupTitle}>Ver demonstração</Text>
+                  <Text style={styles.signupText}>Quer só conhecer o app? Veja as telas com dados de exemplo, sem criar conta. Nada é salvo.</Text>
+                </View>
+              </View>
+              <LoginGhostButton title="Ver demonstração" icon={Eye} onPress={() => enterDemo('ADMIN')} />
             </Card>
 
             <Card style={[styles.raisedCard, styles.supportCardModern]}>
