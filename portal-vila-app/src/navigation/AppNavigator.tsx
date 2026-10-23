@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View } from 'react-native';
-import { DarkTheme, DefaultTheme, NavigationContainer, ParamListBase, createNavigationContainerRef, getFocusedRouteNameFromRoute } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, NavigationContainer, ParamListBase, StackActions, createNavigationContainerRef, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { BottomTabBar, BottomTabBarProps, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ClipboardList, FileText, Home, MoreHorizontal, WalletCards } from 'lucide-react-native';
@@ -108,7 +108,36 @@ function PortalTabBar(props: BottomTabBarProps) {
   const name = current.name === 'Mais' ? getFocusedRouteNameFromRoute(current) ?? 'MoreMenu' : current.name;
   const tab = tabOf[name];
   const index = tab ? props.state.routes.findIndex((route) => route.name === tab) : props.state.index;
-  return <BottomTabBar {...props} state={{ ...props.state, index: index >= 0 ? index : props.state.index }} />;
+  const shown = index >= 0 ? index : props.state.index;
+  // The bar shows the tab a hidden screen belongs to as the open one, so a tap on it used to do nothing: the person was
+  // stuck on the Pix screen, or on Problemas inside "Mais", with no way back by the bar. A tap now goes to that tab's first screen.
+  const navigation = {
+    ...props.navigation,
+    emit: (event: { type: string; target?: string }) => {
+      const result = (props.navigation.emit as (event: unknown) => { defaultPrevented: boolean })(event);
+      if (event.type === 'tabPress' && !result.defaultPrevented) {
+        const pressed = props.state.routes.find((route) => route.key === event.target);
+        const shownRoute = props.state.routes[shown];
+        if (pressed) {
+          // "Mais" always opens its menu: the stack inside it remembers the last screen (Problemas, for one) and used to bring it back.
+          // Opened straight on Problemas the stack has that screen alone, with no menu under it: then the menu takes its place.
+          const stack = navigationRef.getRootState()?.routes.find((route) => route.name === 'Mais')?.state as
+            | { key?: string; index?: number; routes?: { name: string }[] }
+            | undefined;
+          const top = stack?.routes?.[stack.index ?? 0];
+          if (pressed.name === 'Mais' && stack?.key && top && top.name !== 'MoreMenu') {
+            const hasMenu = stack.routes?.some((route) => route.name === 'MoreMenu');
+            navigationRef.dispatch({ ...(hasMenu ? StackActions.popToTop() : StackActions.replace('MoreMenu')), target: stack.key });
+          }
+          if (pressed.key === shownRoute.key && pressed.key !== current.key) {
+            (props.navigation.navigate as (name: string) => void)(pressed.name);
+          }
+        }
+      }
+      return result;
+    }
+  };
+  return <BottomTabBar {...props} navigation={navigation as unknown as BottomTabBarProps['navigation']} state={{ ...props.state, index: shown }} />;
 }
 
 const Tabs = createBottomTabNavigator();
