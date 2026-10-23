@@ -100,10 +100,13 @@ export function CashBoxScreen() {
         }
       };
 
-      if (typeof window !== 'undefined') {
+      // A phone has `window` but not its events (the app closed on opening this screen); it refreshes on focus and on the timer.
+      const windowEvents = typeof window !== 'undefined' && typeof window.addEventListener === 'function';
+      if (windowEvents) {
         window.addEventListener('focus', refresh);
       }
-      if (typeof document !== 'undefined') {
+      const documentEvents = typeof document !== 'undefined' && typeof document.addEventListener === 'function';
+      if (documentEvents) {
         document.addEventListener('visibilitychange', handleVisible);
       }
 
@@ -113,10 +116,10 @@ export function CashBoxScreen() {
         if (events) {
           events.close();
         }
-        if (typeof window !== 'undefined') {
+        if (windowEvents) {
           window.removeEventListener('focus', refresh);
         }
-        if (typeof document !== 'undefined') {
+        if (documentEvents) {
           document.removeEventListener('visibilitychange', handleVisible);
         }
       };

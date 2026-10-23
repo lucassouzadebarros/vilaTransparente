@@ -95,14 +95,26 @@ apiClient.interceptors.request.use(async (config) => {
   return config;
 });
 
+const authExpiredListeners = new Set<() => void>();
+
+/**
+ * Calls `listener` when the server turns the saved sign-in down (401). It is a plain list and not a `window` event
+ * because a phone has no `window.addEventListener`: using it there closed the app as soon as it opened.
+ * Returns the function that stops listening.
+ */
+export function onAuthExpired(listener: () => void) {
+  authExpiredListeners.add(listener);
+  return () => {
+    authExpiredListeners.delete(listener);
+  };
+}
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
       await AsyncStorage.removeItem('portal-vila-session');
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new Event('portal-vila-auth-expired'));
-      }
+      authExpiredListeners.forEach((listener) => listener());
     }
     return Promise.reject(error);
   }

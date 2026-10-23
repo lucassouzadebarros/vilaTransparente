@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 import { resetDemoState } from '../demo/demoAdapter';
 import { demoSession, isDemoMode, startDemoMode, stopDemoMode } from '../demo/demoMode';
-import { api } from '../services/api';
+import { api, onAuthExpired } from '../services/api';
 import { Role, Session } from '../types';
 import { registerForPush } from '../utils/push';
 
@@ -53,14 +53,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }, [session?.token, session?.demo]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    const clearExpiredSession = () => setSession(null);
-    window.addEventListener('portal-vila-auth-expired', clearExpiredSession);
-    return () => window.removeEventListener('portal-vila-auth-expired', clearExpiredSession);
-  }, []);
+  useEffect(() => onAuthExpired(() => setSession(null)), []);
 
   const value = useMemo<AuthContextValue>(() => ({
     session,
