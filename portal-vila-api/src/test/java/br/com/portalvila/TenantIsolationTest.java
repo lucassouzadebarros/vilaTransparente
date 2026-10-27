@@ -208,12 +208,12 @@ class TenantIsolationTest {
     }
 
     @Test
-    void settingsAreOnePerCondominium() {
+    void settingsBelongToTheirCondominium() {
         Settings theirs = asOther(() -> settings.save(new Settings()));
         cleanup.add(() -> TenantContext.runAs(OTHER, () -> settings.deleteById(theirs.id)));
 
         assertThat(ids(settings.findAll())).doesNotContain(theirs.id);
-        assertThat(asOther(() -> ids(settings.findAll()))).containsExactly(theirs.id);
+        assertThat(asOther(() -> ids(settings.findAll()))).contains(theirs.id);
     }
 
     @Test

@@ -15,12 +15,17 @@ import java.util.function.Supplier;
  *
  * {@link JwtAuthFilter} sets it from the signed-in account for each request. Work without an account names its own:
  * the invitation routes take the condominium of the code, a document link the one in its token, the voting schedule
- * goes through each condominium, and the Asaas webhook and the first load are the Vila's. Anything else still falls back
- * to the Vila; that fallback becomes an error before a second condominium is created.
+ * goes through each condominium, and the Asaas webhook and the first load are the Vila's.
+ *
+ * Work that names none runs as {@link #NONE}: it reads nothing of any condominium, and what it tries to save fails
+ * (there is no condominium 0). Forgetting to name the condominium shows up as an error, never as data in the Vila.
  */
 final class TenantContext {
     /** The Vila: the condominium every row existed in before the app served several. */
     static final long VILA = 1L;
+
+    /** No condominium: reads find nothing, writes fail. What runs when nothing said which condominium. */
+    static final long NONE = 0L;
 
     /** Not a condominium: reads see every condominium. Only for finding out which one something belongs to. */
     private static final long ALL = -1L;
@@ -32,7 +37,7 @@ final class TenantContext {
 
     static long current() {
         Long id = CURRENT.get();
-        return id == null ? VILA : id;
+        return id == null ? NONE : id;
     }
 
     static void set(long condominiumId) {
@@ -43,21 +48,31 @@ final class TenantContext {
         CURRENT.remove();
     }
 
+    /** Sets the condominium and returns the one before, to hand back to {@link #restore}. */
+    static Long enter(long condominiumId) {
+        Long previous = CURRENT.get();
+        CURRENT.set(condominiumId);
+        return previous;
+    }
+
+    static void restore(Long previous) {
+        if (previous == null) {
+            CURRENT.remove();
+        } else {
+            CURRENT.set(previous);
+        }
+    }
+
     /**
      * Runs {@code work} as that condominium and puts the previous one back. Open the transaction <em>inside</em> the
      * block: a session keeps the condominium it was opened with, so one already open would not change.
      */
     static <T> T callAs(long condominiumId, Supplier<T> work) {
-        Long previous = CURRENT.get();
-        CURRENT.set(condominiumId);
+        Long previous = enter(condominiumId);
         try {
             return work.get();
         } finally {
-            if (previous == null) {
-                CURRENT.remove();
-            } else {
-                CURRENT.set(previous);
-            }
+            restore(previous);
         }
     }
 

@@ -1220,7 +1220,11 @@ class ResidentController {
         return passwordResetService.requestResetForResident(resident.id);
     }
 
+    /** A condominium without Pix still registers and edits its residents; it just has no customer in Asaas. */
     private void syncGatewayCustomer(Resident resident) {
+        if (!PixGatewayClient.connectedHere()) {
+            return;
+        }
         GatewayCustomer customer = gatewayClient.createOrUpdateCustomer(resident);
         resident.gatewayCustomerId = customer.id();
     }

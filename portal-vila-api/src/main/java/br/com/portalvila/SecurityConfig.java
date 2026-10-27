@@ -114,6 +114,7 @@ class JwtAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
         throws ServletException, IOException {
         String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
+        Long condominium = null;
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             try {
                 Claims claims = jwtService.parse(authHeader.substring(7));
@@ -128,17 +129,22 @@ class JwtAuthFilter extends OncePerRequestFilter {
                     );
                     org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
                     // Like the role, the condominium comes from the account in the database, never from the request.
-                    TenantContext.set(user.condominiumId);
+                    condominium = user.condominiumId;
                 }
             } catch (RuntimeException ignored) {
                 org.springframework.security.core.context.SecurityContextHolder.clearContext();
-                TenantContext.clear();
             }
         }
+        if (condominium == null) {
+            // Nobody signed in: the request runs with no condominium unless its route names one.
+            filterChain.doFilter(request, response);
+            return;
+        }
+        Long previous = TenantContext.enter(condominium);
         try {
             filterChain.doFilter(request, response);
         } finally {
-            TenantContext.clear();
+            TenantContext.restore(previous);
         }
     }
 }
