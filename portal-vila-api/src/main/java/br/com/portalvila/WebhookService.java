@@ -73,9 +73,13 @@ class WebhookService {
         this.acceptStoredSecret = acceptStoredSecret;
     }
 
-    /** Tells the admin, in the logs, when the guessable legacy secret is still accepted. */
+    /** Tells the admin, in the logs, when the guessable legacy secret is still accepted. The secret is the Vila's. */
     @EventListener(ApplicationReadyEvent.class)
     void warnAboutLegacySecret() {
+        TenantContext.runAs(TenantContext.VILA, this::warnAboutVilaSecret);
+    }
+
+    private void warnAboutVilaSecret() {
         if (acceptStoredSecret && LEGACY_DEFAULT_SECRET.equals(storedSecret())) {
             log.warn("O segredo do webhook gravado no banco ainda e o valor padrao '{}'. Troque o token no Asaas e em "
                 + "ASAAS_WEBHOOK_TOKEN e depois defina ASAAS_ACCEPT_STORED_WEBHOOK_SECRET=false.", LEGACY_DEFAULT_SECRET);

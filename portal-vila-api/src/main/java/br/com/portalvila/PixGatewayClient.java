@@ -21,6 +21,14 @@ import java.util.Map;
 import java.util.Optional;
 
 interface PixGatewayClient {
+    /**
+     * The one Asaas account configured here is the Vila's. Until each condominium connects its own, only the Vila uses
+     * it: the others have everything but Pix.
+     */
+    static boolean connectedHere() {
+        return TenantContext.current() == TenantContext.VILA;
+    }
+
     String ONE_PIXEL_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
 
     GatewayCustomer createOrUpdateCustomer(Resident resident);
@@ -88,6 +96,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
 
     @Override
     public GatewayCustomer createOrUpdateCustomer(Resident resident) {
+        requireVila();
         requireApiKey();
         String cpfCnpj = cpfCnpj(resident);
         Map<String, Object> payload = customerPayload(resident, cpfCnpj);
@@ -171,6 +180,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
 
     @Override
     public Optional<String> findCustomerName(String customerId) {
+        requireVila();
         if (apiKey == null || apiKey.isBlank() || customerId == null || customerId.isBlank()) {
             return Optional.empty();
         }
@@ -231,6 +241,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
 
     @Override
     public GatewayCharge createPixCharge(CreatePixChargeRequest request) {
+        requireVila();
         requireApiKey();
 
         try {
@@ -265,6 +276,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
 
     @Override
     public Optional<GatewayCharge> findPaymentByExternalReference(String externalReference) {
+        requireVila();
         requireApiKey();
         try {
             @SuppressWarnings("unchecked")
@@ -294,6 +306,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
 
     @Override
     public List<GatewayCharge> listPixPaymentsByCustomerAndDueDateRange(String customerId, LocalDate start, LocalDate end) {
+        requireVila();
         requireApiKey();
         try {
             @SuppressWarnings("unchecked")
@@ -338,6 +351,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
 
     @Override
     public PixQrCode getPixQrCode(String gatewayPaymentId) {
+        requireVila();
         requireApiKey();
 
         try {
@@ -361,6 +375,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
 
     @Override
     public GatewayPayment getPayment(String gatewayPaymentId) {
+        requireVila();
         requireApiKey();
         try {
             @SuppressWarnings("unchecked")
@@ -384,6 +399,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
 
     @Override
     public void cancelPayment(String gatewayPaymentId) {
+        requireVila();
         requireApiKey();
         try {
             webClient.delete()
@@ -400,6 +416,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
 
     @Override
     public List<JsonNode> listPixPaymentsCreatedBetween(LocalDate start, LocalDate end) {
+        requireVila();
         Map<String, String> filters = new HashMap<>();
         filters.put("billingType", "PIX");
         filters.put("dateCreated[ge]", start.format(DateTimeFormatter.ISO_DATE));
@@ -409,6 +426,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
 
     @Override
     public List<JsonNode> listPixPaymentsReceivedBetween(LocalDate start, LocalDate end) {
+        requireVila();
         Map<String, String> filters = new HashMap<>();
         filters.put("billingType", "PIX");
         filters.put("paymentDate[ge]", start.format(DateTimeFormatter.ISO_DATE));
@@ -418,6 +436,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
 
     @Override
     public BigDecimal getBalance() {
+        requireVila();
         requireApiKey();
         try {
             JsonNode response = webClient.get()
@@ -441,6 +460,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
 
     @Override
     public List<GatewayTransaction> listFinancialTransactions(LocalDate start, LocalDate end) {
+        requireVila();
         Map<String, String> filters = new HashMap<>();
         filters.put("startDate", start.format(DateTimeFormatter.ISO_DATE));
         filters.put("finishDate", end.format(DateTimeFormatter.ISO_DATE));
@@ -491,6 +511,13 @@ class AsaasPixGatewayClient implements PixGatewayClient {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
         } catch (RuntimeException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
+        }
+    }
+
+    /** Before any call to Asaas: the account is the Vila's, and no other condominium reaches it. */
+    private static void requireVila() {
+        if (!PixGatewayClient.connectedHere()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "O Pix ainda não está ligado a este condomínio.");
         }
     }
 
