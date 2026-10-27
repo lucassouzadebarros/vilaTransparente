@@ -9,7 +9,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -21,6 +23,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -41,6 +45,9 @@ class PlatformTest {
     @Autowired HouseRepository houses;
     @Autowired ResidentRepository residents;
     @Autowired JdbcTemplate jdbc;
+    @Autowired SettingsRepository settings;
+    @Autowired AuditEntryRepository auditEntries;
+    @Autowired PasswordEncoder encoder;
     @MockBean PixGatewayClient gatewayClient;
 
     private final List<Runnable> cleanup = new ArrayList<>();
@@ -124,6 +131,114 @@ class PlatformTest {
         assertThat(secondRow.get("pixConnected").asBoolean()).isFalse();
         assertThat(vilaRow).isNotNull();
         assertThat(vilaRow.get("pixConnected").asBoolean()).isTrue();
+    }
+
+    private JsonNode send(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request, String body, int expected) throws Exception {
+        String answer = mvc.perform(request.header("Authorization", owner).contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().is(expected)).andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        return answer.isBlank() ? null : json.readTree(answer);
+    }
+
+    /** Removes a condominium made by a test, with what was created inside it. */
+    private void forget(long id) {
+        cleanup.add(() -> {
+            TenantContext.runAs(id, () -> {
+                houses.deleteAll();
+                settings.deleteAll();
+                auditEntries.deleteAll();
+            });
+            condominiums.deleteById(id);
+        });
+    }
+
+    @Test
+    void theOwnerCreatesACondominiumWithItsUnitsAndItsOwnSettings() throws Exception {
+        String name = "Residencial São José " + UUID.randomUUID().toString().substring(0, 6);
+        JsonNode created = send(post("/api/platform/condominiums"), "{\"name\":\"  " + name + " \",\"unitLabel\":\"Apto\",\"units\":12}", 200);
+        long id = created.get("id").asLong();
+        forget(id);
+
+        assertThat(created.get("name").asText()).isEqualTo(name);
+        assertThat(created.get("slug").asText()).startsWith("residencial-sao-jose-");
+        assertThat(created.get("status").asText()).isEqualTo("ACTIVE");
+        assertThat(created.get("houses").asLong()).isEqualTo(12);
+        assertThat(created.get("pixConnected").asBoolean()).isFalse();
+        TenantContext.runAs(id, () -> {
+            assertThat(houses.findByActiveTrueOrderByNumberAsc().get(0).label).isEqualTo("Apto 01");
+            assertThat(settings.findAll()).singleElement().satisfies(own -> assertThat(own.villageName).isEqualTo(name));
+        });
+        // Nothing of it reaches the Vila.
+        assertThat(houses.findByActiveTrueOrderByNumberAsc()).noneMatch(house -> house.label.startsWith("Apto"));
+
+        JsonNode detail = send(get("/api/platform/condominiums/" + id), "", 200);
+        assertThat(detail.get("activity").get(0).get("action").asText()).isEqualTo("CONDOMINIUM_CREATED");
+        assertThat(detail.get("activity").get(0).get("actor").asText()).isEqualTo("dono@teste.dev");
+    }
+
+    @Test
+    void aRepeatedIdentifierOrAWrongFieldIsRefusedAndNothingIsLeftBehind() throws Exception {
+        String slug = "teste-" + UUID.randomUUID().toString().substring(0, 8);
+        long id = send(post("/api/platform/condominiums"), "{\"name\":\"Primeiro\",\"slug\":\"" + slug + "\",\"units\":0}", 200).get("id").asLong();
+        forget(id);
+        long before = condominiums.count();
+
+        send(post("/api/platform/condominiums"), "{\"name\":\"Segundo\",\"slug\":\"" + slug.toUpperCase() + "\",\"units\":1}", 409);
+        send(post("/api/platform/condominiums"), "{\"name\":\"Grande demais\",\"units\":5000}", 400);
+        send(post("/api/platform/condominiums"), "{\"name\":\"Torres\",\"unitLabel\":\"Torre\",\"units\":3}", 400);
+        send(post("/api/platform/condominiums"), "{\"name\":\"ab\",\"units\":3}", 400);
+
+        assertThat(condominiums.count()).isEqualTo(before);
+        mvc.perform(post("/api/platform/condominiums").header("Authorization", vilaAdmin).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Sem permissao\",\"units\":1}")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void aSuspendedCondominiumKeepsItsPeopleOutUntilItIsReactivated() throws Exception {
+        AppUser manager = new AppUser("Sindica", "sindica-" + UUID.randomUUID() + "@teste.dev", encoder.encode("SenhaBoa123"), "ADMIN", null);
+        manager.condominiumId = second.id;
+        AppUser saved = users.save(manager);
+        cleanup.add(() -> users.deleteById(saved.id));
+        String token = "Bearer " + jwt.issue(saved);
+        String login = "{\"email\":\"" + saved.email + "\",\"password\":\"SenhaBoa123\"}";
+
+        mvc.perform(get("/api/residents/houses").header("Authorization", token)).andExpect(status().isOk());
+
+        assertThat(send(put("/api/platform/condominiums/" + second.id + "/status"), "{\"status\":\"SUSPENDED\"}", 200).get("status").asText())
+            .isEqualTo("SUSPENDED");
+        String refused = mvc.perform(get("/api/residents/houses").header("Authorization", token))
+            .andExpect(status().isForbidden()).andReturn().getResponse().getContentAsString();
+        assertThat(refused).contains("suspenso");
+        mvc.perform(post("/api/auth/login").header("X-Forwarded-For", "test-" + UUID.randomUUID()).contentType(MediaType.APPLICATION_JSON).content(login))
+            .andExpect(status().isForbidden());
+        // The platform keeps working, the Vila too.
+        mvc.perform(get("/api/platform/condominiums/" + second.id).header("Authorization", owner)).andExpect(status().isOk());
+
+        send(put("/api/platform/condominiums/" + second.id + "/status"), "{\"status\":\"ACTIVE\"}", 200);
+        mvc.perform(get("/api/residents/houses").header("Authorization", token)).andExpect(status().isOk());
+        mvc.perform(post("/api/auth/login").header("X-Forwarded-For", "test-" + UUID.randomUUID()).contentType(MediaType.APPLICATION_JSON).content(login))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void theVilaCannotBeSuspendedFromThePanel() throws Exception {
+        send(put("/api/platform/condominiums/" + TenantContext.VILA + "/status"), "{\"status\":\"SUSPENDED\"}", 409);
+        assertThat(condominiums.findById(TenantContext.VILA).orElseThrow().status).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void renamingChangesTheNameTheAppShowsToo() throws Exception {
+        TenantContext.runAs(second.id, () -> {
+            Settings own = new Settings();
+            own.villageName = "Residencial Teste";
+            Settings stored = settings.save(own);
+            cleanup.add(() -> TenantContext.runAs(second.id, () -> settings.deleteById(stored.id)));
+        });
+
+        send(put("/api/platform/condominiums/" + second.id), "{\"name\":\"Residencial Novo Nome\"}", 200);
+
+        assertThat(condominiums.findById(second.id).orElseThrow().name).isEqualTo("Residencial Novo Nome");
+        TenantContext.runAs(second.id, () -> assertThat(settings.findAll().get(0).villageName).isEqualTo("Residencial Novo Nome"));
+        cleanup.add(() -> TenantContext.runAs(second.id, () -> auditEntries.deleteAll()));
     }
 
     @Test

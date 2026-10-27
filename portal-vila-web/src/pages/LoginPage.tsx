@@ -38,12 +38,25 @@ export function LoginPage() {
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       <section className="relative hidden overflow-hidden bg-sidebar p-12 text-sidebar-ink lg:flex lg:flex-col lg:justify-between">
-        <div className="flex items-center gap-3">
+        {/* Depth without noise: a soft light from the corner and a faint grid that fades out. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(60rem_40rem_at_110%_-10%,rgba(92,184,201,0.22),transparent_60%),radial-gradient(40rem_30rem_at_-20%_120%,rgba(91,196,139,0.12),transparent_60%)]"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:linear-gradient(rgba(255,255,255,.8)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.8)_1px,transparent_1px)] [background-size:44px_44px] [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]"
+        />
+        <div className="relative flex items-center gap-3">
           <img src={logo} alt="" className="size-10 rounded-xl" />
           <span className="text-lg font-semibold">Portal da Vila</span>
         </div>
-        <div className="max-w-md">
-          <h1 className="text-3xl font-semibold leading-tight">Painel da plataforma</h1>
+        <div className="relative max-w-md">
+          <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-sidebar-muted">
+            <span aria-hidden className="size-1.5 rounded-full bg-[#5bc48b]" />
+            Gestão de condomínios
+          </p>
+          <h1 className="text-4xl font-semibold leading-tight tracking-tight">Painel da plataforma</h1>
           <p className="mt-3 text-sidebar-muted">A gestão dos condomínios que usam o Portal da Vila.</p>
           <ul className="mt-10 space-y-5">
             {highlights.map(({ icon: Icon, text }) => (
@@ -56,7 +69,7 @@ export function LoginPage() {
             ))}
           </ul>
         </div>
-        <p className="text-xs text-sidebar-muted">Acesso restrito a quem administra a plataforma.</p>
+        <p className="relative text-xs text-sidebar-muted">Acesso restrito a quem administra a plataforma.</p>
       </section>
 
       <section className="flex items-center justify-center px-4 py-12 sm:px-8">
@@ -102,6 +115,7 @@ export function LoginPage() {
               {busy ? 'Entrando…' : 'Entrar'}
             </Button>
           </form>
+          <p className="mt-6 text-center text-xs text-muted">Esqueceu a senha? Use “Esqueci minha senha” no aplicativo.</p>
         </div>
       </section>
     </div>

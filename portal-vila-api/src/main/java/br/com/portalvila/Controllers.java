@@ -48,6 +48,8 @@ class AuthController {
     private final CurrentUserService currentUser;
     private final LoginAttemptLimiter loginLimiter;
     private final AccountErasureService erasure;
+    private final PlatformAdmins platformAdmins;
+    private final CondominiumAccess access;
 
     AuthController(
         AppUserRepository users,
@@ -59,8 +61,12 @@ class AuthController {
         PasswordResetService passwordResetService,
         CurrentUserService currentUser,
         LoginAttemptLimiter loginLimiter,
-        AccountErasureService erasure
+        AccountErasureService erasure,
+        PlatformAdmins platformAdmins,
+        CondominiumAccess access
     ) {
+        this.platformAdmins = platformAdmins;
+        this.access = access;
         this.erasure = erasure;
         this.loginLimiter = loginLimiter;
         this.users = users;
@@ -104,6 +110,9 @@ class AuthController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciais inválidas.");
         }
         loginLimiter.succeed(attemptKey);
+        if (!platformAdmins.includes(user.email) && access.suspended(user.condominiumId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, CondominiumAccess.SUSPENDED_MESSAGE);
+        }
         return new LoginResponse(jwtService.issue(user), user.name, user.email, user.role, user.residentId, user.mustChangePassword);
     }
 
@@ -1000,6 +1009,7 @@ class ResidentController {
     private final HouseInviteService invites;
     private final LoginAttemptLimiter inviteLimiter;
     private final TransactionTemplate transaction;
+    private final CondominiumAccess access;
 
     ResidentController(
         ResidentRepository residents,
@@ -1010,8 +1020,10 @@ class ResidentController {
         PasswordResetService passwordResetService,
         HouseInviteService invites,
         LoginAttemptLimiter inviteLimiter,
-        PlatformTransactionManager transactionManager
+        PlatformTransactionManager transactionManager,
+        CondominiumAccess access
     ) {
+        this.access = access;
         this.residents = residents;
         this.houses = houses;
         this.users = users;
@@ -1096,7 +1108,8 @@ class ResidentController {
      * unknown code runs where it would anyway and fails the same way as any other.
      */
     private long condominiumOfCode(String code) {
-        return invites.condominiumOf(code).orElse(TenantContext.current());
+        // A suspended condominium takes nobody new: its codes fail like any wrong code.
+        return invites.condominiumOf(code).filter(condominium -> !access.suspended(condominium)).orElse(TenantContext.current());
     }
 
     /** Public: tells a person which house a code opens, and nothing else. Wrong, used and expired codes look the same. */

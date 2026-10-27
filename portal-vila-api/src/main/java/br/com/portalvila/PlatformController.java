@@ -1,8 +1,13 @@
 package br.com.portalvila;
 
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -37,15 +42,11 @@ class PlatformAdmins {
 @RestController
 @RequestMapping("/api/platform")
 class PlatformController {
-    private final CondominiumRepository condominiums;
-    private final HouseRepository houses;
-    private final ResidentRepository residents;
+    private final PlatformService platform;
     private final CurrentUserService currentUser;
 
-    PlatformController(CondominiumRepository condominiums, HouseRepository houses, ResidentRepository residents, CurrentUserService currentUser) {
-        this.condominiums = condominiums;
-        this.houses = houses;
-        this.residents = residents;
+    PlatformController(PlatformService platform, CurrentUserService currentUser) {
+        this.platform = platform;
         this.currentUser = currentUser;
     }
 
@@ -59,17 +60,26 @@ class PlatformController {
     /** Every condominium, with a few numbers counted inside each one. */
     @GetMapping("/condominiums")
     List<CondominiumSummary> list() {
-        return condominiums.findAll().stream()
-            .map(condominium -> TenantContext.callAs(condominium.id, () -> new CondominiumSummary(
-                condominium.id,
-                condominium.name,
-                condominium.slug,
-                condominium.status,
-                condominium.createdAt,
-                houses.countByActiveTrue(),
-                residents.countByStatus("ACTIVE"),
-                PixGatewayClient.connectedHere()
-            )))
-            .toList();
+        return platform.list();
+    }
+
+    @GetMapping("/condominiums/{id}")
+    CondominiumDetail detail(@PathVariable Long id) {
+        return platform.detail(id);
+    }
+
+    @PostMapping("/condominiums")
+    CondominiumSummary create(@Valid @RequestBody CreateCondominiumRequest request) {
+        return platform.create(request);
+    }
+
+    @PutMapping("/condominiums/{id}")
+    CondominiumSummary rename(@PathVariable Long id, @Valid @RequestBody RenameCondominiumRequest request) {
+        return platform.rename(id, request.name());
+    }
+
+    @PutMapping("/condominiums/{id}/status")
+    CondominiumSummary changeStatus(@PathVariable Long id, @Valid @RequestBody CondominiumStatusRequest request) {
+        return platform.changeStatus(id, request.status());
     }
 }

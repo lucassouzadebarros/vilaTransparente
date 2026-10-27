@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/AppShell';
 import { Spinner } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
+import { CondominiumDetailPage } from '@/pages/CondominiumDetailPage';
 import { CondominiumsPage } from '@/pages/CondominiumsPage';
 import { LoginPage } from '@/pages/LoginPage';
 
@@ -34,6 +35,7 @@ export function App() {
       >
         <Route index element={<Navigate to="/condominios" replace />} />
         <Route path="/condominios" element={<CondominiumsPage />} />
+        <Route path="/condominios/:id" element={<CondominiumDetailPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
