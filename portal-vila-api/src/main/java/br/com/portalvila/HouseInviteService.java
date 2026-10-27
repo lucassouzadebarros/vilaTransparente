@@ -77,6 +77,18 @@ class HouseInviteService {
         return new Issued(saved, house, code);
     }
 
+    /**
+     * The condominium a typed code belongs to. Nobody is signed in yet, so the code itself is looked up above the
+     * condominiums; everything after that ({@link #redeemable} and the registration) runs inside the one found.
+     */
+    Optional<Long> condominiumOf(String rawCode) {
+        String normalized = normalize(rawCode);
+        if (normalized.length() != CODE_LENGTH) {
+            return Optional.empty();
+        }
+        return TenantContext.callAcrossCondominiums(() -> invites.findByCodeHash(hash(normalized)).map(invite -> invite.condominiumId));
+    }
+
     /** The invitation behind a code typed by someone, if it can still be used. Every failure looks the same to the caller. */
     Optional<HouseInvite> redeemable(String rawCode) {
         String normalized = normalize(rawCode);

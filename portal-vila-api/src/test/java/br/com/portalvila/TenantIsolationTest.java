@@ -33,8 +33,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Two condominiums share one database. Whatever one of them does through the repositories must stay out of reach of the
- * other: reads, lookups by id, derived queries, locked reads and deletes. The Vila is condominium 1; there is no table
- * of condominiums in these tests, so "2" is just another number.
+ * other: reads, lookups by id, derived queries, locked reads and deletes. The Vila is condominium 1; these tests make no
+ * condominium rows (the schema here has no foreign keys), so "2" is just another number.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -171,7 +171,7 @@ class TenantIsolationTest {
     @Test
     void everyRepositoryUsesTheCondominiumAwareBase() throws Exception {
         var repositories = context.getBeansOfType(JpaRepository.class).values();
-        assertThat(repositories).hasSize(20);
+        assertThat(repositories).hasSize(21);
         for (JpaRepository<?, ?> repository : repositories) {
             assertThat(((Advised) repository).getTargetSource().getTarget()).isInstanceOf(TenantAwareRepository.class);
         }

@@ -72,6 +72,7 @@ class PasswordResetService {
         }
         String code = nextCode();
         PasswordResetCode created = new PasswordResetCode();
+        created.condominiumId = user.condominiumId;
         created.userId = user.id;
         created.codeHash = passwordEncoder.encode(code);
         created.expiresAt = now.plusMinutes(expirationMinutes);

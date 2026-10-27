@@ -14,9 +14,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * "Something changed, reload" for the screens that are open. Each screen listens to one condominium, and a change only
+ * reaches the screens of the condominium it happened in.
+ */
 @Service
 class DashboardEventService {
-    private final CopyOnWriteArrayList<SseEmitter> emitters = new CopyOnWriteArrayList<>();
+    private record Listener(long condominiumId, SseEmitter emitter) {
+    }
+
+    private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
     private final ExecutorService executor = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "dashboard-events");
         thread.setDaemon(true);
@@ -32,69 +39,74 @@ class DashboardEventService {
         heartbeat.scheduleAtFixedRate(this::publishHeartbeat, 15, 15, TimeUnit.SECONDS);
     }
 
-    SseEmitter subscribe() {
+    SseEmitter subscribe(long condominiumId) {
         SseEmitter emitter = new SseEmitter(0L);
-        emitters.add(emitter);
-        emitter.onCompletion(() -> emitters.remove(emitter));
-        emitter.onTimeout(() -> emitters.remove(emitter));
-        emitter.onError(error -> emitters.remove(emitter));
-        send(emitter, "connected", Map.of("status", "ok"));
+        Listener listener = new Listener(condominiumId, emitter);
+        listeners.add(listener);
+        emitter.onCompletion(() -> listeners.remove(listener));
+        emitter.onTimeout(() -> listeners.remove(listener));
+        emitter.onError(error -> listeners.remove(listener));
+        send(listener, "connected", Map.of("status", "ok"));
         return emitter;
     }
 
+    /** Tells the screens of the current condominium, after the change is committed. */
     void publishDashboardChanged() {
+        long condominiumId = TenantContext.current();
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    publishAsync();
+                    publishAsync(condominiumId);
                 }
             });
             return;
         }
-        publishAsync();
+        publishAsync(condominiumId);
     }
 
-    private void publishAsync() {
+    private void publishAsync(long condominiumId) {
         executor.execute(() -> {
             try {
-                publishNow();
+                publishNow(condominiumId);
             } catch (RuntimeException ignored) {
                 // A broken browser/event stream must never fail the request that changed data.
             }
         });
     }
 
-    private void publishNow() {
+    private void publishNow(long condominiumId) {
         Map<String, String> payload = Map.of(
             "type", "DASHBOARD_CHANGED",
             "at", Instant.now().toString()
         );
-        for (SseEmitter emitter : emitters) {
-            send(emitter, "dashboard-changed", payload);
+        for (Listener listener : listeners) {
+            if (listener.condominiumId() == condominiumId) {
+                send(listener, "dashboard-changed", payload);
+            }
         }
     }
 
     private void publishHeartbeat() {
-        if (emitters.isEmpty()) {
+        if (listeners.isEmpty()) {
             return;
         }
         Map<String, String> payload = Map.of(
             "type", "HEARTBEAT",
             "at", Instant.now().toString()
         );
-        for (SseEmitter emitter : emitters) {
-            send(emitter, "heartbeat", payload);
+        for (Listener listener : listeners) {
+            send(listener, "heartbeat", payload);
         }
     }
 
-    private void send(SseEmitter emitter, String name, Object payload) {
+    private void send(Listener listener, String name, Object payload) {
         try {
-            emitter.send(SseEmitter.event().name(name).data(payload));
+            listener.emitter().send(SseEmitter.event().name(name).data(payload));
         } catch (IOException | RuntimeException ex) {
-            emitters.remove(emitter);
+            listeners.remove(listener);
             try {
-                emitter.complete();
+                listener.emitter().complete();
             } catch (RuntimeException ignored) {
                 // Connection is already gone.
             }

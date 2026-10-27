@@ -6,7 +6,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 
@@ -20,6 +21,7 @@ class DataSeeder implements CommandLineRunner {
     private final PasswordEncoder passwordEncoder;
     private final String adminEmail;
     private final String adminPassword;
+    private final TransactionTemplate transaction;
 
     DataSeeder(
         @Value("${portal.seed.enabled:true}") boolean enabled,
@@ -28,7 +30,8 @@ class DataSeeder implements CommandLineRunner {
         HouseRepository houses,
         AppUserRepository users,
         SettingsRepository settingsRepository,
-        PasswordEncoder passwordEncoder
+        PasswordEncoder passwordEncoder,
+        PlatformTransactionManager transactionManager
     ) {
         this.enabled = enabled;
         this.adminEmail = adminEmail;
@@ -37,15 +40,19 @@ class DataSeeder implements CommandLineRunner {
         this.users = users;
         this.settingsRepository = settingsRepository;
         this.passwordEncoder = passwordEncoder;
+        this.transaction = new TransactionTemplate(transactionManager);
     }
 
+    /** Seeds the Vila only. Runs at start with nobody signed in, so it names the Vila before its transaction opens. */
     @Override
-    @Transactional
     public void run(String... args) {
         if (!enabled) {
             return;
         }
+        TenantContext.runAs(TenantContext.VILA, () -> transaction.executeWithoutResult(status -> seedVila()));
+    }
 
+    private void seedVila() {
         if (settingsRepository.count() == 0) {
             Settings settings = new Settings();
             settings.villageName = "Portal da Vila";

@@ -13,14 +13,17 @@ import java.util.function.Supplier;
  * entities marked {@code @TenantId} get it stamped on insert and filtered on every read, so a repository call cannot
  * return (or touch) another condominium's rows.
  *
- * {@link JwtAuthFilter} sets it from the signed-in account for each request. Work without an account (the scheduled
- * jobs, the Asaas webhook, the first load) has no condominium of its own yet and falls back to the Vila, which is the
- * only condominium that exists. That fallback is temporary: before a second condominium is created it becomes an error,
- * and each of those entry points resolves its own condominium.
+ * {@link JwtAuthFilter} sets it from the signed-in account for each request. Work without an account names its own:
+ * the invitation routes take the condominium of the code, a document link the one in its token, the voting schedule
+ * goes through each condominium, and the Asaas webhook and the first load are the Vila's. Anything else still falls back
+ * to the Vila; that fallback becomes an error before a second condominium is created.
  */
 final class TenantContext {
     /** The Vila: the condominium every row existed in before the app served several. */
     static final long VILA = 1L;
+
+    /** Not a condominium: reads see every condominium. Only for finding out which one something belongs to. */
+    private static final long ALL = -1L;
 
     private static final ThreadLocal<Long> CURRENT = new ThreadLocal<>();
 
@@ -64,6 +67,18 @@ final class TenantContext {
             return null;
         });
     }
+
+    /**
+     * Reads above the condominiums, for an entry point that has a code or an id but nobody signed in yet (an invitation
+     * code, say) and must find out whose it is. Read only: then do the work with {@link #callAs} in that condominium.
+     */
+    static <T> T callAcrossCondominiums(Supplier<T> lookup) {
+        return callAs(ALL, lookup);
+    }
+
+    static boolean isAcrossCondominiums(Long condominiumId) {
+        return condominiumId != null && condominiumId == ALL;
+    }
 }
 
 @Component
@@ -76,6 +91,11 @@ class TenantIdentifierResolver implements CurrentTenantIdentifierResolver<Long>,
     @Override
     public boolean validateExistingCurrentSessions() {
         return false;
+    }
+
+    @Override
+    public boolean isRoot(Long tenantId) {
+        return TenantContext.isAcrossCondominiums(tenantId);
     }
 
     @Override

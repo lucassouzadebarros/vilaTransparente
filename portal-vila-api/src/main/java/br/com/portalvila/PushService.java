@@ -63,9 +63,9 @@ class PushService {
         tokens.deleteByToken(token);
     }
 
-    /** Everyone who lives in the village: residents and the síndico. */
+    /** Everyone who lives in the condominium: residents and the síndico. */
     void notifyResidents(String title, String body, Map<String, Object> data) {
-        List<Long> ids = users.findAll().stream()
+        List<Long> ids = users.findByCondominiumId(TenantContext.current()).stream()
             .filter(user -> user.active && user.residentId != null)
             .map(user -> user.id)
             .toList();

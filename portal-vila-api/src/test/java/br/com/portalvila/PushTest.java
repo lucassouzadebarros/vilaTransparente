@@ -127,6 +127,40 @@ class PushTest {
     }
 
     @Test
+    void aNoticeOnlyReachesThePhonesOfItsCondominium() throws Exception {
+        register("ExponentPushToken[vila]");
+        long other = 2L;
+        try {
+            TenantContext.runAs(other, () -> {
+                House house = houses.save(new House(2, "Casa 02"));
+                Resident person = residents.save(new Resident(house.id, "Vizinho", "vizinho@teste.dev", null, null));
+                AppUser neighbour = users.save(new AppUser("Vizinho", "vizinho@teste.dev", "x", "RESIDENT", person.id));
+                PushToken phone = new PushToken();
+                phone.userId = neighbour.id;
+                phone.token = "ExponentPushToken[outro]";
+                phone.platform = "android";
+                tokens.save(phone);
+
+                Budget budget = new Budget();
+                budget.title = "Portao novo";
+                budget.supplier = "Serralheria";
+                budget.amount = new BigDecimal("900.00");
+                workflow.saveBudget(budget);
+            });
+
+            assertThat(arrived.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThat(String.join("\n", received)).contains("ExponentPushToken[outro]").doesNotContain("ExponentPushToken[vila]");
+        } finally {
+            TenantContext.runAs(other, () -> {
+                votes.deleteAll();
+                budgets.deleteAll();
+                residents.deleteAll();
+                houses.deleteAll();
+            });
+        }
+    }
+
+    @Test
     void nothingIsSentWhenNoPhoneIsRegistered() throws Exception {
         Budget budget = new Budget();
         budget.title = "Pintura do muro";

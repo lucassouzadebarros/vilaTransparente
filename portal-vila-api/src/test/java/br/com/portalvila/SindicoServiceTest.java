@@ -73,7 +73,7 @@ class SindicoServiceTest {
         assertThat(sindico.current().houseLabel()).isEqualTo("Casa 02");
 
         assertThat(sindico.choose(null).residentId()).isNull();
-        assertThat(users.findByRole("SINDICO")).isEmpty();
+        assertThat(users.findByCondominiumIdAndRole(TenantContext.VILA, "SINDICO")).isEmpty();
 
         assertThatThrownBy(() -> sindico.choose(former.id))
             .isInstanceOfSatisfying(ResponseStatusException.class, ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
