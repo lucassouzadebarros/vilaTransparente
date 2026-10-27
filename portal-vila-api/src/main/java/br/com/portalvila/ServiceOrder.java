@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.hibernate.annotations.TenantId;
 
 @Entity
 @Table(name = "service_orders")
@@ -11,6 +13,11 @@ public class ServiceOrder {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     public Long id;
+
+    @JsonIgnore
+    @TenantId
+    @Column(name = "condominium_id", nullable = false, updatable = false)
+    public Long condominiumId;
 
     @Column(nullable = false)
     public String title;

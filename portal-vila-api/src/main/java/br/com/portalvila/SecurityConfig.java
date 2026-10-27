@@ -127,12 +127,19 @@ class JwtAuthFilter extends OncePerRequestFilter {
                         List.of(new SimpleGrantedAuthority("ROLE_" + user.role))
                     );
                     org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+                    // Like the role, the condominium comes from the account in the database, never from the request.
+                    TenantContext.set(user.condominiumId);
                 }
             } catch (RuntimeException ignored) {
                 org.springframework.security.core.context.SecurityContextHolder.clearContext();
+                TenantContext.clear();
             }
         }
-        filterChain.doFilter(request, response);
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
+            TenantContext.clear();
+        }
     }
 }
 

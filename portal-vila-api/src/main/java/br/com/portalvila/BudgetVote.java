@@ -2,6 +2,8 @@ package br.com.portalvila;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.hibernate.annotations.TenantId;
 
 /** One house's vote on a budget. A house has a single vote; voting again replaces it. */
 @Entity
@@ -13,6 +15,11 @@ public class BudgetVote {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     public Long id;
+
+    @JsonIgnore
+    @TenantId
+    @Column(name = "condominium_id", nullable = false, updatable = false)
+    public Long condominiumId;
 
     @Column(nullable = false)
     public Long budgetId;

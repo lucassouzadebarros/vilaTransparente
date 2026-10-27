@@ -3,6 +3,8 @@ package br.com.portalvila;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.hibernate.annotations.TenantId;
 
 @Entity
 @Table(name = "contributions")
@@ -10,6 +12,11 @@ public class Contribution {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     public Long id;
+
+    @JsonIgnore
+    @TenantId
+    @Column(name = "condominium_id", nullable = false, updatable = false)
+    public Long condominiumId;
 
     @Column(nullable = false)
     public Long houseId;

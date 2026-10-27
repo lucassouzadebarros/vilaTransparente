@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import org.hibernate.annotations.TenantId;
 
 @Entity
 @Table(name = "settings")
@@ -11,6 +12,11 @@ public class Settings {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     public Long id;
+
+    @JsonIgnore
+    @TenantId
+    @Column(name = "condominium_id", nullable = false, updatable = false)
+    public Long condominiumId;
 
     @Column(nullable = false)
     public String villageName = "Portal da Vila";
