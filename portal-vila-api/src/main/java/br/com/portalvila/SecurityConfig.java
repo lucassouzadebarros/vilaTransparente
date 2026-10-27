@@ -60,6 +60,7 @@ class SecurityConfig {
                 // Joining needs a code the administration made for the house: these two are the only open doors.
                 .requestMatchers(HttpMethod.POST, "/api/residents/invite-check", "/api/residents/register-with-invite").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/documents/*/file").permitAll()
+                .requestMatchers("/api/platform/**").hasRole("PLATFORM_ADMIN")
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
@@ -99,10 +100,12 @@ class SecurityConfig {
 class JwtAuthFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final AppUserRepository users;
+    private final PlatformAdmins platformAdmins;
 
-    JwtAuthFilter(JwtService jwtService, AppUserRepository users) {
+    JwtAuthFilter(JwtService jwtService, AppUserRepository users, PlatformAdmins platformAdmins) {
         this.jwtService = jwtService;
         this.users = users;
+        this.platformAdmins = platformAdmins;
     }
 
     /**
@@ -122,11 +125,11 @@ class JwtAuthFilter extends OncePerRequestFilter {
                     .filter(candidate -> candidate.active)
                     .orElse(null);
                 if (user != null && !JwtService.isDocumentToken(claims)) {
-                    var auth = new UsernamePasswordAuthenticationToken(
-                        user.email,
-                        null,
-                        List.of(new SimpleGrantedAuthority("ROLE_" + user.role))
-                    );
+                    // Running the platform comes on top of the role inside the account's own condominium.
+                    var authorities = platformAdmins.includes(user.email)
+                        ? List.of(new SimpleGrantedAuthority("ROLE_" + user.role), new SimpleGrantedAuthority("ROLE_PLATFORM_ADMIN"))
+                        : List.of(new SimpleGrantedAuthority("ROLE_" + user.role));
+                    var auth = new UsernamePasswordAuthenticationToken(user.email, null, authorities);
                     org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
                     // Like the role, the condominium comes from the account in the database, never from the request.
                     condominium = user.condominiumId;

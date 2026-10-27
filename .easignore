@@ -3,6 +3,7 @@
 # This file replaces .gitignore for the upload, so the rules of .gitignore are repeated below.
 
 portal-vila-api/
+portal-vila-web/
 wireframes/
 pdf_extract.txt
 render.yaml

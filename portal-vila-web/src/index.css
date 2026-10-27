@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* The same palette as the residents' app (portal-vila-app/src/theme.ts), light and dark. */
+:root {
+  --bg: #f4f5f3;
+  --surface: #ffffff;
+  --surface-alt: #f2f4f2;
+  --ink: #16202a;
+  --muted: #4f5b66;
+  --line: #dce1de;
+  --line-strong: #7f8a84;
+  --brand: #0b5c6b;
+  --brand-soft: #e2f0f2;
+  --on-brand: #ffffff;
+  --ok: #16703f;
+  --ok-soft: #e4f3ea;
+  --warn: #8a5200;
+  --warn-soft: #fbf0da;
+  --danger: #b42318;
+  --danger-soft: #fce8e5;
+  --sidebar: #0f2a30;
+  --sidebar-ink: #e3eef0;
+  --sidebar-muted: #9fb7bc;
+  --sidebar-active: #1b4049;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #0f161c;
+  --surface: #18212a;
+  --surface-alt: #1f2a34;
+  --ink: #e8edf1;
+  --muted: #a9b4be;
+  --line: #2b3742;
+  --line-strong: #7b8794;
+  --brand: #5cb8c9;
+  --brand-soft: #173842;
+  --on-brand: #0f161c;
+  --ok: #5bc48b;
+  --ok-soft: #16352a;
+  --warn: #f0b35c;
+  --warn-soft: #3b2e14;
+  --danger: #f28b82;
+  --danger-soft: #3e1d1b;
+  --sidebar: #0b1116;
+  --sidebar-ink: #e3eef0;
+  --sidebar-muted: #8fa3ab;
+  --sidebar-active: #18303a;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-on-brand: var(--on-brand);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-ink: var(--sidebar-ink);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-active: var(--sidebar-active);
+  --font-sans: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
