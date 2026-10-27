@@ -59,6 +59,8 @@ class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/health", "/api/residents/registration-houses").permitAll()
                 // Joining needs a code the administration made for the house: these two are the only open doors.
                 .requestMatchers(HttpMethod.POST, "/api/residents/invite-check", "/api/residents/register-with-invite").permitAll()
+                // Asking for a condominium to be registered, and activating the account of whoever runs a new one.
+                .requestMatchers(HttpMethod.POST, "/api/public/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/documents/*/file").permitAll()
                 .requestMatchers("/api/platform/**").hasRole("PLATFORM_ADMIN")
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")

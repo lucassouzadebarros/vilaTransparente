@@ -33,13 +33,57 @@ record CondominiumSummary(
 record CondominiumActivity(String action, String summary, String actor, java.time.LocalDateTime at) {
 }
 
+record PendingManager(String name, String email, LocalDateTime expiresAt) {
+}
+
 record CondominiumDetail(
     CondominiumSummary condominium,
     String sindicoName,
     String sindicoHouse,
     long administrators,
+    PendingManager pendingManager,
     List<CondominiumActivity> activity
 ) {
+}
+
+/** The public form. {@code website} is hidden from people: only robots fill it. */
+record CondominiumRequestForm(
+    String condominiumName,
+    String city,
+    String state,
+    Integer units,
+    String contactName,
+    String contactEmail,
+    String contactPhone,
+    String hasAsaas,
+    String message,
+    String website
+) {
+}
+
+record ApproveCondominiumRequest(String name, String slug, String unitLabel, Integer units, String managerName, String managerEmail) {
+}
+
+record RejectCondominiumRequest(String note) {
+}
+
+record InviteManagerRequest(String name, String email) {
+}
+
+/** The code is shown here once; only its hash is kept. */
+record ManagerInvitation(String name, String email, String code, LocalDateTime expiresAt) {
+}
+
+record ApprovalResult(CondominiumSummary condominium, ManagerInvitation manager) {
+}
+
+record ActivationCodeRequest(String code) {
+}
+
+record ActivationRequest(String code, String password) {
+}
+
+record ActivationPreview(String condominiumName, String name, String email) {
 }
 
 /** A new condominium: its name, an optional identifier (made from the name when empty) and its units. */

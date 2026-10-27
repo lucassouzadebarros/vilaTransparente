@@ -1,4 +1,5 @@
 import { clsx, type ClassValue } from 'clsx';
+import { useEffect } from 'react';
 import { twMerge } from 'tailwind-merge';
 
 export function cn(...classes: ClassValue[]) {
@@ -60,4 +61,19 @@ export function initials(name: string) {
 
 export function plural(count: number, one: string, many: string) {
   return `${formatNumber(count)} ${count === 1 ? one : many}`;
+}
+
+/** 21988887777 -> (21) 98888-7777; anything else as it came. */
+export function formatPhone(value: string) {
+  const digits = value.replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
+  if (digits.length === 11) return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  if (digits.length === 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return value;
+}
+
+/** The browser tab says where you are: "Pedidos · Portal da Vila". */
+export function useDocumentTitle(title: string | undefined) {
+  useEffect(() => {
+    if (title) document.title = `${title} · Portal da Vila`;
+  }, [title]);
 }

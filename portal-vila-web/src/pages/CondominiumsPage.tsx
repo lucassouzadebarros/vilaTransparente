@@ -6,7 +6,7 @@ import { NewCondominiumDialog } from '@/components/NewCondominiumDialog';
 import { Badge, Button, Card, Input, Skeleton } from '@/components/ui';
 import { Monogram, PageHeader, Segmented } from '@/components/ui/page';
 import { api, type CondominiumSummary } from '@/lib/api';
-import { cn, formatDate, formatNumber, initials } from '@/lib/utils';
+import { cn, formatDate, formatNumber, initials, useDocumentTitle } from '@/lib/utils';
 
 type StatusFilter = 'all' | 'active' | 'suspended';
 type SortKey = 'name' | 'houses' | 'activeResidents' | 'createdAt';
@@ -68,6 +68,7 @@ export function CondominiumsPage() {
   const [status, setStatus] = useState<StatusFilter>('all');
   const [sort, setSort] = useState<Sort>({ key: 'name', direction: 'asc' });
   const [creating, setCreating] = useState(false);
+  useDocumentTitle('Condomínios');
 
   const all = query.data ?? [];
   const rows = useMemo(() => {
