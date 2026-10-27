@@ -2,6 +2,8 @@ package br.com.portalvila;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.hibernate.annotations.TenantId;
 
 /** A gateway payment the admin chose to keep out of the portal (for example test payments). */
 @Entity
@@ -13,6 +15,11 @@ public class ExcludedGatewayPayment {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     public Long id;
+
+    @JsonIgnore
+    @TenantId
+    @Column(name = "condominium_id", nullable = false, updatable = false)
+    public Long condominiumId;
 
     @Column(nullable = false)
     public String gateway = "ASAAS";

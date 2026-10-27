@@ -3,6 +3,7 @@ package br.com.portalvila;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import org.hibernate.annotations.TenantId;
 
 /**
  * The way into the app for the person who lives in a house: a single-use, expiring code the administration hands out.
@@ -14,6 +15,11 @@ public class HouseInvite {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     public Long id;
+
+    @JsonIgnore
+    @TenantId
+    @Column(name = "condominium_id", nullable = false, updatable = false)
+    public Long condominiumId;
 
     @Column(nullable = false)
     public Long houseId;

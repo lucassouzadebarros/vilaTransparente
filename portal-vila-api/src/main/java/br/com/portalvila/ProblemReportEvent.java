@@ -2,6 +2,8 @@ package br.com.portalvila;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.hibernate.annotations.TenantId;
 
 /** One line in the life of a problem report: it was opened, changed situation, became a service, or got a comment. */
 @Entity
@@ -16,6 +18,11 @@ public class ProblemReportEvent {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     public Long id;
+
+    @JsonIgnore
+    @TenantId
+    @Column(name = "condominium_id", nullable = false, updatable = false)
+    public Long condominiumId;
 
     @Column(nullable = false)
     public Long reportId;
