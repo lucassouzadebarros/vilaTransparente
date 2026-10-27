@@ -9,7 +9,7 @@ import { colors, spacing } from '../theme';
 import { Budget, BudgetVoteChoice, BudgetVoting, PortalDocument, ProblemReport } from '../types';
 import { Alert } from '../utils/alert';
 import { formatDateBR } from '../utils/format';
-import { budgetBadgeStatus, closingResult, deadlineLabel, formatVotingDate, lowestQuoteId, voteLabel, votingScore } from '../utils/budgetVoting';
+import { budgetBadgeStatus, closingResult, deadlineLabel, formatVotingDate, lowestQuoteId, settledNote, voteLabel, votingScore } from '../utils/budgetVoting';
 
 export function BudgetDetailsScreen() {
   const route = useRoute<any>();
@@ -232,6 +232,7 @@ export function BudgetDetailsScreen() {
               : `Votação encerrada${voting.closedAt ? ` em ${formatVotingDate(voting.closedAt)}` : ''}. Resultado: ${resultLabel(voting.status)}.`}
           </Label>
           {voting.open && voting.deadline ? <Label>{deadlineLabel(voting.deadline)}. Depois do prazo a votação encerra sozinha.</Label> : null}
+          {settledNote(voting) ? <Label>{settledNote(voting)}</Label> : null}
           <View style={styles.scoreRow}>
             <ScoreBox label="Aprovam" value={voting.approveVotes} color={colors.green} background={colors.greenSoft} />
             <ScoreBox label="Recusam" value={voting.rejectVotes} color={colors.red} background={colors.redSoft} />

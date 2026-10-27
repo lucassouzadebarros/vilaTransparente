@@ -31,6 +31,24 @@ export function votingScore(voting: BudgetVoting) {
   return parts.join(' · ');
 }
 
+/**
+ * Said while the voting is open but the result is already settled: the voting does not close with the majority,
+ * so the houses that have not voted yet still can. Empty when the result is still open.
+ */
+export function settledNote(voting: BudgetVoting) {
+  if (!voting.open) {
+    return '';
+  }
+  const rest = 'A votação segue aberta para as outras casas e encerra quando todas votarem, no prazo ou se a administração encerrar.';
+  if (voting.approveVotes >= voting.votesToApprove) {
+    return `A maioria das casas já aprovou. ${rest}`;
+  }
+  if (voting.approveVotes + voting.pendingVotes < voting.votesToApprove) {
+    return `Já não há votos suficientes para aprovar. ${rest}`;
+  }
+  return '';
+}
+
 /** What the result would be if the admin closed the voting now. */
 export function closingResult(voting: BudgetVoting) {
   const voted = voting.approveVotes + voting.rejectVotes;
