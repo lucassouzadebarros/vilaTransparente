@@ -9,11 +9,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -43,11 +46,41 @@ class PlatformAdmins {
 @RequestMapping("/api/platform")
 class PlatformController {
     private final PlatformService platform;
+    private final CondominiumRequestService requests;
     private final CurrentUserService currentUser;
 
-    PlatformController(PlatformService platform, CurrentUserService currentUser) {
+    PlatformController(PlatformService platform, CondominiumRequestService requests, CurrentUserService currentUser) {
         this.platform = platform;
+        this.requests = requests;
         this.currentUser = currentUser;
+    }
+
+    /** Requests from the public form, newest first; {@code status} PENDING, APPROVED, REJECTED or ALL. */
+    @GetMapping("/requests")
+    List<CondominiumRequest> requests(@RequestParam(required = false) String status) {
+        return requests.list(status);
+    }
+
+    /** How many requests wait for an answer (the number beside "Pedidos" in the menu). */
+    @GetMapping("/requests/pending-count")
+    Map<String, Long> pendingRequests() {
+        return Map.of("pending", requests.pending());
+    }
+
+    @PostMapping("/requests/{id}/approve")
+    ApprovalResult approve(@PathVariable Long id, @RequestBody ApproveCondominiumRequest request) {
+        return platform.approve(id, request);
+    }
+
+    @PostMapping("/requests/{id}/reject")
+    CondominiumRequest reject(@PathVariable Long id, @RequestBody RejectCondominiumRequest request) {
+        return requests.reject(id, request.note());
+    }
+
+    /** A new activation code for whoever will run the condominium; any earlier one stops working. */
+    @PostMapping("/condominiums/{id}/manager")
+    ManagerInvitation inviteManager(@PathVariable Long id, @RequestBody InviteManagerRequest request) {
+        return platform.inviteManager(id, request);
     }
 
     /** Who is signed in to the panel. The panel calls it to know whether this account may use it. */
@@ -81,5 +114,56 @@ class PlatformController {
     @PutMapping("/condominiums/{id}/status")
     CondominiumSummary changeStatus(@PathVariable Long id, @Valid @RequestBody CondominiumStatusRequest request) {
         return platform.changeStatus(id, request.status());
+    }
+}
+
+/**
+ * What anyone may do without an account: ask for a condominium to be registered, and activate the account of whoever
+ * runs a newly approved one. Both answer the same way to every wrong attempt and are limited per address.
+ */
+@RestController
+@RequestMapping("/api/public")
+class PublicPlatformController {
+    private final CondominiumRequestService requests;
+    private final ManagerInviteService managers;
+    private final LoginAttemptLimiter limiter;
+
+    PublicPlatformController(CondominiumRequestService requests, ManagerInviteService managers, LoginAttemptLimiter limiter) {
+        this.requests = requests;
+        this.managers = managers;
+        this.limiter = limiter;
+    }
+
+    @PostMapping("/condominium-requests")
+    Map<String, String> requestCondominium(@RequestBody CondominiumRequestForm form, HttpServletRequest http) {
+        requests.submit(form, http);
+        return Map.of("status", "RECEBIDO");
+    }
+
+    @PostMapping("/activation/check")
+    ActivationPreview checkActivation(@RequestBody ActivationCodeRequest request, HttpServletRequest http) {
+        return limited(http, () -> managers.check(request.code()));
+    }
+
+    @PostMapping("/activation/complete")
+    Map<String, String> activate(@RequestBody ActivationRequest request, HttpServletRequest http) {
+        String email = limited(http, () -> managers.complete(request.code(), request.password()));
+        return Map.of("status", "ATIVADA", "email", email);
+    }
+
+    /** Wrong codes count against the address; a right one clears it. */
+    private <T> T limited(HttpServletRequest http, java.util.function.Supplier<T> attempt) {
+        String key = LoginAttemptLimiter.key("ativacao", null, http);
+        limiter.check(key);
+        try {
+            T result = attempt.get();
+            limiter.succeed(key);
+            return result;
+        } catch (org.springframework.web.server.ResponseStatusException failure) {
+            if (failure.getStatusCode().value() == 404) {
+                limiter.fail(key);
+            }
+            throw failure;
+        }
     }
 }

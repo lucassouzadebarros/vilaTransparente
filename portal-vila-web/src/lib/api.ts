@@ -31,13 +31,63 @@ export type CondominiumActivity = {
   at: string;
 };
 
+export type PendingManager = { name: string; email: string; expiresAt: string };
+
 export type CondominiumDetail = {
   condominium: CondominiumSummary;
   sindicoName: string | null;
   sindicoHouse: string | null;
   administrators: number;
+  pendingManager: PendingManager | null;
   activity: CondominiumActivity[];
 };
+
+export type RequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export type CondominiumRequest = {
+  id: number;
+  condominiumName: string;
+  city: string;
+  state: string;
+  units: number;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string | null;
+  hasAsaas: 'SIM' | 'NAO' | 'NAO_SEI';
+  message: string | null;
+  status: RequestStatus;
+  createdAt: string;
+  decidedAt: string | null;
+  decidedBy: string | null;
+  decisionNote: string | null;
+  condominiumId: number | null;
+};
+
+export type RequestForm = {
+  condominiumName: string;
+  city: string;
+  state: string;
+  units: number;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  hasAsaas: 'SIM' | 'NAO' | 'NAO_SEI';
+  message: string;
+  website: string;
+};
+
+export type ManagerInvitation = { name: string; email: string; code: string; expiresAt: string };
+
+export type Approval = {
+  name: string;
+  slug: string;
+  unitLabel: UnitLabel;
+  units: number;
+  managerName: string;
+  managerEmail: string;
+};
+
+export type ActivationPreview = { condominiumName: string; name: string; email: string };
 
 export type UnitLabel = 'Casa' | 'Apto' | 'Unidade' | 'Lote' | 'Sala';
 
@@ -129,5 +179,26 @@ export const api = {
   renameCondominium: (id: number, name: string) =>
     request<CondominiumSummary>(`/platform/condominiums/${id}`, { method: 'PUT', body: JSON.stringify({ name }) }),
   setCondominiumStatus: (id: number, status: 'ACTIVE' | 'SUSPENDED') =>
-    request<CondominiumSummary>(`/platform/condominiums/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) })
+    request<CondominiumSummary>(`/platform/condominiums/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+  requests: (status: RequestStatus | 'ALL') => request<CondominiumRequest[]>(`/platform/requests?status=${status}`),
+  pendingRequests: () => request<{ pending: number }>('/platform/requests/pending-count'),
+  approveRequest: (id: number, approval: Approval) =>
+    request<{ condominium: CondominiumSummary; manager: ManagerInvitation }>(`/platform/requests/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(approval)
+    }),
+  rejectRequest: (id: number, note: string) =>
+    request<CondominiumRequest>(`/platform/requests/${id}/reject`, { method: 'POST', body: JSON.stringify({ note }) }),
+  inviteManager: (condominiumId: number, name: string, email: string) =>
+    request<ManagerInvitation>(`/platform/condominiums/${condominiumId}/manager`, { method: 'POST', body: JSON.stringify({ name, email }) }),
+  // Public: no account needed.
+  submitRequest: (form: RequestForm) =>
+    request<{ status: string }>('/public/condominium-requests', { method: 'POST', body: JSON.stringify(form) }),
+  checkActivation: (code: string) =>
+    request<ActivationPreview>('/public/activation/check', { method: 'POST', body: JSON.stringify({ code }) }),
+  activate: (code: string, password: string) =>
+    request<{ status: string; email: string }>('/public/activation/complete', { method: 'POST', body: JSON.stringify({ code, password }) })
 };
+
+/** Where residents and administrators use the app (the web version; the Android app is the same). */
+export const RESIDENTS_APP_URL = 'https://portal-vila-app.onrender.com';

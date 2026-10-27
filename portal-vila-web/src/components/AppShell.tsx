@@ -1,7 +1,9 @@
-import { Building2, LogOut, Menu, Monitor, Moon, Sun, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Building2, Inbox, LogOut, Menu, Monitor, Moon, Sun, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import logo from '@/logo.png';
+import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useTheme, type ThemeChoice } from '@/lib/theme';
 import { cn, initials } from '@/lib/utils';
@@ -9,9 +11,18 @@ import { cn, initials } from '@/lib/utils';
 const sections = [
   {
     title: 'Plataforma',
-    items: [{ to: '/condominios', label: 'Condomínios', icon: Building2 }]
+    items: [
+      { to: '/condominios', label: 'Condomínios', icon: Building2, badge: false },
+      { to: '/pedidos', label: 'Pedidos', icon: Inbox, badge: true }
+    ]
   }
 ];
+
+/** How many requests wait for an answer; checked again every minute while the panel is open. */
+function usePendingRequests() {
+  const query = useQuery({ queryKey: ['platform', 'pending-requests'], queryFn: api.pendingRequests, refetchInterval: 60_000 });
+  return query.data?.pending ?? 0;
+}
 
 const themes: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: 'Claro', icon: Sun },
@@ -22,6 +33,7 @@ const themes: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { session, signOut } = useAuth();
   const me = session.status === 'signed-in' ? session.me : null;
+  const pending = usePendingRequests();
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-ink">
@@ -38,7 +50,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <div key={section.title}>
             <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">{section.title}</p>
             <ul className="space-y-1">
-              {section.items.map(({ to, label, icon: Icon }) => (
+              {section.items.map(({ to, label, icon: Icon, badge }) => (
                 <li key={to}>
                   <NavLink
                     to={to}
@@ -51,7 +63,13 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                     }
                   >
                     <Icon aria-hidden className="size-4" />
-                    {label}
+                    <span className="flex-1">{label}</span>
+                    {badge && pending > 0 && (
+                      <span className="min-w-5 rounded-full bg-[#f0b35c] px-1.5 text-center text-[11px] font-semibold leading-5 text-[#2a1d05]">
+                        {pending}
+                        <span className="sr-only"> esperando resposta</span>
+                      </span>
+                    )}
                   </NavLink>
                 </li>
               ))}

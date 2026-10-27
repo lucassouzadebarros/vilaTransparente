@@ -23,6 +23,17 @@ interface ResidentRepository extends JpaRepository<Resident, Long> {
     long countByStatus(String status);
 }
 
+interface CondominiumRequestRepository extends JpaRepository<CondominiumRequest, Long> {
+    List<CondominiumRequest> findByStatusOrderByCreatedAtDesc(String status);
+    List<CondominiumRequest> findAllByOrderByCreatedAtDesc();
+    long countByStatus(String status);
+}
+
+interface AccountActivationRepository extends JpaRepository<AccountActivation, Long> {
+    Optional<AccountActivation> findByCodeHash(String codeHash);
+    List<AccountActivation> findByCondominiumIdAndUsedAtIsNullAndRevokedAtIsNull(Long condominiumId);
+}
+
 interface CondominiumRepository extends JpaRepository<Condominium, Long> {
     List<Condominium> findByStatusOrderByIdAsc(String status);
     boolean existsBySlug(String slug);

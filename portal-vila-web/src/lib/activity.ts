@@ -20,6 +20,8 @@ const kinds: Record<string, Kind> = {
   CONDOMINIUM_RENAMED: { label: 'Nome alterado', icon: Pencil, tone: 'brand' },
   CONDOMINIUM_SUSPENDED: { label: 'Acesso suspenso', icon: PauseCircle, tone: 'warn' },
   CONDOMINIUM_REACTIVATED: { label: 'Acesso reativado', icon: PlayCircle, tone: 'ok' },
+  MANAGER_INVITED: { label: 'Síndico convidado', icon: KeyRound, tone: 'brand' },
+  MANAGER_ACTIVATED: { label: 'Síndico ativou a conta', icon: ShieldCheck, tone: 'ok' },
   INVITE_CREATED: { label: 'Convite de acesso criado', icon: KeyRound, tone: 'brand' },
   INVITE_USED: { label: 'Morador entrou por convite', icon: UserRound, tone: 'ok' },
   INVITE_REVOKED: { label: 'Convite cancelado', icon: KeyRound, tone: 'neutral' },

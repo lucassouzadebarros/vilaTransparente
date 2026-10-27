@@ -8,12 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,9 +18,6 @@ import java.util.Optional;
  */
 @Service
 class HouseInviteService {
-    /** No 0/O and no 1/I/L: a code read out loud or from a screenshot is not mistyped. */
-    private static final String ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-    private static final int CODE_LENGTH = 8;
     static final String INVALID_MESSAGE = "Código inválido ou expirado. Peça um novo à administração.";
 
     private final HouseInviteRepository invites;
@@ -33,7 +25,6 @@ class HouseInviteService {
     private final ResidentRepository residents;
     private final AuditService audit;
     private final long validityDays;
-    private final SecureRandom random = new SecureRandom();
 
     HouseInviteService(
         HouseInviteRepository invites,
@@ -66,7 +57,7 @@ class HouseInviteService {
             open.revokedAt = now;
             invites.save(open);
         }
-        String code = newCode();
+        String code = AccessCodes.newCode();
         HouseInvite invite = new HouseInvite();
         invite.houseId = house.id;
         invite.codeHash = hash(code);
@@ -83,7 +74,7 @@ class HouseInviteService {
      */
     Optional<Long> condominiumOf(String rawCode) {
         String normalized = normalize(rawCode);
-        if (normalized.length() != CODE_LENGTH) {
+        if (!AccessCodes.wellFormed(normalized)) {
             return Optional.empty();
         }
         return TenantContext.callAcrossCondominiums(() -> invites.findByCodeHash(hash(normalized)).map(invite -> invite.condominiumId));
@@ -92,7 +83,7 @@ class HouseInviteService {
     /** The invitation behind a code typed by someone, if it can still be used. Every failure looks the same to the caller. */
     Optional<HouseInvite> redeemable(String rawCode) {
         String normalized = normalize(rawCode);
-        if (normalized.length() != CODE_LENGTH) {
+        if (!AccessCodes.wellFormed(normalized)) {
             return Optional.empty();
         }
         return invites.findByCodeHash(hash(normalized))
@@ -134,28 +125,16 @@ class HouseInviteService {
 
     /** The same code however it is typed: lower case, with a dash or with spaces. */
     static String normalize(String raw) {
-        return raw == null ? "" : raw.toUpperCase().replaceAll("[^A-Z0-9]", "");
+        return AccessCodes.normalize(raw);
     }
 
     /** Shown to people as XXXX-XXXX. */
     static String display(String code) {
-        return code.substring(0, 4) + "-" + code.substring(4);
-    }
-
-    private String newCode() {
-        StringBuilder code = new StringBuilder(CODE_LENGTH);
-        for (int i = 0; i < CODE_LENGTH; i++) {
-            code.append(ALPHABET.charAt(random.nextInt(ALPHABET.length())));
-        }
-        return code.toString();
+        return AccessCodes.display(code);
     }
 
     private static String hash(String normalizedCode) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(normalizedCode.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException(ex);
-        }
+        return AccessCodes.hash(normalizedCode);
     }
 
     private static String currentActor() {

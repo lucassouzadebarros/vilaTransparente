@@ -44,6 +44,8 @@ class PlatformService {
     private final AuditEntryRepository auditEntries;
     private final AuditService audit;
     private final TransactionTemplate transaction;
+    private final ManagerInviteService managers;
+    private final CondominiumRequestService requests;
 
     PlatformService(
         CondominiumRepository condominiums,
@@ -53,8 +55,12 @@ class PlatformService {
         AppUserRepository users,
         AuditEntryRepository auditEntries,
         AuditService audit,
-        PlatformTransactionManager transactionManager
+        PlatformTransactionManager transactionManager,
+        ManagerInviteService managers,
+        CondominiumRequestService requests
     ) {
+        this.managers = managers;
+        this.requests = requests;
         this.condominiums = condominiums;
         this.settings = settings;
         this.houses = houses;
@@ -84,8 +90,44 @@ class PlatformService {
             List<CondominiumActivity> activity = auditEntries.findTop12ByOrderByCreatedAtDescIdDesc().stream()
                 .map(entry -> new CondominiumActivity(entry.action, entry.summary, entry.actorEmail, entry.createdAt))
                 .toList();
-            return new CondominiumDetail(summary(condominium), sindico == null ? null : sindico.name, sindicoHouse, administrators, activity);
+            return new CondominiumDetail(summary(condominium), sindico == null ? null : sindico.name, sindicoHouse, administrators,
+                managers.pending(id).orElse(null), activity);
         });
+    }
+
+    /**
+     * Approving a request creates the condominium (with its units and settings) and invites whoever will run it. The
+     * e-mail is checked first, so a taken e-mail stops everything before anything is created.
+     */
+    ApprovalResult approve(Long requestId, ApproveCondominiumRequest input) {
+        CondominiumRequest request = requests.pendingRequest(requestId);
+        String managerName = blank(input.managerName()) ? request.contactName : input.managerName();
+        String managerEmail = blank(input.managerEmail()) ? request.contactEmail : input.managerEmail();
+        managers.assertEmailAvailable(managerEmail, null);
+        ManagerInviteService.cleanName(managerName);
+
+        CondominiumSummary created = create(new CreateCondominiumRequest(
+            blank(input.name()) ? request.condominiumName : input.name(),
+            input.slug(),
+            input.unitLabel(),
+            input.units() == null ? request.units : input.units()
+        ));
+        ManagerInviteService.Issued issued = managers.invite(created.id(), managerName, managerEmail);
+        requests.approved(request, created.id());
+        return new ApprovalResult(created, invitation(issued));
+    }
+
+    /** Invites (or invites again, with a new code) whoever will run a condominium. */
+    ManagerInvitation inviteManager(Long condominiumId, InviteManagerRequest input) {
+        return invitation(managers.invite(find(condominiumId).id, input.name(), input.email()));
+    }
+
+    private static ManagerInvitation invitation(ManagerInviteService.Issued issued) {
+        return new ManagerInvitation(issued.account().name, issued.account().email, issued.code(), issued.expiresAt());
+    }
+
+    private static boolean blank(String value) {
+        return value == null || value.isBlank();
     }
 
     /**
