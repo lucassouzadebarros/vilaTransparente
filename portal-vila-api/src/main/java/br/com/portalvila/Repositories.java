@@ -12,6 +12,7 @@ import java.util.Optional;
 interface HouseRepository extends JpaRepository<House, Long> {
     List<House> findByActiveTrueOrderByNumberAsc();
     Optional<House> findByNumber(Integer number);
+    long countByActiveTrue();
 }
 
 interface ResidentRepository extends JpaRepository<Resident, Long> {
@@ -19,6 +20,7 @@ interface ResidentRepository extends JpaRepository<Resident, Long> {
     Optional<Resident> findFirstByGatewayCustomerIdAndStatusOrderByCreatedAtDesc(String gatewayCustomerId, String status);
     List<Resident> findAllByOrderByHouseIdAsc();
     List<Resident> findByStatusOrderByCreatedAtDesc(String status);
+    long countByStatus(String status);
 }
 
 interface CondominiumRepository extends JpaRepository<Condominium, Long> {

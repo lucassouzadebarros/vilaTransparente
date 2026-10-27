@@ -15,6 +15,21 @@ record LoginRequest(@NotBlank String email, @NotBlank String password) {
 record LoginResponse(String token, String name, String email, String role, Long residentId, boolean mustChangePassword) {
 }
 
+record PlatformMe(String name, String email) {
+}
+
+record CondominiumSummary(
+    Long id,
+    String name,
+    String slug,
+    String status,
+    java.time.LocalDateTime createdAt,
+    long houses,
+    long activeResidents,
+    boolean pixConnected
+) {
+}
+
 record PasswordResetRequest(@NotBlank String email) {
 }
 
