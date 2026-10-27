@@ -101,11 +101,13 @@ class JwtAuthFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final AppUserRepository users;
     private final PlatformAdmins platformAdmins;
+    private final CondominiumAccess access;
 
-    JwtAuthFilter(JwtService jwtService, AppUserRepository users, PlatformAdmins platformAdmins) {
+    JwtAuthFilter(JwtService jwtService, AppUserRepository users, PlatformAdmins platformAdmins, CondominiumAccess access) {
         this.jwtService = jwtService;
         this.users = users;
         this.platformAdmins = platformAdmins;
+        this.access = access;
     }
 
     /**
@@ -125,8 +127,16 @@ class JwtAuthFilter extends OncePerRequestFilter {
                     .filter(candidate -> candidate.active)
                     .orElse(null);
                 if (user != null && !JwtService.isDocumentToken(claims)) {
+                    boolean runsPlatform = platformAdmins.includes(user.email);
+                    // A suspended condominium keeps its data, and its people stay out until it is reactivated.
+                    if (!runsPlatform && access.suspended(user.condominiumId)) {
+                        response.setStatus(HttpStatus.FORBIDDEN.value());
+                        response.setContentType("application/json;charset=UTF-8");
+                        response.getWriter().write("{\"error\":\"" + CondominiumAccess.SUSPENDED_MESSAGE + "\"}");
+                        return;
+                    }
                     // Running the platform comes on top of the role inside the account's own condominium.
-                    var authorities = platformAdmins.includes(user.email)
+                    var authorities = runsPlatform
                         ? List.of(new SimpleGrantedAuthority("ROLE_" + user.role), new SimpleGrantedAuthority("ROLE_PLATFORM_ADMIN"))
                         : List.of(new SimpleGrantedAuthority("ROLE_" + user.role));
                     var auth = new UsernamePasswordAuthenticationToken(user.email, null, authorities);

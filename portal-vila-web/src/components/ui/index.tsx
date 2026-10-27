@@ -2,7 +2,7 @@ import { forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type InputH
 import { cn } from '@/lib/utils';
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-outline';
   size?: 'sm' | 'md';
 };
 
@@ -19,6 +19,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         variant === 'primary' && 'bg-brand text-on-brand hover:opacity-90',
         variant === 'secondary' && 'border border-line bg-surface text-ink hover:bg-surface-alt',
         variant === 'ghost' && 'text-muted hover:bg-surface-alt hover:text-ink',
+        variant === 'danger' && 'bg-danger text-on-danger hover:opacity-90',
+        variant === 'danger-outline' && 'border border-danger/35 bg-surface text-danger hover:bg-danger-soft',
         className
       )}
       {...props}

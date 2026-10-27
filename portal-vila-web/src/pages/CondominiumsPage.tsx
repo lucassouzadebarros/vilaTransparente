@@ -1,9 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Building2, Home, QrCode, RefreshCw, Search, Users } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Building2, ChevronRight, Home, Plus, QrCode, RefreshCw, Search, Users } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import { NewCondominiumDialog } from '@/components/NewCondominiumDialog';
 import { Badge, Button, Card, Input, Skeleton } from '@/components/ui';
+import { Monogram, PageHeader, Segmented } from '@/components/ui/page';
 import { api, type CondominiumSummary } from '@/lib/api';
-import { cn, formatDate, formatNumber } from '@/lib/utils';
+import { cn, formatDate, formatNumber, initials } from '@/lib/utils';
 
 type StatusFilter = 'all' | 'active' | 'suspended';
 type SortKey = 'name' | 'houses' | 'activeResidents' | 'createdAt';
@@ -64,6 +67,7 @@ export function CondominiumsPage() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
   const [sort, setSort] = useState<Sort>({ key: 'name', direction: 'asc' });
+  const [creating, setCreating] = useState(false);
 
   const all = query.data ?? [];
   const rows = useMemo(() => {
@@ -91,16 +95,23 @@ export function CondominiumsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Condomínios</h1>
-          <p className="mt-1 text-sm text-muted">Todos os condomínios atendidos pela plataforma. Os números são contados dentro de cada um.</p>
-        </div>
-        <Button variant="secondary" onClick={() => query.refetch()} disabled={query.isFetching}>
-          <RefreshCw aria-hidden className={cn('size-4', query.isFetching && 'animate-spin')} />
-          Atualizar
-        </Button>
-      </div>
+      <PageHeader
+        title="Condomínios"
+        description="Todos os condomínios atendidos pela plataforma. Os números são contados dentro de cada um."
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => query.refetch()} disabled={query.isFetching} aria-label="Atualizar a lista">
+              <RefreshCw aria-hidden className={cn('size-4', query.isFetching && 'animate-spin')} />
+              <span className="hidden sm:inline">Atualizar</span>
+            </Button>
+            <Button onClick={() => setCreating(true)}>
+              <Plus aria-hidden className="size-4" />
+              Novo condomínio
+            </Button>
+          </>
+        }
+      />
+      <NewCondominiumDialog open={creating} onClose={() => setCreating(false)} />
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <Stat icon={Building2} label="Condomínios" value={loading ? <Skeleton className="h-7 w-12" /> : formatNumber(all.length)} hint={loading ? undefined : `${formatNumber(totals.active)} ativos`} />
@@ -118,20 +129,7 @@ export function CondominiumsPage() {
             </label>
             <Input id="busca" type="search" placeholder="Buscar por nome" className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <div role="radiogroup" aria-label="Situação" className="flex rounded-lg border border-line bg-surface-alt p-0.5">
-            {filters.map((filter) => (
-              <button
-                key={filter.value}
-                type="button"
-                role="radio"
-                aria-checked={status === filter.value}
-                onClick={() => setStatus(filter.value)}
-                className={cn('rounded-md px-3 py-1.5 text-sm transition-colors', status === filter.value ? 'bg-surface font-medium text-ink shadow-sm' : 'text-muted hover:text-ink')}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
+          <Segmented label="Situação" value={status} options={filters} onChange={setStatus} />
           {!loading && !query.isError && (
             <p className="ml-auto text-sm text-muted" aria-live="polite">
               {rows.length === all.length ? `${formatNumber(all.length)} condomínios` : `${formatNumber(rows.length)} de ${formatNumber(all.length)}`}
@@ -166,13 +164,16 @@ export function CondominiumsPage() {
                     Pix
                   </th>
                   <SortHeader label="Desde" column="createdAt" sort={sort} onSort={onSort} />
+                  <th scope="col" className="w-10 px-2 py-3">
+                    <span className="sr-only">Abrir</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {loading &&
                   Array.from({ length: 3 }, (_, index) => (
                     <tr key={index}>
-                      {Array.from({ length: 6 }, (_, cell) => (
+                      {Array.from({ length: 7 }, (_, cell) => (
                         <td key={cell} className="px-4 py-4">
                           <Skeleton className="h-4 w-full max-w-32" />
                         </td>
@@ -181,14 +182,18 @@ export function CondominiumsPage() {
                   ))}
                 {!loading &&
                   rows.map((row) => (
-                    <tr key={row.id} className="transition-colors hover:bg-surface-alt/50">
+                    <tr key={row.id} className="group relative transition-colors hover:bg-surface-alt/60 focus-within:bg-surface-alt/60">
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-3">
-                          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-soft text-sm font-semibold text-brand" aria-hidden>
-                            {row.name.trim().charAt(0).toUpperCase()}
-                          </span>
+                          <Monogram text={initials(row.name)} />
                           <div className="min-w-0">
-                            <p className="truncate font-medium">{row.name}</p>
+                            {/* The link covers the whole row: click anywhere, or Tab to it. */}
+                            <Link
+                              to={`/condominios/${row.id}`}
+                              className="block truncate font-medium after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
+                            >
+                              {row.name}
+                            </Link>
                             <p className="truncate font-mono text-xs text-muted">{row.slug}</p>
                           </div>
                         </div>
@@ -198,12 +203,28 @@ export function CondominiumsPage() {
                       <td className="px-4 py-3.5 text-right tabular-nums">{formatNumber(row.activeResidents)}</td>
                       <td className="px-4 py-3.5">{row.pixConnected ? <Badge tone="brand">Conectado</Badge> : <Badge>Não conectado</Badge>}</td>
                       <td className="px-4 py-3.5 tabular-nums text-muted">{formatDate(row.createdAt)}</td>
+                      <td className="px-2 py-3.5 text-muted">
+                        <ChevronRight aria-hidden className="size-4 transition-transform group-hover:translate-x-0.5 group-hover:text-ink" />
+                      </td>
                     </tr>
                   ))}
                 {!loading && rows.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-14 text-center text-sm text-muted">
-                      {all.length === 0 ? 'Nenhum condomínio cadastrado ainda.' : 'Nenhum condomínio com esse filtro.'}
+                    <td colSpan={7} className="px-4 py-14 text-center">
+                      {all.length === 0 ? (
+                        <div className="flex flex-col items-center gap-3">
+                          <span className="grid size-11 place-items-center rounded-xl bg-brand-soft text-brand">
+                            <Building2 aria-hidden className="size-5" />
+                          </span>
+                          <p className="font-medium">Nenhum condomínio ainda</p>
+                          <Button onClick={() => setCreating(true)}>
+                            <Plus aria-hidden className="size-4" />
+                            Criar o primeiro
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted">Nenhum condomínio com esse filtro.</p>
+                      )}
                     </td>
                   </tr>
                 )}

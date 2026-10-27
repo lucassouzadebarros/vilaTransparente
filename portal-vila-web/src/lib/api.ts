@@ -24,6 +24,30 @@ export type CondominiumSummary = {
   pixConnected: boolean;
 };
 
+export type CondominiumActivity = {
+  action: string;
+  summary: string | null;
+  actor: string | null;
+  at: string;
+};
+
+export type CondominiumDetail = {
+  condominium: CondominiumSummary;
+  sindicoName: string | null;
+  sindicoHouse: string | null;
+  administrators: number;
+  activity: CondominiumActivity[];
+};
+
+export type UnitLabel = 'Casa' | 'Apto' | 'Unidade' | 'Lote' | 'Sala';
+
+export type NewCondominium = {
+  name: string;
+  slug: string;
+  unitLabel: UnitLabel;
+  units: number;
+};
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -98,5 +122,12 @@ export const api = {
   login: (email: string, password: string) =>
     request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   me: () => request<PlatformMe>('/platform/me'),
-  condominiums: () => request<CondominiumSummary[]>('/platform/condominiums')
+  condominiums: () => request<CondominiumSummary[]>('/platform/condominiums'),
+  condominium: (id: number) => request<CondominiumDetail>(`/platform/condominiums/${id}`),
+  createCondominium: (input: NewCondominium) =>
+    request<CondominiumSummary>('/platform/condominiums', { method: 'POST', body: JSON.stringify(input) }),
+  renameCondominium: (id: number, name: string) =>
+    request<CondominiumSummary>(`/platform/condominiums/${id}`, { method: 'PUT', body: JSON.stringify({ name }) }),
+  setCondominiumStatus: (id: number, status: 'ACTIVE' | 'SUSPENDED') =>
+    request<CondominiumSummary>(`/platform/condominiums/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) })
 };

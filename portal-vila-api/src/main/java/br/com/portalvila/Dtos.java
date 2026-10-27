@@ -30,6 +30,28 @@ record CondominiumSummary(
 ) {
 }
 
+record CondominiumActivity(String action, String summary, String actor, java.time.LocalDateTime at) {
+}
+
+record CondominiumDetail(
+    CondominiumSummary condominium,
+    String sindicoName,
+    String sindicoHouse,
+    long administrators,
+    List<CondominiumActivity> activity
+) {
+}
+
+/** A new condominium: its name, an optional identifier (made from the name when empty) and its units. */
+record CreateCondominiumRequest(@NotBlank String name, String slug, String unitLabel, Integer units) {
+}
+
+record RenameCondominiumRequest(@NotBlank String name) {
+}
+
+record CondominiumStatusRequest(@NotBlank String status) {
+}
+
 record PasswordResetRequest(@NotBlank String email) {
 }
 

@@ -25,6 +25,7 @@ interface ResidentRepository extends JpaRepository<Resident, Long> {
 
 interface CondominiumRepository extends JpaRepository<Condominium, Long> {
     List<Condominium> findByStatusOrderByIdAsc(String status);
+    boolean existsBySlug(String slug);
 }
 
 /**
@@ -112,6 +113,7 @@ interface ExcludedGatewayPaymentRepository extends JpaRepository<ExcludedGateway
 
 interface AuditEntryRepository extends JpaRepository<AuditEntry, Long> {
     List<AuditEntry> findTop200ByOrderByCreatedAtDescIdDesc();
+    List<AuditEntry> findTop12ByOrderByCreatedAtDescIdDesc();
     List<AuditEntry> findByActorEmailIgnoreCase(String actorEmail);
 }
 

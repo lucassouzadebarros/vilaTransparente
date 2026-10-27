@@ -4,7 +4,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import logo from '@/logo.png';
 import { useAuth } from '@/lib/auth';
 import { useTheme, type ThemeChoice } from '@/lib/theme';
-import { cn } from '@/lib/utils';
+import { cn, initials } from '@/lib/utils';
 
 const sections = [
   {
@@ -105,6 +105,19 @@ function ThemeSwitch() {
   );
 }
 
+function UserChip() {
+  const { session } = useAuth();
+  if (session.status !== 'signed-in') return null;
+  return (
+    <span
+      title={`${session.me.name} · ${session.me.email}`}
+      className="grid size-9 place-items-center rounded-full bg-sidebar text-xs font-semibold text-sidebar-ink ring-2 ring-surface"
+    >
+      {initials(session.me.name)}
+    </span>
+  );
+}
+
 /** Menu on the left (a drawer on narrow screens), top bar with the theme, and the page. */
 export function AppShell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -145,8 +158,11 @@ export function AppShell() {
           >
             <Menu aria-hidden className="size-4" />
           </button>
-          <div className="hidden text-sm text-muted lg:block">Gestão de condomínios</div>
-          <ThemeSwitch />
+          <div className="hidden lg:block" />
+          <div className="flex items-center gap-3">
+            <ThemeSwitch />
+            <UserChip />
+          </div>
         </header>
         <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-8">
           <Outlet />

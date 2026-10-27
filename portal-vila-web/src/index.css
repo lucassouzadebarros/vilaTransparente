@@ -20,6 +20,7 @@
   --warn-soft: #fbf0da;
   --danger: #b42318;
   --danger-soft: #fce8e5;
+  --on-danger: #ffffff;
   --sidebar: #0f2a30;
   --sidebar-ink: #e3eef0;
   --sidebar-muted: #9fb7bc;
@@ -44,6 +45,7 @@
   --warn-soft: #3b2e14;
   --danger: #f28b82;
   --danger-soft: #3e1d1b;
+  --on-danger: #1a0d0c;
   --sidebar: #0b1116;
   --sidebar-ink: #e3eef0;
   --sidebar-muted: #8fa3ab;
@@ -68,6 +70,7 @@
   --color-warn-soft: var(--warn-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-on-danger: var(--on-danger);
   --color-sidebar: var(--sidebar);
   --color-sidebar-ink: var(--sidebar-ink);
   --color-sidebar-muted: var(--sidebar-muted);
@@ -79,6 +82,11 @@ html,
 body,
 #root {
   min-height: 100%;
+}
+
+/* The page does not shift sideways when a scroll bar appears or goes. */
+html {
+  scrollbar-gutter: stable;
 }
 
 body {

@@ -8,6 +8,8 @@ import java.time.LocalDateTime;
 @Table(name = "condominiums")
 public class Condominium {
     static final String ACTIVE = "ACTIVE";
+    /** Kept with all its data; its people cannot get in until it is reactivated. */
+    static final String SUSPENDED = "SUSPENDED";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
