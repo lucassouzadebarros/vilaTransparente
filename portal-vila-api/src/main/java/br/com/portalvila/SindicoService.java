@@ -27,7 +27,7 @@ class SindicoService {
 
     @Transactional(readOnly = true)
     public SindicoResponse current() {
-        return users.findByRole(ROLE).stream()
+        return users.findByCondominiumIdAndRole(TenantContext.current(), ROLE).stream()
             .filter(user -> user.active && user.residentId != null)
             .findFirst()
             .flatMap(user -> residents.findById(user.residentId))
@@ -56,7 +56,7 @@ class SindicoService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A conta admin já tem essas permissões.");
             }
         }
-        for (AppUser previous : users.findByRole(ROLE)) {
+        for (AppUser previous : users.findByCondominiumIdAndRole(TenantContext.current(), ROLE)) {
             if (chosen == null || !previous.id.equals(chosen.id)) {
                 previous.role = "RESIDENT";
                 users.save(previous);

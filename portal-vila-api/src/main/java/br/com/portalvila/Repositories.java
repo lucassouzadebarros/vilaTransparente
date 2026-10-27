@@ -21,10 +21,19 @@ interface ResidentRepository extends JpaRepository<Resident, Long> {
     List<Resident> findByStatusOrderByCreatedAtDesc(String status);
 }
 
+interface CondominiumRepository extends JpaRepository<Condominium, Long> {
+    List<Condominium> findByStatusOrderByIdAsc(String status);
+}
+
+/**
+ * Accounts are not filtered by condominium (signing in finds the account before any condominium is known), so a
+ * query that lists accounts names the condominium itself.
+ */
 interface AppUserRepository extends JpaRepository<AppUser, Long> {
     Optional<AppUser> findByEmailIgnoreCase(String email);
     Optional<AppUser> findByResidentId(Long residentId);
-    List<AppUser> findByRole(String role);
+    List<AppUser> findByCondominiumId(Long condominiumId);
+    List<AppUser> findByCondominiumIdAndRole(Long condominiumId, String role);
 }
 
 interface PasswordResetCodeRepository extends JpaRepository<PasswordResetCode, Long> {

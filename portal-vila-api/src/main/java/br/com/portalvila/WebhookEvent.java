@@ -2,6 +2,7 @@ package br.com.portalvila;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(
@@ -12,6 +13,11 @@ public class WebhookEvent {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     public Long id;
+
+    /** The Asaas notice arrives before anyone knows its condominium, so not filtered; whose it is, all the same. */
+    @JsonIgnore
+    @Column(name = "condominium_id", nullable = false)
+    public Long condominiumId = TenantContext.current();
 
     @Column(nullable = false)
     public String gateway = "ASAAS";

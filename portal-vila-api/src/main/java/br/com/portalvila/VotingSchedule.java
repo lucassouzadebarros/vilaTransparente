@@ -8,35 +8,42 @@ import org.springframework.stereotype.Component;
 /**
  * Runs by the clock, in São Paulo time: votings whose deadline has passed close by themselves (every hour, so a
  * voting never stays open for long after the last day), and the houses that have not voted are reminded at 9 a.m.
+ * Each active condominium in turn, each in its own transaction; one that fails does not stop the others.
  */
 @Component
 class VotingSchedule {
     private static final Logger log = LoggerFactory.getLogger(VotingSchedule.class);
 
     private final BudgetVotingService voting;
+    private final CondominiumRepository condominiums;
 
-    VotingSchedule(BudgetVotingService voting) {
+    VotingSchedule(BudgetVotingService voting, CondominiumRepository condominiums) {
         this.voting = voting;
+        this.condominiums = condominiums;
     }
 
     @Scheduled(cron = "0 10 * * * *", zone = "America/Sao_Paulo")
     void closeExpiredVotings() {
-        try {
-            int closed = voting.expireDue(BudgetVotingService.today());
-            if (closed > 0) {
-                log.info("{} voting(s) closed by deadline", closed);
+        for (Condominium condominium : condominiums.findByStatusOrderByIdAsc(Condominium.ACTIVE)) {
+            try {
+                int closed = TenantContext.callAs(condominium.id, () -> voting.expireDue(BudgetVotingService.today()));
+                if (closed > 0) {
+                    log.info("{} voting(s) closed by deadline in condominium {}", closed, condominium.id);
+                }
+            } catch (RuntimeException e) {
+                log.warn("Could not close expired votings in condominium {}: {}", condominium.id, e.toString());
             }
-        } catch (RuntimeException e) {
-            log.warn("Could not close expired votings: {}", e.toString());
         }
     }
 
     @Scheduled(cron = "0 0 9 * * *", zone = "America/Sao_Paulo")
     void remindPendingHouses() {
-        try {
-            voting.remindPending(BudgetVotingService.today());
-        } catch (RuntimeException e) {
-            log.warn("Could not send voting reminders: {}", e.toString());
+        for (Condominium condominium : condominiums.findByStatusOrderByIdAsc(Condominium.ACTIVE)) {
+            try {
+                TenantContext.callAs(condominium.id, () -> voting.remindPending(BudgetVotingService.today()));
+            } catch (RuntimeException e) {
+                log.warn("Could not send voting reminders in condominium {}: {}", condominium.id, e.toString());
+            }
         }
     }
 }

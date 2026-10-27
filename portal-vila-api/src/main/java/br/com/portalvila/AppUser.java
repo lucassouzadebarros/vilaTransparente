@@ -11,10 +11,13 @@ public class AppUser {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     public Long id;
 
-    /** The account is not filtered by condominium (the login looks it up before any condominium is known). */
+    /**
+     * The account is not filtered by condominium (the login looks it up before any condominium is known). It belongs to
+     * the condominium it was created in.
+     */
     @JsonIgnore
     @Column(name = "condominium_id", nullable = false)
-    public Long condominiumId = TenantContext.VILA;
+    public Long condominiumId = TenantContext.current();
 
     @Column(nullable = false)
     public String name;

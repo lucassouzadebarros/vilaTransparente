@@ -11,6 +11,11 @@ public class PasswordResetCode {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     public Long id;
 
+    /** Looked up by account while nobody is signed in, so not filtered; whose it is, all the same. */
+    @JsonIgnore
+    @Column(name = "condominium_id", nullable = false)
+    public Long condominiumId = TenantContext.current();
+
     @Column(nullable = false)
     public Long userId;
 

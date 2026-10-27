@@ -13,7 +13,9 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -176,12 +178,16 @@ class DashboardEventController {
         this.events = events;
     }
 
+    /**
+     * Public (a browser event stream cannot send the login header) and carries no data, only "reload". It listens to
+     * the condominium asked for; the app installed today does not ask, and it is the Vila's.
+     */
     @GetMapping("/dashboard")
-    ResponseEntity<SseEmitter> dashboard(HttpServletRequest request) {
+    ResponseEntity<SseEmitter> dashboard(HttpServletRequest request, @RequestParam(required = false) Long condominium) {
         if (request.getDispatcherType() != DispatcherType.REQUEST) {
             return ResponseEntity.noContent().build();
         }
-        return ResponseEntity.ok(events.subscribe());
+        return ResponseEntity.ok(events.subscribe(condominium == null ? TenantContext.VILA : condominium));
     }
 }
 
@@ -329,9 +335,10 @@ class WebhookController {
         this.events = events;
     }
 
+    /** Only the Vila has an Asaas account connected: its notices are the Vila's until each condominium has its own. */
     @PostMapping("/webhooks/asaas")
     WebhookResult asaas(@RequestHeader(value = "asaas-access-token", required = false) String token, @RequestBody JsonNode payload) {
-        return webhookService.processAsaas(token, payload);
+        return TenantContext.callAs(TenantContext.VILA, () -> webhookService.processAsaas(token, payload));
     }
 
     @GetMapping("/admin/webhook-events")
@@ -705,10 +712,12 @@ class DocumentController {
 
     @GetMapping("/{id}/file")
     ResponseEntity<Resource> file(@PathVariable Long id, @RequestParam(name = "t", required = false) String accessToken) throws MalformedURLException {
-        if (!isSignedIn() && !jwtService.isValidDocumentToken(accessToken, id)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Link do documento expirado. Abra o documento de novo pelo aplicativo.");
-        }
-        PortalDocument document = documents.findById(id).orElseThrow();
+        // Signed in: the request already runs in the account's condominium. A link opened in a new tab: the link's.
+        long condominium = isSignedIn()
+            ? TenantContext.current()
+            : jwtService.documentTokenCondominium(accessToken, id).orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.UNAUTHORIZED, "Link do documento expirado. Abra o documento de novo pelo aplicativo."));
+        PortalDocument document = TenantContext.callAs(condominium, () -> documents.findById(id)).orElseThrow();
         if (document.storagePath == null || document.storagePath.isBlank()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Arquivo não encontrado.");
         }
@@ -990,6 +999,7 @@ class ResidentController {
     private final PasswordResetService passwordResetService;
     private final HouseInviteService invites;
     private final LoginAttemptLimiter inviteLimiter;
+    private final TransactionTemplate transaction;
 
     ResidentController(
         ResidentRepository residents,
@@ -999,7 +1009,8 @@ class ResidentController {
         PixGatewayClient gatewayClient,
         PasswordResetService passwordResetService,
         HouseInviteService invites,
-        LoginAttemptLimiter inviteLimiter
+        LoginAttemptLimiter inviteLimiter,
+        PlatformTransactionManager transactionManager
     ) {
         this.residents = residents;
         this.houses = houses;
@@ -1009,6 +1020,7 @@ class ResidentController {
         this.passwordResetService = passwordResetService;
         this.invites = invites;
         this.inviteLimiter = inviteLimiter;
+        this.transaction = new TransactionTemplate(transactionManager);
     }
 
     /**
@@ -1079,25 +1091,42 @@ class ResidentController {
         return Map.of("status", "CANCELADO");
     }
 
+    /**
+     * Nobody is signed in on the two public invitation routes: they run in the condominium of the code typed. An
+     * unknown code runs where it would anyway and fails the same way as any other.
+     */
+    private long condominiumOfCode(String code) {
+        return invites.condominiumOf(code).orElse(TenantContext.current());
+    }
+
     /** Public: tells a person which house a code opens, and nothing else. Wrong, used and expired codes look the same. */
     @PostMapping("/invite-check")
     InviteCheckResponse checkInvite(@Valid @RequestBody InviteCheckRequest request, HttpServletRequest http) {
         String attemptKey = LoginAttemptLimiter.key("invite", null, http);
         inviteLimiter.check(attemptKey);
-        HouseInvite invite = invites.redeemable(request.code()).orElseThrow(() -> {
-            inviteLimiter.fail(attemptKey);
-            return new ResponseStatusException(HttpStatus.NOT_FOUND, HouseInviteService.INVALID_MESSAGE);
+        return TenantContext.callAs(condominiumOfCode(request.code()), () -> {
+            HouseInvite invite = invites.redeemable(request.code()).orElseThrow(() -> {
+                inviteLimiter.fail(attemptKey);
+                return new ResponseStatusException(HttpStatus.NOT_FOUND, HouseInviteService.INVALID_MESSAGE);
+            });
+            House house = houses.findById(invite.houseId).orElseThrow();
+            return new InviteCheckResponse(house.label, house.number);
         });
-        House house = houses.findById(invite.houseId).orElseThrow();
-        return new InviteCheckResponse(house.label, house.number);
     }
 
-    /** Public: the person creates their own access, for the house the code opens, and the code is spent. */
+    /**
+     * Public: the person creates their own access, for the house the code opens, and the code is spent. The transaction
+     * opens inside the condominium of the code (a session keeps the condominium it was opened with).
+     */
     @PostMapping("/register-with-invite")
-    @Transactional
     ResidentRegistrationResponse registerWithInvite(@Valid @RequestBody InviteRegistrationRequest request, HttpServletRequest http) {
         String attemptKey = LoginAttemptLimiter.key("invite", null, http);
         inviteLimiter.check(attemptKey);
+        return TenantContext.callAs(condominiumOfCode(request.code()),
+            () -> transaction.execute(status -> registerWithInviteHere(request, attemptKey)));
+    }
+
+    private ResidentRegistrationResponse registerWithInviteHere(InviteRegistrationRequest request, String attemptKey) {
         HouseInvite invite = invites.redeemable(request.code()).orElseThrow(() -> {
             inviteLimiter.fail(attemptKey);
             return new ResponseStatusException(HttpStatus.NOT_FOUND, HouseInviteService.INVALID_MESSAGE);
