@@ -51,7 +51,7 @@ class BudgetFirstFlowTest {
     @Autowired ResidentRepository residents;
     @MockBean PixGatewayClient gatewayClient;
 
-    /** Voters by house number: houses 02, 03, 05 and 07 take part, so 3 votes decide. */
+    /** Voters by house number: houses 02, 03, 05 and 07 take part; the voting closes when all four have voted. */
     final Map<Integer, AppUser> voters = new HashMap<>();
     private String admin;
 
@@ -104,10 +104,11 @@ class BudgetFirstFlowTest {
         return workflow.saveBudget(budget);
     }
 
+    /** All four houses vote yes: the voting closes once the last one has voted. */
     private void approve(Budget budget) {
-        voting.vote(budget.id, "APROVAR", voters.get(2));
-        voting.vote(budget.id, "APROVAR", voters.get(3));
-        voting.vote(budget.id, "APROVAR", voters.get(5));
+        for (int number : new int[]{2, 3, 5, 7}) {
+            voting.vote(budget.id, "APROVAR", voters.get(number));
+        }
     }
 
     private ServiceOrder serviceFrom(Budget budget) {
@@ -156,6 +157,10 @@ class BudgetFirstFlowTest {
         assertThat(voting.summary(dear.id, voters.get(2)).approveVotes()).isEqualTo(1);
         voting.vote(cheap.id, "APROVAR", voters.get(5));
         voting.vote(cheap.id, "APROVAR", voters.get(7));
+        // A majority is not the end: house 03 has not moved its yes yet, so nothing is decided.
+        assertThat(budgets.findById(cheap.id).orElseThrow().status).isEqualTo("EM_ANALISE");
+        assertThat(budgets.findById(dear.id).orElseThrow().status).isEqualTo("EM_ANALISE");
+        voting.vote(cheap.id, "APROVAR", voters.get(3));
 
         assertThat(budgets.findById(cheap.id).orElseThrow().status).isEqualTo("APROVADO");
         assertThat(budgets.findById(dear.id).orElseThrow().status).isEqualTo("REJEITADO");
@@ -198,6 +203,9 @@ class BudgetFirstFlowTest {
 
         voting.vote(budget.id, "RECUSAR", voters.get(2));
         voting.vote(budget.id, "RECUSAR", voters.get(3));
+        voting.vote(budget.id, "RECUSAR", voters.get(5));
+        assertThat(budgets.findById(budget.id).orElseThrow().status).isEqualTo("EM_ANALISE");
+        voting.vote(budget.id, "RECUSAR", voters.get(7));
 
         assertThat(budgets.findById(budget.id).orElseThrow().status).isEqualTo("REJEITADO");
         assertThat(reports.findById(report.id).orElseThrow().status).isEqualTo("ABERTO");

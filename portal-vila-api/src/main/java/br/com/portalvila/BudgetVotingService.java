@@ -22,9 +22,9 @@ import java.util.stream.Collectors;
 /**
  * Houses vote to approve or reject a budget.
  *
- * Participating houses are the active houses with an active resident. A budget is approved as soon as
- * more than half of them vote yes, and rejected as soon as that can no longer happen. The admin can also
- * close the voting early: it then passes when more than half of the houses voted and yes beats no.
+ * Participating houses are the active houses with an active resident. The voting stays open, even once a
+ * majority is there, until every house has voted, the deadline passes or the admin closes it. It then passes
+ * when more than half of the houses voted and yes beats no.
  */
 @Service
 class BudgetVotingService {
@@ -142,11 +142,10 @@ class BudgetVotingService {
         vote.updatedAt = LocalDateTime.now();
         votes.save(vote);
 
-        Tally tally = tally(votes.findByBudgetId(budget.id), participants);
-        if (tally.approve() >= tally.needed()) {
-            decide(budget, "APROVADO");
-        } else if (tally.approve() + tally.pending() < tally.needed()) {
-            decide(budget, "REJEITADO");
+        // A majority (for or against) does not close the voting: every house can still vote or change its vote until all
+        // of them have voted, the deadline passes or the admin closes it.
+        if (tally(votes.findByBudgetId(budget.id), participants).pending() == 0) {
+            closeByTally(budget, null);
         }
         return summarize(budget, votes.findByBudgetId(budget.id), participants, houseLabels(), voter);
     }

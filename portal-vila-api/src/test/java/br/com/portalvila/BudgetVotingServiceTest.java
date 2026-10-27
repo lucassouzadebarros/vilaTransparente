@@ -10,6 +10,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -115,16 +116,49 @@ class BudgetVotingServiceTest {
     }
 
     @Test
-    void rejectsAsSoonAsApprovalIsNoLongerPossible() {
+    void aMajorityDoesNotCloseTheVotingWhileAHouseCanStillVote() {
+        Budget budget = newBudget("1500.00");
+        voting.vote(budget.id, "APROVAR", voters.get(2));
+        voting.vote(budget.id, "APROVAR", voters.get(3));
+
+        BudgetVotingSummary majority = voting.vote(budget.id, "APROVAR", voters.get(5));
+
+        assertThat(majority.approveVotes()).isEqualTo(3);
+        assertThat(majority.open()).isTrue();
+        assertThat(majority.status()).isEqualTo("EM_ANALISE");
+        assertThat(voting.summary(budget.id, voters.get(7)).canVote()).isTrue();
+
+        // The house that was left can still vote, even against: the last vote closes it and the result is the same.
+        BudgetVotingSummary last = voting.vote(budget.id, "RECUSAR", voters.get(7));
+        assertThat(last.open()).isFalse();
+        assertThat(last.status()).isEqualTo("APROVADO");
+        assertThat(last.approveVotes()).isEqualTo(3);
+        assertThat(last.rejectVotes()).isEqualTo(1);
+
+        // Without the last house, the deadline (or the admin) closes it and the majority decides.
+        Budget waiting = newBudget("1600.00", BudgetVotingService.today());
+        voting.vote(waiting.id, "APROVAR", voters.get(2));
+        voting.vote(waiting.id, "APROVAR", voters.get(3));
+        voting.vote(waiting.id, "APROVAR", voters.get(5));
+        assertThat(voting.expireDue(BudgetVotingService.today().plusDays(1))).isEqualTo(1);
+        assertThat(budgets.findById(waiting.id).orElseThrow().status).isEqualTo("APROVADO");
+    }
+
+    @Test
+    void aLostVoteAlsoWaitsForEveryHouse() {
         Budget budget = newBudget("800.00");
 
         voting.vote(budget.id, "RECUSAR", voters.get(2));
-        assertThat(voting.summary(budget.id, admin).open()).isTrue();
+        voting.vote(budget.id, "RECUSAR", voters.get(3));
+        BudgetVotingSummary lost = voting.vote(budget.id, "RECUSAR", voters.get(5));
+        assertThat(lost.open()).isTrue();
+        assertThat(lost.rejectVotes()).isEqualTo(3);
 
-        BudgetVotingSummary result = voting.vote(budget.id, "RECUSAR", voters.get(3));
+        BudgetVotingSummary result = voting.vote(budget.id, "APROVAR", voters.get(7));
 
         assertThat(result.status()).isEqualTo("REJEITADO");
-        assertThat(result.rejectVotes()).isEqualTo(2);
+        assertThat(result.rejectVotes()).isEqualTo(3);
+        assertThat(result.approveVotes()).isEqualTo(1);
     }
 
     @Test
@@ -186,6 +220,7 @@ class BudgetVotingServiceTest {
         voting.vote(budget.id, "APROVAR", voters.get(2));
         voting.vote(budget.id, "APROVAR", voters.get(3));
         voting.vote(budget.id, "APROVAR", voters.get(5));
+        voting.vote(budget.id, "APROVAR", voters.get(7));
         Budget approved = budgets.findById(budget.id).orElseThrow();
         assertThat(approved.status).isEqualTo("APROVADO");
 
@@ -224,6 +259,7 @@ class BudgetVotingServiceTest {
         voting.vote(budgetId, "APROVAR", voters.get(2));
         voting.vote(budgetId, "APROVAR", voters.get(3));
         voting.vote(budgetId, "APROVAR", voters.get(5));
+        voting.vote(budgetId, "APROVAR", voters.get(7));
         assertThat(services.findById(wall.id).orElseThrow().approvedBudgetId).isNull();
 
         workflow.updateService(wall.id, service("Pintura do muro", budgetId));
@@ -243,10 +279,15 @@ class BudgetVotingServiceTest {
     }
 
     private Budget newBudget(String amount) {
+        return newBudget(amount, null);
+    }
+
+    private Budget newBudget(String amount, LocalDate votingDeadline) {
         Budget budget = new Budget();
         budget.title = "Orçamento " + amount;
         budget.supplier = "Fornecedor";
         budget.amount = new BigDecimal(amount);
+        budget.votingDeadline = votingDeadline;
         budget.status = "APROVADO"; // ignored: new budgets always go to the vote
         return workflow.saveBudget(budget);
     }

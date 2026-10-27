@@ -34,7 +34,7 @@ class FlowLinksTest {
     @Autowired ResidentRepository residents;
     @MockBean PixGatewayClient gatewayClient;
 
-    /** Voters by house number: houses 02, 03, 05 and 07 take part, so 3 yes votes approve. */
+    /** Voters by house number: houses 02, 03, 05 and 07 take part; the voting closes when all four have voted. */
     final Map<Integer, AppUser> voters = new HashMap<>();
 
     @BeforeEach
@@ -161,7 +161,12 @@ class FlowLinksTest {
         assertThat(voting.summary(dear.id, voters.get(2)).myVote()).isNull();
 
         voting.vote(cheap.id, "APROVAR", voters.get(5));
-        BudgetVotingSummary done = voting.vote(cheap.id, "APROVAR", voters.get(7));
+        BudgetVotingSummary majority = voting.vote(cheap.id, "APROVAR", voters.get(7));
+        assertThat(majority.approveVotes()).isEqualTo(3);
+        assertThat(majority.open()).isTrue();
+
+        // House 03 was the last one: its yes leaves the dear quote and the voting closes.
+        BudgetVotingSummary done = voting.vote(cheap.id, "APROVAR", voters.get(3));
 
         assertThat(done.status()).isEqualTo("APROVADO");
         ServiceOrder chosen = services.findById(created.id).orElseThrow();
@@ -179,6 +184,7 @@ class FlowLinksTest {
         voting.vote(first.id, "APROVAR", voters.get(2));
         voting.vote(first.id, "APROVAR", voters.get(3));
         voting.vote(first.id, "APROVAR", voters.get(5));
+        voting.vote(first.id, "APROVAR", voters.get(7));
         assertThat(services.findById(created.id).orElseThrow().approvedBudgetId).isEqualTo(first.id);
 
         Budget late = new Budget();
@@ -229,6 +235,7 @@ class FlowLinksTest {
         voting.vote(budget.id, "APROVAR", voters.get(2));
         voting.vote(budget.id, "APROVAR", voters.get(3));
         voting.vote(budget.id, "APROVAR", voters.get(5));
+        voting.vote(budget.id, "APROVAR", voters.get(7));
         ServiceOrder fromBudget = service("Reforma do telhado");
         fromBudget.approvedBudgetId = budget.id;
         ServiceOrder created = workflow.saveService(fromBudget);

@@ -441,8 +441,8 @@ export function BudgetFormScreen() {
               {forReport
                 ? `Orçamento para o problema "${forReport.title}". Ele vai para a votação das casas; se for aprovado, pode virar serviço.`
                 : forService
-                  ? `Cotação para o serviço "${forService.title}". Cada casa aprova só uma cotação do serviço: vence a que chegar primeiro à maioria, e as outras são encerradas.`
-                  : 'Todo orçamento novo vai para a votação das casas. Ele é aprovado quando a maioria das casas votar "Aprovar".'}
+                  ? `Cotação para o serviço "${forService.title}". Cada casa aprova só uma cotação do serviço: vence a que tiver a maioria quando a votação encerrar, e as outras são encerradas.`
+                  : 'Todo orçamento novo vai para a votação das casas. Ele é aprovado quando a maioria das casas votar "Aprovar". Mesmo com a maioria, a votação segue aberta até todas as casas votarem ou até o prazo.'}
             </Text>
           </View>
         )}
