@@ -370,7 +370,11 @@ record SettingsResponse(
     BigDecimal monthlyAmount,
     Integer paymentDueDay,
     String gatewayProvider,
-    BigDecimal budgetRequiredAbove
+    BigDecimal budgetRequiredAbove,
+    String billingType,
+    BigDecimal finePercent,
+    BigDecimal interestPercent,
+    String chargeTitle
 ) {
     static SettingsResponse from(Settings settings) {
         return new SettingsResponse(
@@ -379,10 +383,64 @@ record SettingsResponse(
             settings.monthlyAmount,
             settings.paymentDueDay,
             settings.gatewayProvider,
-            settings.budgetRequiredAbove
+            settings.budgetRequiredAbove,
+            settings.billingType,
+            settings.finePercent,
+            settings.interestPercent,
+            settings.chargeTitleOrDefault()
         );
     }
 }
 
 record BudgetRuleRequest(BigDecimal budgetRequiredAbove) {
+}
+
+record BillingRulesRequest(String billingType, BigDecimal finePercent, BigDecimal interestPercent, String chargeTitle) {
+}
+
+/** One month of charges as the administration sees it: a row per charge, and the units left without one. */
+record BillingMonth(
+    String month,
+    boolean pixConnected,
+    BigDecimal monthlyAmount,
+    LocalDate dueDate,
+    int unitsToCharge,
+    BillingTotals totals,
+    List<BillingRow> rows
+) {
+}
+
+record BillingTotals(BigDecimal expected, BigDecimal received, BigDecimal open, BigDecimal overdue, int paid, int pending, int late) {
+}
+
+/**
+ * status: PAID, PENDING, OVERDUE, CANCELLED; NOT_CHARGED (a resident, no charge yet this month); NO_RESIDENT (nobody to
+ * charge). extra: a charge beyond the month's standard one.
+ */
+record BillingRow(
+    Long houseId,
+    String houseLabel,
+    String residentName,
+    Long contributionId,
+    Long chargeId,
+    BigDecimal amount,
+    BigDecimal paidAmount,
+    LocalDate dueDate,
+    String status,
+    boolean extra,
+    boolean manual,
+    String invoiceUrl,
+    String receiptUrl,
+    LocalDateTime paidAt
+) {
+}
+
+record GenerateChargesRequest(@NotBlank String month, @Positive BigDecimal amount, LocalDate dueDate) {
+}
+
+/** What a batch did, unit by unit: one unit failing (a resident without a full CPF, say) does not stop the others. */
+record GenerateChargesResult(String month, int created, int alreadyCharged, List<UnitProblem> failed, List<UnitProblem> skipped) {
+}
+
+record UnitProblem(String houseLabel, String reason) {
 }

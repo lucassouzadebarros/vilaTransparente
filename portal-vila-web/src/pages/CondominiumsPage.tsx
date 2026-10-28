@@ -150,7 +150,7 @@ export function CondominiumsPage() {
             </Button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
               <caption className="sr-only">Condomínios da plataforma</caption>
               <thead className="bg-surface-alt/60 text-left text-xs uppercase tracking-wide text-muted">

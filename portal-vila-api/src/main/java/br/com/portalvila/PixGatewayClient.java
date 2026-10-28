@@ -41,13 +41,23 @@ interface PixGatewayClient {
 record GatewayCustomer(String id) {
 }
 
+/**
+ * billingType: PIX, or BOLETO (a boleto that also carries a Pix QR code). finePercent and interestPercent: what Asaas adds
+ * after the due date; zero or empty sends nothing, so the account's own settings in Asaas stay as they are.
+ */
 record CreatePixChargeRequest(
     String customerId,
     String externalReference,
     String description,
     BigDecimal value,
-    LocalDate dueDate
+    LocalDate dueDate,
+    String billingType,
+    BigDecimal finePercent,
+    BigDecimal interestPercent
 ) {
+    CreatePixChargeRequest(String customerId, String externalReference, String description, BigDecimal value, LocalDate dueDate) {
+        this(customerId, externalReference, description, value, dueDate, Settings.BILLING_PIX, null, null);
+    }
 }
 
 record GatewayCharge(String id, String status, String invoiceUrl, BigDecimal value, LocalDate dueDate, String externalReference) {
@@ -199,7 +209,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
         payload.put("name", resident.name);
         payload.put("email", resident.email);
         payload.put("cpfCnpj", cpfCnpj);
-        payload.put("externalReference", "VILA-HOUSE-" + String.format("%02d", resident.houseId));
+        payload.put("externalReference", PixService.referencePrefix() + "-HOUSE-" + String.format("%02d", resident.houseId));
         return payload;
     }
 
@@ -238,18 +248,24 @@ class AsaasPixGatewayClient implements PixGatewayClient {
         requireVila();
         requireApiKey();
 
+        Map<String, Object> body = new HashMap<>();
+        body.put("customer", request.customerId());
+        body.put("billingType", Settings.BILLING_BOLETO.equals(request.billingType()) ? Settings.BILLING_BOLETO : Settings.BILLING_PIX);
+        body.put("value", request.value());
+        body.put("dueDate", request.dueDate().format(DateTimeFormatter.ISO_DATE));
+        body.put("description", request.description());
+        body.put("externalReference", request.externalReference());
+        if (request.finePercent() != null && request.finePercent().signum() > 0) {
+            body.put("fine", Map.of("value", request.finePercent(), "type", "PERCENTAGE"));
+        }
+        if (request.interestPercent() != null && request.interestPercent().signum() > 0) {
+            body.put("interest", Map.of("value", request.interestPercent()));
+        }
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> response = webClient.post()
                 .uri("/payments")
-                .bodyValue(Map.of(
-                    "customer", request.customerId(),
-                    "billingType", "PIX",
-                    "value", request.value(),
-                    "dueDate", request.dueDate().format(DateTimeFormatter.ISO_DATE),
-                    "description", request.description(),
-                    "externalReference", request.externalReference()
-                ))
+                .bodyValue(body)
                 .retrieve()
                 .bodyToMono(Map.class)
                 .block(Duration.ofSeconds(15));

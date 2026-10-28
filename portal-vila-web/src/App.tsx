@@ -5,6 +5,7 @@ import { Spinner } from '@/components/ui';
 import { administersCondominium } from '@/lib/api';
 import { useAuth, useSession } from '@/lib/auth';
 import { ActivatePage } from '@/pages/ActivatePage';
+import { BillingPage } from '@/pages/BillingPage';
 import { CondoOverviewPage } from '@/pages/CondoOverviewPage';
 import { CondoSettingsPage } from '@/pages/CondoSettingsPage';
 import { CondominiumDetailPage } from '@/pages/CondominiumDetailPage';
@@ -62,6 +63,7 @@ export function App() {
         <Route index element={<Home />} />
         <Route path="/condominio" element={<OnlyCondominium><CondoOverviewPage /></OnlyCondominium>} />
         <Route path="/condominio/unidades" element={<OnlyCondominium><UnitsPage /></OnlyCondominium>} />
+        <Route path="/condominio/cobrancas" element={<OnlyCondominium><BillingPage /></OnlyCondominium>} />
         <Route path="/condominio/configuracoes" element={<OnlyCondominium><CondoSettingsPage /></OnlyCondominium>} />
         <Route path="/condominios" element={<OnlyPlatform><CondominiumsPage /></OnlyPlatform>} />
         <Route path="/condominios/:id" element={<OnlyPlatform><CondominiumDetailPage /></OnlyPlatform>} />

@@ -170,7 +170,7 @@ export function UnitsPage() {
             </Button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[680px] text-sm">
               <caption className="sr-only">Unidades do condomínio</caption>
               <thead className="bg-surface-alt/60 text-left text-xs uppercase tracking-wide text-muted">

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Building2, ExternalLink, Home, Inbox, LayoutDashboard, LogOut, Menu, Monitor, Moon, Settings, Sun, X, type LucideIcon } from 'lucide-react';
+import { Building2, ExternalLink, Home, Inbox, LayoutDashboard, LogOut, Menu, Monitor, Moon, Receipt, Settings, Sun, X, type LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import logo from '@/logo.png';
@@ -19,6 +19,7 @@ function sectionsFor(me: Session): { title: string; items: Item[] }[] {
       items: [
         { to: '/condominio', label: 'Visão geral', icon: LayoutDashboard, end: true },
         { to: '/condominio/unidades', label: 'Unidades e moradores', icon: Home },
+        { to: '/condominio/cobrancas', label: 'Cobranças', icon: Receipt },
         { to: '/condominio/configuracoes', label: 'Configurações', icon: Settings }
       ]
     });

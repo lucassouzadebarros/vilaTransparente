@@ -103,6 +103,20 @@ class PixService {
         return response;
     }
 
+    /**
+     * The month's standard charge of one unit, in a transaction of its own: a batch calls it unit by unit, so a unit that
+     * fails leaves the others charged. Asking again for a unit already charged this month returns that charge.
+     */
+    @Transactional
+    public PixChargeResponse generateStandardCharge(String month, BigDecimal requestedAmount, LocalDate requestedDueDate, Long residentId) {
+        month = validatedMonth(month);
+        Settings settings = settingsRepository.findAll().stream().findFirst().orElseGet(Settings::new);
+        BigDecimal amount = validatedAmount(requestedAmount == null ? settings.monthlyAmount : requestedAmount);
+        LocalDate dueDate = validatedDueDate(month, requestedDueDate, settings);
+        Resident resident = residents.findById(residentId).orElseThrow();
+        return createMonthlyChargeForResident(month, amount, settings, resident, dueDate);
+    }
+
     @Transactional(readOnly = true)
     public List<PixChargeResponse> listCharges(String month) {
         Map<Long, Contribution> contributionById = contributions.findByReferenceMonthOrderByHouseIdAsc(month)
@@ -336,21 +350,18 @@ class PixService {
         CreatePixChargeRequest request = new CreatePixChargeRequest(
             customer.id(),
             externalReference,
-            "Caixinha da Vila - " + house.label + " - " + month + (additionalCharge ? " (complementar)" : ""),
+            settings.chargeTitleOrDefault() + " - " + house.label + " - " + month + (additionalCharge ? " (complementar)" : ""),
             amount,
-            dueDate
+            dueDate,
+            settings.billingType,
+            settings.finePercent,
+            settings.interestPercent
         );
         GatewayCharge gatewayCharge = additionalCharge
             ? gatewayClient.createPixCharge(request)
             : gatewayClient.findPaymentByExternalReference(externalReference)
             .filter(charge -> externalReference.equals(charge.externalReference()))
-            .orElseGet(() -> gatewayClient.createPixCharge(new CreatePixChargeRequest(
-                customer.id(),
-                externalReference,
-                "Caixinha da Vila - " + house.label + " - " + month,
-                amount,
-                dueDate
-            )));
+            .orElseGet(() -> gatewayClient.createPixCharge(request));
         return persistGatewayCharge(settings, contribution, externalReference, amount, dueDate, gatewayCharge);
     }
 
@@ -562,7 +573,16 @@ class PixService {
 
     private String externalReference(String month, House house) {
         String houseNumber = String.format("%02d", house.number);
-        return "VILA-" + month + "-HOUSE-" + houseNumber;
+        return referencePrefix() + "-" + month + "-HOUSE-" + houseNumber;
+    }
+
+    /**
+     * Starts the references the charges carry in Asaas: "VILA" for the Vila (as always), "C" and the number for any other
+     * condominium, whose charges live in its own account.
+     */
+    static String referencePrefix() {
+        long condominium = TenantContext.current();
+        return condominium == TenantContext.VILA ? "VILA" : "C" + condominium;
     }
 
     private String validatedMonth(String month) {
