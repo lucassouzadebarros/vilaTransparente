@@ -117,6 +117,30 @@ class PlatformController {
     }
 }
 
+/** Any signed-in account: who it is, its role, whether it runs the platform, and its condominium. */
+@RestController
+@RequestMapping("/api/session")
+class SessionController {
+    private final CurrentUserService currentUser;
+    private final PlatformAdmins platformAdmins;
+    private final CondominiumRepository condominiums;
+
+    SessionController(CurrentUserService currentUser, PlatformAdmins platformAdmins, CondominiumRepository condominiums) {
+        this.currentUser = currentUser;
+        this.platformAdmins = platformAdmins;
+        this.condominiums = condominiums;
+    }
+
+    @GetMapping
+    SessionResponse current() {
+        AppUser user = currentUser.current();
+        SessionCondominium condominium = condominiums.findById(user.condominiumId)
+            .map(found -> new SessionCondominium(found.id, found.name, found.slug, found.status, PixGatewayClient.connectedHere()))
+            .orElse(null);
+        return new SessionResponse(user.name, user.email, user.role, user.residentId, platformAdmins.includes(user.email), condominium);
+    }
+}
+
 /**
  * What anyone may do without an account: ask for a condominium to be registered, and activate the account of whoever
  * runs a newly approved one. Both answer the same way to every wrong attempt and are limited per address.

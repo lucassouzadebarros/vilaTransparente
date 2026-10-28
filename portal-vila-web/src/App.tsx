@@ -2,13 +2,17 @@ import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/AppShell';
 import { Spinner } from '@/components/ui';
-import { useAuth } from '@/lib/auth';
+import { administersCondominium } from '@/lib/api';
+import { useAuth, useSession } from '@/lib/auth';
 import { ActivatePage } from '@/pages/ActivatePage';
+import { CondoOverviewPage } from '@/pages/CondoOverviewPage';
+import { CondoSettingsPage } from '@/pages/CondoSettingsPage';
 import { CondominiumDetailPage } from '@/pages/CondominiumDetailPage';
 import { CondominiumsPage } from '@/pages/CondominiumsPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { RequestPage } from '@/pages/RequestPage';
 import { RequestsPage } from '@/pages/RequestsPage';
+import { UnitsPage } from '@/pages/UnitsPage';
 
 function RequireSession({ children }: { children: ReactNode }) {
   const { session } = useAuth();
@@ -25,6 +29,22 @@ function RequireSession({ children }: { children: ReactNode }) {
   return children;
 }
 
+/** Where each account starts: its own condominium, or the platform for whoever only runs the platform. */
+function Home() {
+  const me = useSession();
+  return <Navigate to={administersCondominium(me) ? '/condominio' : '/condominios'} replace />;
+}
+
+function OnlyPlatform({ children }: { children: ReactNode }) {
+  const me = useSession();
+  return me.platformAdmin ? children : <Navigate to="/" replace />;
+}
+
+function OnlyCondominium({ children }: { children: ReactNode }) {
+  const me = useSession();
+  return administersCondominium(me) ? children : <Navigate to="/" replace />;
+}
+
 export function App() {
   return (
     <Routes>
@@ -39,10 +59,13 @@ export function App() {
           </RequireSession>
         }
       >
-        <Route index element={<Navigate to="/condominios" replace />} />
-        <Route path="/condominios" element={<CondominiumsPage />} />
-        <Route path="/condominios/:id" element={<CondominiumDetailPage />} />
-        <Route path="/pedidos" element={<RequestsPage />} />
+        <Route index element={<Home />} />
+        <Route path="/condominio" element={<OnlyCondominium><CondoOverviewPage /></OnlyCondominium>} />
+        <Route path="/condominio/unidades" element={<OnlyCondominium><UnitsPage /></OnlyCondominium>} />
+        <Route path="/condominio/configuracoes" element={<OnlyCondominium><CondoSettingsPage /></OnlyCondominium>} />
+        <Route path="/condominios" element={<OnlyPlatform><CondominiumsPage /></OnlyPlatform>} />
+        <Route path="/condominios/:id" element={<OnlyPlatform><CondominiumDetailPage /></OnlyPlatform>} />
+        <Route path="/pedidos" element={<OnlyPlatform><RequestsPage /></OnlyPlatform>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

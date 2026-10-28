@@ -7,6 +7,22 @@ export function cn(...classes: ClassValue[]) {
 }
 
 const numbers = new Intl.NumberFormat('pt-BR');
+const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+export function formatMoney(value: number | null | undefined) {
+  return money.format(Number(value ?? 0));
+}
+
+export function currentMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** "2026-10" -> "outubro de 2026" */
+export function monthName(month: string) {
+  const [year, number] = month.split('-').map(Number);
+  return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(new Date(year, number - 1, 1));
+}
 const dates = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
 export function formatNumber(value: number) {

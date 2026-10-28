@@ -146,7 +146,7 @@ export function HomeScreen() {
         <LocalCard style={styles.transparencyCard}>
           <Text style={styles.cardTitle}>{loadFailed ? 'Não consegui carregar' : 'Carregando...'}</Text>
           <Text style={styles.cardSubtitle}>
-            {loadFailed ? 'Confira a conexão e toque em atualizar para tentar de novo.' : 'Buscando os dados da vila.'}
+            {loadFailed ? 'Confira a conexão e toque em atualizar para tentar de novo.' : 'Buscando os dados do condomínio.'}
           </Text>
           {loadFailed ? (
             <Pressable style={styles.primaryAction} onPress={load}>
@@ -327,7 +327,7 @@ function TransparencyOpenCard({ dashboard, navigation }) {
   const balance = dashboard?.balance ?? 0;
   return (
     <LocalCard style={styles.transparencyCard}>
-      <Text style={styles.cardTitle}>Saldo acumulado da vila</Text>
+      <Text style={styles.cardTitle}>Saldo acumulado do condomínio</Text>
       <Text style={[styles.balanceOpenValue, width < NARROW_PHONE ? styles.balanceValueNarrow : null]}>{formatCurrency(balance)}</Text>
       <MetricGrid
         items={[

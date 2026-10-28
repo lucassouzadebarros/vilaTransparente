@@ -242,6 +242,51 @@ class PlatformTest {
     }
 
     @Test
+    void theSessionTellsTheRoleThePlatformAndTheCondominium() throws Exception {
+        JsonNode ownerSession = send(get("/api/session"), "", 200);
+        assertThat(ownerSession.get("platformAdmin").asBoolean()).isTrue();
+        assertThat(ownerSession.get("role").asText()).isEqualTo("ADMIN");
+        assertThat(ownerSession.get("condominium").get("id").asLong()).isEqualTo(TenantContext.VILA);
+        assertThat(ownerSession.get("condominium").get("pixConnected").asBoolean()).isTrue();
+
+        String manager = "Bearer " + jwt.issue(account("gestora-" + UUID.randomUUID() + "@teste.dev", "ADMIN", second.id));
+        String body = mvc.perform(get("/api/session").header("Authorization", manager))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        JsonNode session = json.readTree(body);
+        assertThat(session.get("platformAdmin").asBoolean()).isFalse();
+        assertThat(session.get("condominium").get("id").asLong()).isEqualTo(second.id);
+        assertThat(session.get("condominium").get("name").asText()).isEqualTo("Residencial Teste");
+        assertThat(session.get("condominium").get("pixConnected").asBoolean()).isFalse();
+        mvc.perform(get("/api/session")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void theAdministrationRenamesItsCondominiumInTheSettingsAndTheRestIsKept() throws Exception {
+        String manager = "Bearer " + jwt.issue(account("gestora-" + UUID.randomUUID() + "@teste.dev", "ADMIN", second.id));
+        TenantContext.runAs(second.id, () -> {
+            Settings own = new Settings();
+            own.villageName = "Residencial Teste";
+            Settings stored = settings.save(own);
+            cleanup.add(() -> TenantContext.runAs(second.id, () -> settings.deleteById(stored.id)));
+        });
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/settings").header("Authorization", manager)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"villageName\":\"Residencial Jardim Novo\",\"monthlyAmount\":250}"))
+            .andExpect(status().isOk());
+
+        assertThat(condominiums.findById(second.id).orElseThrow().name).isEqualTo("Residencial Jardim Novo");
+        TenantContext.runAs(second.id, () -> {
+            Settings own = settings.findAll().get(0);
+            assertThat(own.villageName).isEqualTo("Residencial Jardim Novo");
+            assertThat(own.monthlyAmount).isEqualByComparingTo("250");
+            assertThat(own.paymentDueDay).isEqualTo(10);
+            assertThat(own.gatewayProvider).isEqualTo("ASAAS");
+        });
+        // The Vila is untouched.
+        assertThat(condominiums.findById(TenantContext.VILA).orElseThrow().name).isNotEqualTo("Residencial Jardim Novo");
+    }
+
+    @Test
     void runningThePlatformKeepsTheRoleInTheOwnCondominium() throws Exception {
         // The owner is still the Vila's administrator: the Vila's admin routes answer, and only the Vila's data.
         mvc.perform(get("/api/admin/audit").header("Authorization", owner)).andExpect(status().isOk());

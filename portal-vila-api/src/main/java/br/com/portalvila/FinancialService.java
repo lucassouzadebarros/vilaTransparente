@@ -238,10 +238,19 @@ class FinancialService {
 
     public Settings updateSettings(Settings incoming) {
         Settings settings = settings();
-        settings.villageName = incoming.villageName;
-        settings.monthlyAmount = incoming.monthlyAmount;
-        settings.paymentDueDay = incoming.paymentDueDay;
-        settings.gatewayProvider = incoming.gatewayProvider;
+        // A field left out keeps what it had (the web panel sends only what its form shows).
+        if (incoming.villageName != null && !incoming.villageName.isBlank()) {
+            settings.villageName = incoming.villageName.trim();
+        }
+        if (incoming.monthlyAmount != null) {
+            settings.monthlyAmount = incoming.monthlyAmount;
+        }
+        if (incoming.paymentDueDay != null) {
+            settings.paymentDueDay = incoming.paymentDueDay;
+        }
+        if (incoming.gatewayProvider != null && !incoming.gatewayProvider.isBlank()) {
+            settings.gatewayProvider = incoming.gatewayProvider;
+        }
         if (incoming.webhookSecret != null && !incoming.webhookSecret.isBlank()) {
             settings.webhookSecret = incoming.webhookSecret;
         }

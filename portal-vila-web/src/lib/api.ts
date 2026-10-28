@@ -13,6 +13,57 @@ export type PlatformMe = {
   email: string;
 };
 
+export type Session = {
+  name: string;
+  email: string;
+  role: 'ADMIN' | 'SINDICO' | 'RESIDENT' | string;
+  residentId: number | null;
+  platformAdmin: boolean;
+  condominium: { id: number; name: string; slug: string; status: string; pixConnected: boolean } | null;
+};
+
+/** Who may use the panel: the platform's owners and whoever administers a condominium. Residents use the app. */
+export function mayUsePanel(session: Session) {
+  return session.platformAdmin || session.role === 'ADMIN';
+}
+
+export function administersCondominium(session: Session) {
+  return session.role === 'ADMIN' && session.condominium !== null;
+}
+
+export type Movement = { date: string; type: string; description: string; amount: number; status: string };
+
+export type Dashboard = {
+  month: string;
+  balance: number;
+  collected: number;
+  totalCollected: number;
+  pending: number;
+  overdue: number;
+  expenses: number;
+  paidHouses: number;
+  pendingHouses: number;
+  transparencyEnabled: boolean;
+  movements: Movement[];
+};
+
+export type HouseOption = { houseId: number; number: number; label: string; available: boolean; invited: boolean };
+
+export type Resident = { id: number; houseId: number; name: string; email: string | null; phone: string | null; status: string; createdAt: string };
+
+export type OpenInvite = { id: number; houseId: number; houseNumber: number; houseLabel: string; createdAt: string; expiresAt: string; createdBy: string };
+
+export type IssuedInvite = { id: number; houseId: number; houseNumber: number; houseLabel: string; code: string; expiresAt: string };
+
+export type CondominiumSettings = {
+  id: number;
+  villageName: string;
+  monthlyAmount: number;
+  paymentDueDay: number;
+  gatewayProvider: string;
+  budgetRequiredAbove: number | null;
+};
+
 export type CondominiumSummary = {
   id: number;
   name: string;
@@ -172,6 +223,19 @@ export const api = {
   login: (email: string, password: string) =>
     request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   me: () => request<PlatformMe>('/platform/me'),
+  session: () => request<Session>('/session'),
+  // The signed-in administrator's own condominium (the API answers inside it).
+  dashboard: (month: string) => request<Dashboard>(`/dashboard?month=${month}`),
+  houses: () => request<HouseOption[]>('/residents/houses'),
+  residents: () => request<Resident[]>('/residents'),
+  openInvites: () => request<OpenInvite[]>('/residents/invites'),
+  createInvite: (houseId: number) => request<IssuedInvite>('/residents/invites', { method: 'POST', body: JSON.stringify({ houseId }) }),
+  revokeInvite: (id: number) => request<{ status: string }>(`/residents/invites/${id}`, { method: 'DELETE' }),
+  settings: () => request<CondominiumSettings>('/settings'),
+  updateSettings: (settings: Pick<CondominiumSettings, 'villageName' | 'monthlyAmount' | 'paymentDueDay'>) =>
+    request<CondominiumSettings>('/settings', { method: 'PUT', body: JSON.stringify(settings) }),
+  updateBudgetRule: (budgetRequiredAbove: number | null) =>
+    request<CondominiumSettings>('/settings/budget-rule', { method: 'PUT', body: JSON.stringify({ budgetRequiredAbove }) }),
   condominiums: () => request<CondominiumSummary[]>('/platform/condominiums'),
   condominium: (id: number) => request<CondominiumDetail>(`/platform/condominiums/${id}`),
   createCondominium: (input: NewCondominium) =>

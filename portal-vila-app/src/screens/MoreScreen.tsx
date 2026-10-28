@@ -115,14 +115,14 @@ const menuItems: MenuItem[] = [
     adminOnly: true
   },
   {
-    title: 'Problemas da vila',
+    title: 'Problemas do condomínio',
     description: 'Relate um problema e acompanhe os relatos.',
     icon: AlertTriangle,
     route: 'ProblemReports'
   },
   {
     title: 'Configurações',
-    description: 'Valor, vencimento e dados da vila.',
+    description: 'Valor, vencimento e dados do condomínio.',
     icon: Settings,
     route: 'Settings',
     adminOnly: true

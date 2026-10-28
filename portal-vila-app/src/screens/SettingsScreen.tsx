@@ -49,7 +49,7 @@ export function SettingsScreen() {
   }, []);
 
   return (
-    <Screen title="Configurações" subtitle="Parâmetros da vila" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
+    <Screen title="Configurações" subtitle="Parâmetros do condomínio" right={<Button title="" icon={RefreshCw} variant="ghost" onPress={load} />}>
       <Card>
         <Facts
           items={[
