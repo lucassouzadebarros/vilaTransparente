@@ -36,7 +36,8 @@ record SessionCondominium(Long id, String name, String slug, String status, bool
 }
 
 /** Who is signed in and where: what the web panel needs to show the right menus. */
-record SessionResponse(String name, String email, String role, Long residentId, boolean platformAdmin, SessionCondominium condominium) {
+/** canPay: may record, approve and pay the condominium's bills (the administration, and the síndico if allowed). */
+record SessionResponse(String name, String email, String role, Long residentId, boolean platformAdmin, SessionCondominium condominium, boolean canPay) {
 }
 
 record CondominiumSummary(
@@ -381,7 +382,9 @@ record SettingsResponse(
     String chargeMode,
     BigDecimal monthlyTotal,
     BigDecimal waterPrice,
-    BigDecimal gasPrice
+    BigDecimal gasPrice,
+    boolean sindicoCanPay,
+    BigDecimal approvalAbove
 ) {
     static SettingsResponse from(Settings settings) {
         return new SettingsResponse(
@@ -401,9 +404,77 @@ record SettingsResponse(
             settings.chargeMode,
             settings.monthlyTotal,
             settings.waterPrice,
-            settings.gasPrice
+            settings.gasPrice,
+            settings.sindicoCanPay,
+            settings.approvalAbove
         );
     }
+}
+
+/** Who pays the bills besides the administration, and above which value a second person approves (empty: nobody). */
+record PaymentRulesRequest(Boolean sindicoCanPay, BigDecimal approvalAbove) {
+}
+
+record SupplierRequest(String name, String document, String pixKey, String pixKeyType, String phone, String email, String notes) {
+}
+
+/**
+ * A new bill. amount is the whole bill; with installments above 1 it is split in that many, one a month from dueDate.
+ * monthly: it repeats every month (paying one creates the next).
+ */
+record PayableRequest(
+    Long supplierId,
+    String description,
+    String category,
+    BigDecimal amount,
+    LocalDate dueDate,
+    Integer installments,
+    Boolean monthly,
+    Long budgetId,
+    Long serviceOrderId,
+    Long documentId,
+    String exceptionReason,
+    String notes
+) {
+}
+
+/** A payment made outside the system (bank app, cash): when, how, and the receipt. */
+record PayPayableRequest(LocalDate paidAt, String method, Long receiptDocumentId, String notes) {
+}
+
+/** canApprove: the person asking may approve it (has permission and did not record it). */
+record PayableView(
+    Long id,
+    String description,
+    String category,
+    BigDecimal amount,
+    LocalDate dueDate,
+    String status,
+    boolean overdue,
+    Long supplierId,
+    String supplierName,
+    boolean supplierHasPix,
+    Integer installment,
+    Integer installments,
+    String recurrence,
+    Long budgetId,
+    Long serviceOrderId,
+    Long documentId,
+    String exceptionReason,
+    String notes,
+    String createdBy,
+    LocalDateTime createdAt,
+    String approvedBy,
+    LocalDateTime approvedAt,
+    String paidBy,
+    LocalDate paidAt,
+    String paymentMethod,
+    Long receiptDocumentId,
+    Long expenseId,
+    String cancelledBy,
+    String cancelReason,
+    boolean canApprove
+) {
 }
 
 record BudgetRuleRequest(BigDecimal budgetRequiredAbove) {

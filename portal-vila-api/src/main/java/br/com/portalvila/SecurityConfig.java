@@ -170,10 +170,19 @@ class JwtAuthFilter extends OncePerRequestFilter {
 class CurrentUserService {
     private final AppUserRepository users;
     private final ResidentRepository residents;
+    private final SettingsRepository settings;
 
-    CurrentUserService(AppUserRepository users, ResidentRepository residents) {
+    CurrentUserService(AppUserRepository users, ResidentRepository residents, SettingsRepository settings) {
         this.users = users;
         this.residents = residents;
+        this.settings = settings;
+    }
+
+    /** The administration, and the síndico when the condominium allows it: record, approve and pay bills. */
+    boolean canPay() {
+        String role = current().role;
+        return "ADMIN".equals(role)
+            || "SINDICO".equals(role) && settings.findAll().stream().findFirst().map(found -> found.sindicoCanPay).orElse(false);
     }
 
     AppUser current() {
@@ -250,5 +259,9 @@ class AccessRules {
 
     public boolean canManageBudgets() {
         return currentUser.canManageBudgets();
+    }
+
+    public boolean canPay() {
+        return currentUser.canPay();
     }
 }

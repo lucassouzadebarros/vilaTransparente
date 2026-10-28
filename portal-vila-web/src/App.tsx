@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/AppShell';
 import { Spinner } from '@/components/ui';
-import { administersCondominium } from '@/lib/api';
+import { administersCondominium, managesCondominium } from '@/lib/api';
 import { useAuth, useSession } from '@/lib/auth';
 import { ActivatePage } from '@/pages/ActivatePage';
 import { BillingPage } from '@/pages/BillingPage';
@@ -11,6 +11,8 @@ import { CondoSettingsPage } from '@/pages/CondoSettingsPage';
 import { CondominiumDetailPage } from '@/pages/CondominiumDetailPage';
 import { CondominiumsPage } from '@/pages/CondominiumsPage';
 import { LoginPage } from '@/pages/LoginPage';
+import { PayablesPage } from '@/pages/PayablesPage';
+import { SuppliersPage } from '@/pages/SuppliersPage';
 import { ReadingsPage } from '@/pages/ReadingsPage';
 import { RequestPage } from '@/pages/RequestPage';
 import { RequestsPage } from '@/pages/RequestsPage';
@@ -31,10 +33,16 @@ function RequireSession({ children }: { children: ReactNode }) {
   return children;
 }
 
-/** Where each account starts: its own condominium, or the platform for whoever only runs the platform. */
+/** Where each account starts: its own condominium, its bills for the síndico, or the platform for whoever only runs it. */
 function Home() {
   const me = useSession();
-  return <Navigate to={administersCondominium(me) ? '/condominio' : '/condominios'} replace />;
+  return <Navigate to={administersCondominium(me) ? '/condominio' : managesCondominium(me) ? '/condominio/contas' : '/condominios'} replace />;
+}
+
+/** The administration and the síndico. */
+function OnlyManagers({ children }: { children: ReactNode }) {
+  const me = useSession();
+  return managesCondominium(me) ? children : <Navigate to="/" replace />;
 }
 
 function OnlyPlatform({ children }: { children: ReactNode }) {
@@ -66,6 +74,8 @@ export function App() {
         <Route path="/condominio/unidades" element={<OnlyCondominium><UnitsPage /></OnlyCondominium>} />
         <Route path="/condominio/cobrancas" element={<OnlyCondominium><BillingPage /></OnlyCondominium>} />
         <Route path="/condominio/consumo" element={<OnlyCondominium><ReadingsPage /></OnlyCondominium>} />
+        <Route path="/condominio/contas" element={<OnlyManagers><PayablesPage /></OnlyManagers>} />
+        <Route path="/condominio/fornecedores" element={<OnlyManagers><SuppliersPage /></OnlyManagers>} />
         <Route path="/condominio/configuracoes" element={<OnlyCondominium><CondoSettingsPage /></OnlyCondominium>} />
         <Route path="/condominios" element={<OnlyPlatform><CondominiumsPage /></OnlyPlatform>} />
         <Route path="/condominios/:id" element={<OnlyPlatform><CondominiumDetailPage /></OnlyPlatform>} />

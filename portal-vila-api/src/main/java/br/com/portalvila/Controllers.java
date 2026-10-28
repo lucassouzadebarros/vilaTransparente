@@ -774,8 +774,17 @@ class DocumentController {
             && !(authentication instanceof org.springframework.security.authentication.AnonymousAuthenticationToken);
     }
 
-    /** The síndico only attaches documents to budgets and services; the rest stays with the admin. */
+    /**
+     * The síndico attaches documents to budgets and services, and to bills (the bill, the receipt) when the condominium
+     * lets the síndico pay them; the rest stays with the admin.
+     */
     private void assertCanAttach(String relatedType) {
+        if ("PAYABLE".equals(relatedType)) {
+            if (!currentUser.canPay()) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Só quem paga as contas do condomínio anexa documentos a elas.");
+            }
+            return;
+        }
         if (!currentUser.isAdmin() && !"BUDGET".equals(relatedType) && !"SERVICE".equals(relatedType)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "O síndico só anexa documentos de orçamentos e serviços.");
         }
@@ -1480,6 +1489,12 @@ class SettingsController {
     @PreAuthorize("hasRole('ADMIN')")
     SettingsResponse updateBillingRules(@RequestBody BillingRulesRequest request) {
         return SettingsResponse.from(financialService.updateBillingRules(request));
+    }
+
+    @PutMapping("/payments")
+    @PreAuthorize("hasRole('ADMIN')")
+    SettingsResponse updatePaymentRules(@RequestBody PaymentRulesRequest request) {
+        return SettingsResponse.from(financialService.updatePaymentRules(request));
     }
 }
 

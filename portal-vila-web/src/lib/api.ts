@@ -20,16 +20,94 @@ export type Session = {
   residentId: number | null;
   platformAdmin: boolean;
   condominium: { id: number; name: string; slug: string; status: string; pixConnected: boolean } | null;
+  /** May record, approve and pay the condominium's bills: the administration, and the síndico when allowed. */
+  canPay: boolean;
 };
 
-/** Who may use the panel: the platform's owners and whoever administers a condominium. Residents use the app. */
+/** Who may use the panel: the platform's owners, whoever administers a condominium and its síndico. Residents use the app. */
 export function mayUsePanel(session: Session) {
-  return session.platformAdmin || session.role === 'ADMIN';
+  return session.platformAdmin || session.role === 'ADMIN' || session.role === 'SINDICO';
 }
 
 export function administersCondominium(session: Session) {
   return session.role === 'ADMIN' && session.condominium !== null;
 }
+
+/** The administration and the síndico: they follow the bills (and pay them, when canPay). */
+export function managesCondominium(session: Session) {
+  return (session.role === 'ADMIN' || session.role === 'SINDICO') && session.condominium !== null;
+}
+
+export type PixKeyType = 'CPF' | 'CNPJ' | 'EMAIL' | 'PHONE' | 'EVP';
+
+export type Supplier = {
+  id: number;
+  name: string;
+  document: string | null;
+  pixKey: string | null;
+  pixKeyType: PixKeyType | null;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+  active: boolean;
+};
+
+export type SupplierInput = Omit<Supplier, 'id' | 'active'>;
+
+export type PayableStatus = 'PENDING_APPROVAL' | 'APPROVED' | 'PAID' | 'CANCELLED';
+
+export type Payable = {
+  id: number;
+  description: string;
+  category: string | null;
+  amount: number;
+  dueDate: string;
+  status: PayableStatus;
+  overdue: boolean;
+  supplierId: number | null;
+  supplierName: string | null;
+  supplierHasPix: boolean;
+  installment: number | null;
+  installments: number | null;
+  recurrence: 'MONTHLY' | null;
+  budgetId: number | null;
+  serviceOrderId: number | null;
+  documentId: number | null;
+  exceptionReason: string | null;
+  notes: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  paidBy: string | null;
+  paidAt: string | null;
+  paymentMethod: string | null;
+  receiptDocumentId: number | null;
+  expenseId: number | null;
+  cancelledBy: string | null;
+  cancelReason: string | null;
+  canApprove: boolean;
+};
+
+export type PayableInput = {
+  supplierId: number | null;
+  description: string;
+  category: string | null;
+  amount: number;
+  dueDate: string;
+  installments: number;
+  monthly: boolean;
+  budgetId: number | null;
+  documentId: number | null;
+  exceptionReason: string | null;
+  notes: string | null;
+};
+
+export type PaymentMethod = 'PIX' | 'TED' | 'BOLETO' | 'DINHEIRO' | 'CARTAO' | 'OUTRO';
+
+export type BudgetOption = { id: number; title: string; supplier: string; amount: number; status: string };
+
+export type UploadedDocument = { id: number; name: string; url: string };
 
 export type Movement = { date: string; type: string; description: string; amount: number; status: string };
 
@@ -77,6 +155,8 @@ export type CondominiumSettings = {
   monthlyTotal: number | null;
   waterPrice: number | null;
   gasPrice: number | null;
+  sindicoCanPay: boolean;
+  approvalAbove: number | null;
 };
 
 export type ChargeMode = 'FIXED' | 'FRACTION';
@@ -296,7 +376,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       ...init,
       headers: {
         Accept: 'application/json',
-        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        // A file goes as a form, and the browser writes its own Content-Type with the boundary.
+        ...(init.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...init.headers
       }
@@ -339,6 +420,46 @@ export const api = {
   billing: (month: string) => request<BillingMonth>(`/admin/billing?month=${month}`),
   generateCharges: (input: { month: string; amount?: number; total?: number; dueDate: string }) =>
     request<GenerateResult>('/admin/billing/generate', { method: 'POST', body: JSON.stringify(input) }),
+  updatePaymentRules: (rules: { sindicoCanPay: boolean; approvalAbove: number | null }) =>
+    request<CondominiumSettings>('/settings/payments', { method: 'PUT', body: JSON.stringify(rules) }),
+  suppliers: () => request<Supplier[]>('/suppliers'),
+  saveSupplier: (id: number | null, input: SupplierInput) =>
+    request<Supplier>(id == null ? '/suppliers' : `/suppliers/${id}`, { method: id == null ? 'POST' : 'PUT', body: JSON.stringify(input) }),
+  deactivateSupplier: (id: number) => request<Supplier>(`/suppliers/${id}`, { method: 'DELETE' }),
+  payables: () => request<Payable[]>('/payables'),
+  createPayable: (input: PayableInput) => request<Payable[]>('/payables', { method: 'POST', body: JSON.stringify(input) }),
+  approvePayable: (id: number) => request<Payable>(`/payables/${id}/approve`, { method: 'POST' }),
+  payPayable: (id: number, input: { paidAt: string; method: PaymentMethod; receiptDocumentId: number | null; notes: string | null }) =>
+    request<Payable>(`/payables/${id}/pay`, { method: 'POST', body: JSON.stringify(input) }),
+  cancelPayable: (id: number, reason: string) => request<Payable>(`/payables/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  budgets: () => request<BudgetOption[]>('/budgets'),
+  /** A file kept with a bill (the invoice, the receipt): only who pays the bills may send it. */
+  uploadDocument: (file: File, type: 'NOTA_FISCAL' | 'RECIBO' | 'BOLETO') => {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    form.append('name', file.name);
+    form.append('type', type);
+    form.append('relatedType', 'PAYABLE');
+    return request<UploadedDocument>('/documents/upload', { method: 'POST', body: form });
+  },
+  /** Opens a kept file in a new tab: the API answers a short-lived signed address. */
+  openDocument: async (id: number) => {
+    // The tab opens on the click itself (a tab opened after waiting for the API would be blocked as a pop-up).
+    const tab = window.open('', '_blank');
+    try {
+      const { path } = await request<{ path: string }>(`/documents/${id}/access`);
+      const url = `${BASE_URL.replace(/\/api$/, '')}${path}`;
+      if (tab) {
+        tab.opener = null;
+        tab.location.href = url;
+      } else {
+        window.location.href = url;
+      }
+    } catch (error) {
+      tab?.close();
+      throw error;
+    }
+  },
   fractions: () => request<FractionsView>('/admin/billing/fractions'),
   updateFractions: (updates: { houseId: number; fraction: number | null }[]) =>
     request<FractionsView>('/admin/billing/fractions', { method: 'PUT', body: JSON.stringify(updates) }),

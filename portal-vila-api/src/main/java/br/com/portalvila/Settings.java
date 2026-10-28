@@ -69,6 +69,13 @@ public class Settings {
     /** What the whole condominium costs in a month, divided among the units in FRACTION mode. */
     public BigDecimal monthlyTotal;
 
+    /** Whether the síndico may record, approve and pay bills too, besides the administration. */
+    @Column(nullable = false)
+    public boolean sindicoCanPay = false;
+
+    /** Above this, a bill waits for the approval of a second person (not whoever recorded it). Empty: no second approval. */
+    public BigDecimal approvalAbove;
+
     /** Price of a cubic meter of water and of gas, for the charges by meter reading. */
     public BigDecimal waterPrice;
     public BigDecimal gasPrice;

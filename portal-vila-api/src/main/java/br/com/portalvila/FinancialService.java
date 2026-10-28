@@ -297,6 +297,26 @@ class FinancialService {
         return saved;
     }
 
+    /** Whether the síndico pays bills too, and above which value a second person approves them. */
+    public Settings updatePaymentRules(PaymentRulesRequest request) {
+        Settings settings = settings();
+        if (request.approvalAbove() != null && request.approvalAbove().signum() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O valor não pode ser negativo.");
+        }
+        if (request.sindicoCanPay() != null) {
+            settings.sindicoCanPay = request.sindicoCanPay();
+        }
+        settings.approvalAbove = request.approvalAbove() == null || request.approvalAbove().signum() == 0
+            ? null
+            : request.approvalAbove().setScale(2, RoundingMode.HALF_UP);
+        settings.updatedAt = LocalDateTime.now();
+        Settings saved = settingsRepository.save(settings);
+        audit.record("PAYMENT_RULES_CHANGED", "SETTINGS", saved.id,
+            (saved.sindicoCanPay ? "Síndico também paga" : "Só a administração paga") + ", "
+                + (saved.approvalAbove == null ? "sem segunda aprovação" : "segunda aprovação acima de " + AuditService.money(saved.approvalAbove)));
+        return saved;
+    }
+
     public Settings updateSettings(Settings incoming) {
         Settings settings = settings();
         // A field left out keeps what it had (the web panel sends only what its form shows).
