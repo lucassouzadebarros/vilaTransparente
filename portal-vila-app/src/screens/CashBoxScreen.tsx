@@ -186,7 +186,7 @@ export function CashBoxScreen() {
       ) : (
         <>
           <Card>
-            <Label>Saldo acumulado da vila</Label>
+            <Label>Saldo acumulado do condomínio</Label>
             <Text style={styles.balance}>{formatMoneyBR(dashboard?.balance ?? 0)}</Text>
             <View style={styles.divider} />
             <Row><Label>Arrecadado total</Label><Money value={dashboard?.totalCollected ?? dashboard?.collected ?? 0} /></Row>

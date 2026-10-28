@@ -18,6 +18,13 @@ record LoginResponse(String token, String name, String email, String role, Long 
 record PlatformMe(String name, String email) {
 }
 
+record SessionCondominium(Long id, String name, String slug, String status, boolean pixConnected) {
+}
+
+/** Who is signed in and where: what the web panel needs to show the right menus. */
+record SessionResponse(String name, String email, String role, Long residentId, boolean platformAdmin, SessionCondominium condominium) {
+}
+
 record CondominiumSummary(
     Long id,
     String name,

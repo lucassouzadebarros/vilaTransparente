@@ -27,7 +27,8 @@ export function Toaster({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={notify}>
       {children}
-      <div aria-live="polite" className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex flex-col items-end gap-2 sm:inset-x-auto sm:right-6 sm:bottom-6">
+      {/* Phone: at the bottom, where the thumb is. Computer: top right, under the bar, clear of the save buttons. */}
+      <div aria-live="polite" className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex flex-col items-end gap-2 sm:inset-x-auto sm:top-20 sm:right-6 sm:bottom-auto">
         {toasts.map((toast) => (
           <div
             key={toast.id}

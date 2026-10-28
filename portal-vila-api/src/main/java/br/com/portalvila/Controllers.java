@@ -1417,9 +1417,11 @@ class AdminSindicoController {
 @RequestMapping("/api/settings")
 class SettingsController {
     private final FinancialService financialService;
+    private final CondominiumRepository condominiums;
 
-    SettingsController(FinancialService financialService) {
+    SettingsController(FinancialService financialService, CondominiumRepository condominiums) {
         this.financialService = financialService;
+        this.condominiums = condominiums;
     }
 
     @GetMapping
@@ -1430,7 +1432,15 @@ class SettingsController {
     @PutMapping
     @PreAuthorize("hasRole('ADMIN')")
     SettingsResponse update(@RequestBody Settings settings) {
-        return SettingsResponse.from(financialService.updateSettings(settings));
+        Settings saved = financialService.updateSettings(settings);
+        // The condominium's name is the same everywhere: the platform panel shows the one the administration chose.
+        condominiums.findById(TenantContext.current())
+            .filter(condominium -> !condominium.name.equals(saved.villageName))
+            .ifPresent(condominium -> {
+                condominium.name = saved.villageName;
+                condominiums.save(condominium);
+            });
+        return SettingsResponse.from(saved);
     }
 
     @PutMapping("/budget-rule")

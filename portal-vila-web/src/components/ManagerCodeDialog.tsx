@@ -19,7 +19,7 @@ function message(invitation: ManagerInvitation, condominiumName: string) {
   ].join('\n');
 }
 
-function CopyButton({ text, label, className }: { text: string; label: string; className?: string }) {
+export function CopyButton({ text, label, className }: { text: string; label: string; className?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <Button

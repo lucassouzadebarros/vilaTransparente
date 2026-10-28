@@ -1,26 +1,43 @@
 import { useQuery } from '@tanstack/react-query';
-import { Building2, Inbox, LogOut, Menu, Monitor, Moon, Sun, X } from 'lucide-react';
+import { Building2, ExternalLink, Home, Inbox, LayoutDashboard, LogOut, Menu, Monitor, Moon, Settings, Sun, X, type LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import logo from '@/logo.png';
-import { api } from '@/lib/api';
-import { useAuth } from '@/lib/auth';
+import { administersCondominium, api, RESIDENTS_APP_URL, type Session } from '@/lib/api';
+import { useAuth, useSession } from '@/lib/auth';
 import { useTheme, type ThemeChoice } from '@/lib/theme';
 import { cn, initials } from '@/lib/utils';
 
-const sections = [
-  {
-    title: 'Plataforma',
-    items: [
-      { to: '/condominios', label: 'Condomínios', icon: Building2, badge: false },
-      { to: '/pedidos', label: 'Pedidos', icon: Inbox, badge: true }
-    ]
-  }
-];
+type Item = { to: string; label: string; icon: LucideIcon; badge?: boolean; end?: boolean };
 
-/** How many requests wait for an answer; checked again every minute while the panel is open. */
-function usePendingRequests() {
-  const query = useQuery({ queryKey: ['platform', 'pending-requests'], queryFn: api.pendingRequests, refetchInterval: 60_000 });
+/** The menu follows the account: its own condominium if it administers one, the platform if it runs it. */
+function sectionsFor(me: Session): { title: string; items: Item[] }[] {
+  const sections: { title: string; items: Item[] }[] = [];
+  if (administersCondominium(me)) {
+    sections.push({
+      title: 'Meu condomínio',
+      items: [
+        { to: '/condominio', label: 'Visão geral', icon: LayoutDashboard, end: true },
+        { to: '/condominio/unidades', label: 'Unidades e moradores', icon: Home },
+        { to: '/condominio/configuracoes', label: 'Configurações', icon: Settings }
+      ]
+    });
+  }
+  if (me.platformAdmin) {
+    sections.push({
+      title: 'Plataforma',
+      items: [
+        { to: '/condominios', label: 'Condomínios', icon: Building2 },
+        { to: '/pedidos', label: 'Pedidos', icon: Inbox, badge: true }
+      ]
+    });
+  }
+  return sections;
+}
+
+/** How many requests wait for an answer; checked again every minute while the panel is open. Only for the platform. */
+function usePendingRequests(enabled: boolean) {
+  const query = useQuery({ queryKey: ['platform', 'pending-requests'], queryFn: api.pendingRequests, refetchInterval: 60_000, enabled });
   return query.data?.pending ?? 0;
 }
 
@@ -31,9 +48,10 @@ const themes: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
 ];
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
-  const { session, signOut } = useAuth();
-  const me = session.status === 'signed-in' ? session.me : null;
-  const pending = usePendingRequests();
+  const { signOut } = useAuth();
+  const me = useSession();
+  const pending = usePendingRequests(me.platformAdmin);
+  const sections = sectionsFor(me);
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-ink">
@@ -41,19 +59,22 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <img src={logo} alt="" className="size-9 rounded-lg" />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">Portal da Vila</p>
-          <p className="text-xs text-sidebar-muted">Painel da plataforma</p>
+          <p className="truncate text-xs text-sidebar-muted">
+            {administersCondominium(me) ? me.condominium!.name : 'Painel da plataforma'}
+          </p>
         </div>
       </div>
 
-      <nav aria-label="Menu principal" className="flex-1 space-y-6 px-3 py-2">
+      <nav aria-label="Menu principal" className="flex-1 space-y-6 overflow-y-auto px-3 py-2">
         {sections.map((section) => (
           <div key={section.title}>
             <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">{section.title}</p>
             <ul className="space-y-1">
-              {section.items.map(({ to, label, icon: Icon, badge }) => (
+              {section.items.map(({ to, label, icon: Icon, badge, end }) => (
                 <li key={to}>
                   <NavLink
                     to={to}
+                    end={end}
                     onClick={onNavigate}
                     className={({ isActive }) =>
                       cn(
@@ -79,12 +100,21 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       <div className="border-t border-white/10 p-4">
-        {me && (
-          <div className="mb-3 min-w-0 px-1">
-            <p className="truncate text-sm font-medium">{me.name}</p>
-            <p className="truncate text-xs text-sidebar-muted">{me.email}</p>
-          </div>
+        {administersCondominium(me) && (
+          <a
+            href={RESIDENTS_APP_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="mb-3 flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-muted transition-colors hover:bg-sidebar-active/60 hover:text-sidebar-ink"
+          >
+            <ExternalLink aria-hidden className="size-4" />
+            Abrir o aplicativo
+          </a>
         )}
+        <div className="mb-3 min-w-0 px-1">
+          <p className="truncate text-sm font-medium">{me.name}</p>
+          <p className="truncate text-xs text-sidebar-muted">{me.email}</p>
+        </div>
         <button
           type="button"
           onClick={() => signOut()}
@@ -124,14 +154,10 @@ function ThemeSwitch() {
 }
 
 function UserChip() {
-  const { session } = useAuth();
-  if (session.status !== 'signed-in') return null;
+  const me = useSession();
   return (
-    <span
-      title={`${session.me.name} · ${session.me.email}`}
-      className="grid size-9 place-items-center rounded-full bg-sidebar text-xs font-semibold text-sidebar-ink ring-2 ring-surface"
-    >
-      {initials(session.me.name)}
+    <span title={`${me.name} · ${me.email}`} className="grid size-9 place-items-center rounded-full bg-sidebar text-xs font-semibold text-sidebar-ink ring-2 ring-surface">
+      {initials(me.name)}
     </span>
   );
 }
