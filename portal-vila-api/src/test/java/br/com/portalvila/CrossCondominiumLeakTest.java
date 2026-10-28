@@ -70,6 +70,7 @@ class CrossCondominiumLeakTest {
     @Autowired PixChargeRepository pixCharges;
     @Autowired AuditEntryRepository auditEntries;
     @Autowired ExcludedGatewayPaymentRepository excludedPayments;
+    @Autowired WebhookEventRepository webhookEvents;
     @MockBean PixGatewayClient gatewayClient;
 
     @TempDir Path folder;
@@ -148,6 +149,15 @@ class CrossCondominiumLeakTest {
         invite = invites.save(invite);
 
         audit.record("TESTE_VAZAMENTO", "EXPENSE", expense.id, mark);
+
+        // A notice from the Vila's Asaas account (not filtered by condominium: it arrives before anyone knows whose it is).
+        WebhookEvent notice = new WebhookEvent();
+        notice.eventId = "evt_" + mark;
+        notice.eventType = "PAYMENT_RECEIVED";
+        notice.gatewayPaymentId = "pay_" + mark;
+        notice.payloadJson = "{\"payment\":{\"description\":\"" + mark + "\"}}";
+        WebhookEvent storedNotice = webhookEvents.save(notice);
+        cleanup.add(() -> webhookEvents.deleteById(storedNotice.id));
 
         vilaIds.addAll(List.of(house.id, resident.id, vilaAccount.id, expense.id, budget.id, report.id, event.id, service.id,
             contribution.id, receipt.id, document.id, invite.id));
