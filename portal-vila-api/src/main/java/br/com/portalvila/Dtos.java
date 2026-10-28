@@ -374,7 +374,10 @@ record SettingsResponse(
     String billingType,
     BigDecimal finePercent,
     BigDecimal interestPercent,
-    String chargeTitle
+    String chargeTitle,
+    BigDecimal reserveFundPercent,
+    boolean remindersEnabled,
+    Integer reminderDaysBefore
 ) {
     static SettingsResponse from(Settings settings) {
         return new SettingsResponse(
@@ -387,7 +390,10 @@ record SettingsResponse(
             settings.billingType,
             settings.finePercent,
             settings.interestPercent,
-            settings.chargeTitleOrDefault()
+            settings.chargeTitleOrDefault(),
+            settings.reserveFundPercent,
+            settings.remindersEnabled,
+            settings.reminderDaysBefore
         );
     }
 }
@@ -395,7 +401,20 @@ record SettingsResponse(
 record BudgetRuleRequest(BigDecimal budgetRequiredAbove) {
 }
 
-record BillingRulesRequest(String billingType, BigDecimal finePercent, BigDecimal interestPercent, String chargeTitle) {
+/** The last three may be left out: they keep what they had. */
+record BillingRulesRequest(
+    String billingType,
+    BigDecimal finePercent,
+    BigDecimal interestPercent,
+    String chargeTitle,
+    BigDecimal reserveFundPercent,
+    Boolean remindersEnabled,
+    Integer reminderDaysBefore
+) {
+}
+
+/** A one-off charge: for one unit (houseId) or every unit with a resident (houseId empty). */
+record ExtraChargeRequest(Long houseId, @NotBlank String description, @Positive BigDecimal amount, @NotNull LocalDate dueDate) {
 }
 
 /** One month of charges as the administration sees it: a row per charge, and the units left without one. */
@@ -410,7 +429,8 @@ record BillingMonth(
 ) {
 }
 
-record BillingTotals(BigDecimal expected, BigDecimal received, BigDecimal open, BigDecimal overdue, int paid, int pending, int late) {
+/** reserve: how much of what is expected goes to the reserve fund. */
+record BillingTotals(BigDecimal expected, BigDecimal received, BigDecimal open, BigDecimal overdue, BigDecimal reserve, int paid, int pending, int late) {
 }
 
 /**
@@ -431,7 +451,9 @@ record BillingRow(
     boolean manual,
     String invoiceUrl,
     String receiptUrl,
-    LocalDateTime paidAt
+    LocalDateTime paidAt,
+    String description,
+    BigDecimal reserveAmount
 ) {
 }
 

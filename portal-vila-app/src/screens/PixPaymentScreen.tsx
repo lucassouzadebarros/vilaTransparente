@@ -3,12 +3,13 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../utils/alert';
 import { useRoute } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
-import { Copy, QrCode, RefreshCw } from 'lucide-react-native';
+import { Copy, ExternalLink, QrCode, RefreshCw } from 'lucide-react-native';
 import { ChargeStatusTimeline } from '../components/pix/ChargeStatusTimeline';
 import { PixQrCodeBox } from '../components/pix/PixQrCodeBox';
 import { Badge, Button, Card, Label, Money, Row, Screen, Value } from '../components/ui';
 import { api } from '../services/api';
 import { PixCharge } from '../types';
+import { openExternal } from '../utils/links';
 import { colors, spacing } from '../theme';
 
 export function PixPaymentScreen() {
@@ -63,6 +64,14 @@ export function PixPaymentScreen() {
             </View>
             <Button title="Copiar código Pix" icon={Copy} onPress={copy} />
           </Card>
+
+          {charge.invoiceUrl && charge.status !== 'PAID' && charge.status !== 'CANCELLED' ? (
+            <Card>
+              <Value>Fatura</Value>
+              <Label>A página do Asaas com o Pix e, quando o condomínio cobra por boleto, o boleto para pagar ou imprimir.</Label>
+              <Button title="Abrir fatura" icon={ExternalLink} variant="ghost" onPress={() => openExternal(charge.invoiceUrl!)} />
+            </Card>
+          ) : null}
 
           <Card>
             <ChargeStatusTimeline status={charge.status} paidAt={charge.paidAt} />

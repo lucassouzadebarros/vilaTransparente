@@ -259,16 +259,30 @@ class FinancialService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O nome da cobrança precisa ter de 3 a 60 letras.");
         }
         Settings settings = settings();
+        BigDecimal reserve = request.reserveFundPercent() == null ? settings.reserveFundPercent : request.reserveFundPercent();
+        if (reserve.signum() < 0 || reserve.compareTo(BigDecimal.valueOf(30)) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O fundo de reserva vai de 0% a 30% da taxa.");
+        }
+        int daysBefore = request.reminderDaysBefore() == null ? settings.reminderDaysBefore : request.reminderDaysBefore();
+        if (daysBefore < 1 || daysBefore > 10) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O lembrete sai de 1 a 10 dias antes do vencimento.");
+        }
         settings.billingType = billingType;
         settings.finePercent = fine.setScale(2, RoundingMode.HALF_UP);
         settings.interestPercent = interest.setScale(2, RoundingMode.HALF_UP);
         settings.chargeTitle = title;
+        settings.reserveFundPercent = reserve.setScale(2, RoundingMode.HALF_UP);
+        if (request.remindersEnabled() != null) {
+            settings.remindersEnabled = request.remindersEnabled();
+        }
+        settings.reminderDaysBefore = daysBefore;
         settings.updatedAt = LocalDateTime.now();
         Settings saved = settingsRepository.save(settings);
         audit.record("BILLING_RULES_CHANGED", "SETTINGS", saved.id,
             (Settings.BILLING_BOLETO.equals(saved.billingType) ? "Boleto com Pix" : "Pix")
                 + ", multa " + saved.finePercent.toPlainString() + "%, juros " + saved.interestPercent.toPlainString() + "% ao mês, \""
-                + saved.chargeTitle + "\"");
+                + saved.chargeTitle + "\", fundo de reserva " + saved.reserveFundPercent.toPlainString() + "%, lembretes "
+                + (saved.remindersEnabled ? saved.reminderDaysBefore + " dia(s) antes" : "desligados"));
         return saved;
     }
 
