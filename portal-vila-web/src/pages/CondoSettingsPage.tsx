@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, QrCode, Save, Scale, Settings2 } from 'lucide-react';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { AlertTriangle, Landmark, QrCode, Save, Scale, Settings2 } from 'lucide-react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
+import { PixConnection } from '@/components/PixConnection';
 import { FormAlert } from '@/components/PublicLayout';
-import { Badge, Button, Card, Input, Skeleton, Spinner } from '@/components/ui';
+import { Button, Card, Input, Skeleton, Spinner } from '@/components/ui';
 import { Field, PageHeader } from '@/components/ui/page';
 import { useToast } from '@/components/ui/toast';
 import { api, type CondominiumSettings } from '@/lib/api';
@@ -136,6 +138,14 @@ export function CondoSettingsPage() {
   const condominium = me.condominium!;
   useDocumentTitle('Configurações');
   const settings = useQuery({ queryKey: ['condo', 'settings'], queryFn: api.settings });
+  const payments = useQuery({ queryKey: ['condo', 'payments'], queryFn: api.paymentsStatus });
+  const { hash } = useLocation();
+  const loaded = !settings.isPending && !payments.isPending;
+
+  // "Fazer" on the overview opens the Pix section directly. It sits below the form: scroll once both have their real height.
+  useEffect(() => {
+    if (hash === '#pix' && loaded) document.getElementById('pix')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [hash, loaded]);
 
   return (
     <div className="space-y-6">
@@ -159,24 +169,11 @@ export function CondoSettingsPage() {
         <SettingsForm key={settings.data.id} settings={settings.data} />
       )}
 
-      <Section icon={QrCode} title="Pagamentos por Pix" description="Por onde as mensalidades são cobradas e recebidas.">
-        {condominium.pixConnected ? (
-          <div className="flex items-start gap-3 rounded-xl border border-ok/25 bg-ok-soft p-4 text-sm text-ok">
-            <CheckCircle2 aria-hidden className="mt-0.5 size-4 shrink-0" />
-            <p>
-              <strong className="font-semibold">Conta Asaas conectada.</strong> As cobranças por Pix e os avisos de pagamento já funcionam.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2 rounded-xl border border-line bg-surface-alt/60 p-4 text-sm">
-            <Badge>Não conectado</Badge>
-            <p className="text-muted">
-              O dinheiro do condomínio fica na conta Asaas do próprio condomínio. A conexão por aqui (colar a chave da conta, que fica guardada cifrada)
-              chega na próxima etapa do painel. Até lá, o condomínio usa tudo menos o Pix.
-            </p>
-          </div>
-        )}
-      </Section>
+      <div id="pix" className="scroll-mt-20">
+        <Section icon={Landmark} title="Pagamentos por Pix" description="A conta Asaas do condomínio, onde as mensalidades são cobradas e recebidas.">
+          <PixConnection />
+        </Section>
+      </div>
     </div>
   );
 }

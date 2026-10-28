@@ -42,6 +42,13 @@ services:
       # E-mails (comma separated) of the accounts that run the platform and enter the web panel. Set in the dashboard.
       - key: PORTAL_PLATFORM_ADMIN_EMAILS
         sync: false
+      # Seals the Asaas keys the condominiums connect from the panel. Generated once by Render; changing it later makes
+      # the stored keys unreadable (each condominium would have to connect again).
+      - key: PORTAL_SECRETS_KEY
+        generateValue: true
+      # This API seen from outside: the address given to Asaas for the payment notices of each condominium.
+      - key: PORTAL_PUBLIC_API_URL
+        value: https://portal-vila-api.onrender.com
       - key: DATABASE_URL
         fromDatabase:
           name: portal-vila-db

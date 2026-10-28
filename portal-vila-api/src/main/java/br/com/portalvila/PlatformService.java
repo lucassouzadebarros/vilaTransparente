@@ -46,6 +46,7 @@ class PlatformService {
     private final TransactionTemplate transaction;
     private final ManagerInviteService managers;
     private final CondominiumRequestService requests;
+    private final GatewayCredentials credentials;
 
     PlatformService(
         CondominiumRepository condominiums,
@@ -57,8 +58,10 @@ class PlatformService {
         AuditService audit,
         PlatformTransactionManager transactionManager,
         ManagerInviteService managers,
-        CondominiumRequestService requests
+        CondominiumRequestService requests,
+        GatewayCredentials credentials
     ) {
+        this.credentials = credentials;
         this.managers = managers;
         this.requests = requests;
         this.condominiums = condominiums;
@@ -217,7 +220,7 @@ class PlatformService {
             condominium.createdAt,
             houses.countByActiveTrue(),
             residents.countByStatus("ACTIVE"),
-            PixGatewayClient.connectedHere()
+            credentials.connected(condominium.id)
         ));
     }
 

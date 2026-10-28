@@ -18,6 +18,20 @@ record LoginResponse(String token, String name, String email, String role, Long 
 record PlatformMe(String name, String email) {
 }
 
+/** A condominium's Asaas connection as the panel shows it; the key itself never comes back, only its last characters. */
+record PaymentsStatus(
+    boolean connected,
+    String source,
+    String accountName,
+    String keyHint,
+    java.time.LocalDateTime connectedAt,
+    java.time.LocalDateTime lastEventAt
+) {
+}
+
+record ConnectAsaasRequest(String apiKey) {
+}
+
 record SessionCondominium(Long id, String name, String slug, String status, boolean pixConnected) {
 }
 

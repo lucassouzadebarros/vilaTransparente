@@ -64,6 +64,16 @@ export type CondominiumSettings = {
   budgetRequiredAbove: number | null;
 };
 
+/** PAINEL: connected here with the condominium's own key. SERVIDOR: the key lives in the server's configuration (the Vila). */
+export type PaymentsStatus = {
+  connected: boolean;
+  source: 'PAINEL' | 'SERVIDOR' | null;
+  accountName: string | null;
+  keyHint: string | null;
+  connectedAt: string | null;
+  lastEventAt: string | null;
+};
+
 export type CondominiumSummary = {
   id: number;
   name: string;
@@ -236,6 +246,9 @@ export const api = {
     request<CondominiumSettings>('/settings', { method: 'PUT', body: JSON.stringify(settings) }),
   updateBudgetRule: (budgetRequiredAbove: number | null) =>
     request<CondominiumSettings>('/settings/budget-rule', { method: 'PUT', body: JSON.stringify({ budgetRequiredAbove }) }),
+  paymentsStatus: () => request<PaymentsStatus>('/payments/asaas'),
+  connectAsaas: (apiKey: string) => request<PaymentsStatus>('/payments/asaas/connect', { method: 'POST', body: JSON.stringify({ apiKey }) }),
+  disconnectAsaas: () => request<PaymentsStatus>('/payments/asaas', { method: 'DELETE' }),
   condominiums: () => request<CondominiumSummary[]>('/platform/condominiums'),
   condominium: (id: number) => request<CondominiumDetail>(`/platform/condominiums/${id}`),
   createCondominium: (input: NewCondominium) =>

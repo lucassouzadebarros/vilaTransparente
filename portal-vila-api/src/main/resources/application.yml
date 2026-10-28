@@ -40,6 +40,11 @@ portal:
   admin:
     email: ${PORTAL_ADMIN_EMAIL:ubaldinajacare207@gmail.com}
     password: ${PORTAL_ADMIN_PASSWORD:123456}
+  # Where Asaas sends the payment notices of the condominiums that connect their own account (this API, seen from outside).
+  public-api-url: ${PORTAL_PUBLIC_API_URL:http://localhost:8080}
+  secrets:
+    # Seals the secrets kept in the database (a condominium's Asaas key). Without it, no condominium can connect Asaas.
+    key: ${PORTAL_SECRETS_KEY:}
   platform:
     # Accounts (e-mails, comma separated) that run the platform: they see every condominium in the web panel.
     # Empty: nobody does.

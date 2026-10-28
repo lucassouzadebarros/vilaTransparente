@@ -62,7 +62,7 @@ export function Dialog({ open, onClose, title, description, icon, tone = 'brand'
     >
       {open && (
         <div className="flex max-h-[calc(100dvh-2rem)] flex-col">
-          <div className="flex items-start gap-4 px-6 pt-6">
+          <div className={cn('flex items-start gap-4 px-6 pt-6', !children && 'pb-6')}>
             {icon && <span className={cn('grid size-10 shrink-0 place-items-center rounded-xl', toneClasses[tone])}>{icon}</span>}
             <div className="min-w-0 flex-1 pt-0.5">
               <h2 id={titleId} className="text-lg font-semibold leading-snug">
