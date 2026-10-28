@@ -11,6 +11,7 @@ import { CondoSettingsPage } from '@/pages/CondoSettingsPage';
 import { CondominiumDetailPage } from '@/pages/CondominiumDetailPage';
 import { CondominiumsPage } from '@/pages/CondominiumsPage';
 import { LoginPage } from '@/pages/LoginPage';
+import { ReadingsPage } from '@/pages/ReadingsPage';
 import { RequestPage } from '@/pages/RequestPage';
 import { RequestsPage } from '@/pages/RequestsPage';
 import { UnitsPage } from '@/pages/UnitsPage';
@@ -64,6 +65,7 @@ export function App() {
         <Route path="/condominio" element={<OnlyCondominium><CondoOverviewPage /></OnlyCondominium>} />
         <Route path="/condominio/unidades" element={<OnlyCondominium><UnitsPage /></OnlyCondominium>} />
         <Route path="/condominio/cobrancas" element={<OnlyCondominium><BillingPage /></OnlyCondominium>} />
+        <Route path="/condominio/consumo" element={<OnlyCondominium><ReadingsPage /></OnlyCondominium>} />
         <Route path="/condominio/configuracoes" element={<OnlyCondominium><CondoSettingsPage /></OnlyCondominium>} />
         <Route path="/condominios" element={<OnlyPlatform><CondominiumsPage /></OnlyPlatform>} />
         <Route path="/condominios/:id" element={<OnlyPlatform><CondominiumDetailPage /></OnlyPlatform>} />

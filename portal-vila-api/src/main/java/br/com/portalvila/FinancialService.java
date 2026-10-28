@@ -267,6 +267,16 @@ class FinancialService {
         if (daysBefore < 1 || daysBefore > 10) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O lembrete sai de 1 a 10 dias antes do vencimento.");
         }
+        String mode = request.chargeMode() == null ? settings.chargeMode : request.chargeMode().trim().toUpperCase();
+        if (!Settings.MODE_FIXED.equals(mode) && !Settings.MODE_FRACTION.equals(mode)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escolha valor igual por unidade ou rateio por fração ideal.");
+        }
+        BigDecimal monthlyTotal = request.monthlyTotal() == null ? settings.monthlyTotal : request.monthlyTotal();
+        if (Settings.MODE_FRACTION.equals(mode) && (monthlyTotal == null || monthlyTotal.signum() <= 0)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No rateio, informe o total do mês a dividir entre as unidades.");
+        }
+        settings.chargeMode = mode;
+        settings.monthlyTotal = monthlyTotal == null ? null : monthlyTotal.setScale(2, RoundingMode.HALF_UP);
         settings.billingType = billingType;
         settings.finePercent = fine.setScale(2, RoundingMode.HALF_UP);
         settings.interestPercent = interest.setScale(2, RoundingMode.HALF_UP);
@@ -282,7 +292,8 @@ class FinancialService {
             (Settings.BILLING_BOLETO.equals(saved.billingType) ? "Boleto com Pix" : "Pix")
                 + ", multa " + saved.finePercent.toPlainString() + "%, juros " + saved.interestPercent.toPlainString() + "% ao mês, \""
                 + saved.chargeTitle + "\", fundo de reserva " + saved.reserveFundPercent.toPlainString() + "%, lembretes "
-                + (saved.remindersEnabled ? saved.reminderDaysBefore + " dia(s) antes" : "desligados"));
+                + (saved.remindersEnabled ? saved.reminderDaysBefore + " dia(s) antes" : "desligados")
+                + (Settings.MODE_FRACTION.equals(saved.chargeMode) ? ", rateio de " + AuditService.money(saved.monthlyTotal) + " por fração ideal" : ""));
         return saved;
     }
 

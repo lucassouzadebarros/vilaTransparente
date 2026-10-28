@@ -26,6 +26,9 @@ public class House {
     @Column(nullable = false)
     public boolean active = true;
 
+    /** The unit's share when the month is divided by ideal fraction: any weight, as long as every unit uses the same one. */
+    public java.math.BigDecimal idealFraction;
+
     @Column(nullable = false)
     public LocalDateTime createdAt = LocalDateTime.now();
 

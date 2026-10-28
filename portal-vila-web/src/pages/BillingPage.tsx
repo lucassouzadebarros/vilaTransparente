@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   Ban,
   CalendarClock,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
@@ -15,18 +14,18 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
-  Send,
-  TriangleAlert
+  Send
 } from 'lucide-react';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { isoToday, ResultDialog } from '@/components/ChargeResultDialog';
 import { CopyButton } from '@/components/ManagerCodeDialog';
 import { FormAlert } from '@/components/PublicLayout';
 import { Badge, Button, Card, Input, Skeleton, Spinner } from '@/components/ui';
 import { Dialog } from '@/components/ui/dialog';
 import { Field, PageHeader, Segmented } from '@/components/ui/page';
 import { useToast } from '@/components/ui/toast';
-import { api, type BillingMonth, type BillingRow, type BillingStatus, type CondominiumSettings, type GenerateResult } from '@/lib/api';
+import { api, type BillingMonth, type BillingRow, type BillingStatus, type CondominiumSettings, type FractionsView, type GenerateResult } from '@/lib/api';
 import { useSession } from '@/lib/auth';
 import { cn, currentMonth, formatDate, formatMoney, formatNumber, monthName, moneyText, parseMoney, plural, shiftMonth, useDocumentTitle } from '@/lib/utils';
 
@@ -89,10 +88,13 @@ function chargedAgain(cancelled: BillingRow, rows: BillingRow[], chargeTitle: st
   );
 }
 
-/** Today in this computer's calendar, as "2026-10-28". */
-function isoToday() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+/** What each unit with a resident pays of the total, by ideal fraction (the same division the server makes). */
+function apportionPreview(fractions: FractionsView, total: number) {
+  const sum = fractions.units.reduce((acc, unit) => (unit.fraction && Number(unit.fraction) > 0 ? acc + Number(unit.fraction) : acc), 0);
+  if (sum <= 0) return [];
+  return fractions.units
+    .filter((unit) => unit.hasResident && unit.fraction && Number(unit.fraction) > 0)
+    .map((unit) => ({ houseLabel: unit.houseLabel, amount: Math.round(((total * Number(unit.fraction)) / sum) * 100) / 100 }));
 }
 
 function rulesSummary(settings: CondominiumSettings | undefined) {
@@ -102,61 +104,8 @@ function rulesSummary(settings: CondominiumSettings | undefined) {
   parts.push(Number(settings.finePercent) > 0 ? `multa de ${percent(settings.finePercent)}%` : 'sem multa');
   parts.push(Number(settings.interestPercent) > 0 ? `juros de ${percent(settings.interestPercent)}% ao mês` : 'sem juros');
   if (Number(settings.reserveFundPercent) > 0) parts.push(`fundo de reserva de ${percent(settings.reserveFundPercent)}%`);
+  if (settings.chargeMode === 'FRACTION') parts.unshift('Rateio por fração ideal');
   return parts.join(' · ');
-}
-
-/** What a batch did: how many charges went out, and each unit that failed or was left out, with the reason. */
-function ResultDialog({ open, result, onClose }: { open: boolean; result: GenerateResult; onClose: () => void }) {
-  const problems = result.failed.length + result.skipped.length;
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      tone={result.failed.length > 0 ? 'danger' : 'ok'}
-      icon={result.failed.length > 0 ? <TriangleAlert aria-hidden className="size-5" /> : <CheckCircle2 aria-hidden className="size-5" />}
-      title={result.created > 0 ? `${plural(result.created, 'cobrança criada', 'cobranças criadas')}` : 'Nenhuma cobrança nova'}
-      description={
-        <>
-          Mês de {monthName(result.month)}.
-          {result.alreadyCharged > 0 &&
-            ` ${plural(result.alreadyCharged, 'unidade já tinha cobrança e ficou como estava', 'unidades já tinham cobrança e ficaram como estavam')}.`}
-          {result.created > 0 && ' Os moradores já veem a cobrança no aplicativo.'}
-        </>
-      }
-      footer={<Button onClick={onClose}>Concluir</Button>}
-    >
-      {problems > 0 && (
-        <div className="space-y-4">
-          {result.failed.length > 0 && (
-            <div>
-              <p className="mb-2 text-sm font-medium text-danger">Não foi possível cobrar</p>
-              <ul className="divide-y divide-line rounded-xl border border-line">
-                {result.failed.map((problem) => (
-                  <li key={problem.houseLabel} className="px-4 py-3 text-sm">
-                    <p className="font-medium">{problem.houseLabel}</p>
-                    <p className="text-muted">{problem.reason}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {result.skipped.length > 0 && (
-            <div>
-              <p className="mb-2 text-sm font-medium">Ficaram de fora</p>
-              <ul className="divide-y divide-line rounded-xl border border-line">
-                {result.skipped.map((problem) => (
-                  <li key={problem.houseLabel} className="flex flex-wrap justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm">
-                    <span className="font-medium">{problem.houseLabel}</span>
-                    <span className="text-muted">{problem.reason}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-    </Dialog>
-  );
 }
 
 /** Where a one-off charge starts: for every unit, or one unit already chosen (charging again a cancelled charge). */
@@ -307,10 +256,13 @@ function GenerateDialog({ open, month, onClose }: { open: boolean; month: Billin
   const last = `${month.month}-${String(new Date(year, number, 0).getDate()).padStart(2, '0')}`;
   const first = `${month.month}-01` > today ? `${month.month}-01` : today;
   const monthOver = last < today;
-  const [amount, setAmount] = useState(moneyText(month.monthlyAmount));
+  const byFraction = month.chargeMode === 'FRACTION';
+  const fractions = useQuery({ queryKey: ['condo', 'fractions'], queryFn: api.fractions, enabled: open && byFraction });
+  const [amount, setAmount] = useState(moneyText(byFraction ? month.monthlyTotal : month.monthlyAmount));
   const [dueDate, setDueDate] = useState(month.dueDate < today ? today : month.dueDate);
   const [result, setResult] = useState<GenerateResult | null>(null);
   const value = parseMoney(amount);
+  const parts = byFraction && value && !Number.isNaN(value) && fractions.data ? apportionPreview(fractions.data, value) : [];
   const errors = {
     amount: value == null || Number.isNaN(value) || value <= 0 ? 'Informe um valor maior que zero.' : null,
     dueDate: monthOver
@@ -321,7 +273,8 @@ function GenerateDialog({ open, month, onClose }: { open: boolean; month: Billin
   };
 
   const generate = useMutation({
-    mutationFn: () => api.generateCharges({ month: month.month, amount: value as number, dueDate }),
+    mutationFn: () =>
+      api.generateCharges(byFraction ? { month: month.month, total: value as number, dueDate } : { month: month.month, amount: value as number, dueDate }),
     onSuccess: (answer) => {
       setResult(answer);
       queryClient.invalidateQueries({ queryKey: ['condo'] });
@@ -358,7 +311,11 @@ function GenerateDialog({ open, month, onClose }: { open: boolean; month: Billin
           <Button variant="secondary" onClick={close} disabled={generate.isPending}>
             Cancelar
           </Button>
-          <Button type="submit" form="gerar-cobrancas" disabled={generate.isPending || month.unitsToCharge === 0 || !!errors.amount || !!errors.dueDate}>
+          <Button
+            type="submit"
+            form="gerar-cobrancas"
+            disabled={generate.isPending || month.unitsToCharge === 0 || !!errors.amount || !!errors.dueDate || (byFraction && parts.length === 0)}
+          >
             {generate.isPending ? <Spinner /> : <Send aria-hidden className="size-4" />}
             {generate.isPending ? 'Gerando…' : `Gerar ${plural(month.unitsToCharge, 'cobrança', 'cobranças')}`}
           </Button>
@@ -369,15 +326,17 @@ function GenerateDialog({ open, month, onClose }: { open: boolean; month: Billin
         {generate.isError && <FormAlert>{generate.error.message}</FormAlert>}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
-            label="Valor por unidade"
+            label={byFraction ? 'Total a ratear' : 'Valor por unidade'}
             htmlFor="valor-cobranca"
             error={errors.amount}
             hint={
-              value && !errors.amount && Number(settings.data?.reserveFundPercent) > 0
-                ? `+ ${formatMoney((value * Number(settings.data!.reserveFundPercent)) / 100)} de fundo de reserva = ${formatMoney(
-                    value * (1 + Number(settings.data!.reserveFundPercent) / 100)
-                  )}`
-                : undefined
+              byFraction
+                ? 'Dividido pela fração ideal de cada unidade.'
+                : value && !errors.amount && Number(settings.data?.reserveFundPercent) > 0
+                  ? `+ ${formatMoney((value * Number(settings.data!.reserveFundPercent)) / 100)} de fundo de reserva = ${formatMoney(
+                      value * (1 + Number(settings.data!.reserveFundPercent) / 100)
+                    )}`
+                  : undefined
             }
           >
             <div className="relative">
@@ -389,6 +348,27 @@ function GenerateDialog({ open, month, onClose }: { open: boolean; month: Billin
             <Input id="vencimento-cobranca" type="date" min={first} max={last} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </Field>
         </div>
+        {byFraction && parts.length > 0 && (
+          <div className="rounded-xl border border-line">
+            <p className="border-b border-line px-3.5 py-2 text-xs font-medium uppercase tracking-wide text-muted">Cada unidade paga</p>
+            <ul className="max-h-40 divide-y divide-line overflow-y-auto text-sm">
+              {parts.map((part) => (
+                <li key={part.houseLabel} className="flex justify-between gap-3 px-3.5 py-1.5">
+                  <span>{part.houseLabel}</span>
+                  <span className="tabular-nums">{formatMoney(part.amount)}</span>
+                </li>
+              ))}
+            </ul>
+            {value && !Number.isNaN(value) && value - parts.reduce((sum, part) => sum + part.amount, 0) >= 0.01 && (
+              <p className="border-t border-line px-3.5 py-2 text-xs text-muted">
+                {formatMoney(value - parts.reduce((sum, part) => sum + part.amount, 0))} ficam sem cobrança: a parte das unidades sem morador ou sem fração.
+              </p>
+            )}
+          </div>
+        )}
+        {byFraction && fractions.data && parts.length === 0 && (
+          <FormAlert>Nenhuma unidade tem fração ideal. Cadastre em Configurações → Frações ideais.</FormAlert>
+        )}
         <div className="flex items-start justify-between gap-3 rounded-xl border border-line bg-surface-alt/60 p-3.5 text-sm">
           <div>
             <p className="font-medium">{rulesSummary(settings.data)}</p>

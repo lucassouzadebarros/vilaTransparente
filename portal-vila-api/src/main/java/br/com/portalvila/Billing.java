@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
@@ -54,6 +56,16 @@ class BillingController {
     @PostMapping("/extra")
     GenerateChargesResult extra(@Valid @RequestBody ExtraChargeRequest request) {
         return billing.extra(request);
+    }
+
+    @GetMapping("/fractions")
+    FractionsView fractions() {
+        return billing.fractions();
+    }
+
+    @PutMapping("/fractions")
+    FractionsView updateFractions(@RequestBody List<FractionUpdate> updates) {
+        return billing.updateFractions(updates);
     }
 }
 
@@ -218,6 +230,8 @@ class BillingService {
         return new BillingMonth(
             reference.toString(),
             credentials.connectedHere(),
+            settings.chargeMode,
+            settings.monthlyTotal,
             settings.monthlyAmount,
             configuredDueDate(reference, settings),
             unitsToCharge,
@@ -235,13 +249,21 @@ class BillingService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Conecte a conta Asaas em Configurações antes de gerar as cobranças.");
         }
         YearMonth reference = parseMonth(request.month());
-        LocalDate dueDate = request.dueDate() != null ? request.dueDate() : configuredDueDate(reference, settings());
+        Settings settings = settings();
+        LocalDate dueDate = request.dueDate() != null ? request.dueDate() : configuredDueDate(reference, settings);
         if (!YearMonth.from(dueDate).equals(reference)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O vencimento precisa ser dentro do mês da cobrança.");
         }
         // Asaas refuses a due date in the past: better to say so once than to fail every unit.
         if (dueDate.isBefore(BudgetVotingService.today())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O vencimento já passou. Escolha uma data a partir de hoje.");
+        }
+        boolean byFraction = Settings.MODE_FRACTION.equals(settings.chargeMode);
+        BigDecimal total = request.total() != null ? request.total() : settings.monthlyTotal;
+        Map<Long, BigDecimal> parts = byFraction ? apportion(houses.findByActiveTrueOrderByNumberAsc(), total) : Map.of();
+        if (byFraction && parts.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "No rateio, informe o total do mês e as frações ideais das unidades em Configurações.");
         }
         String month = reference.toString();
         int created = 0;
@@ -263,8 +285,13 @@ class BillingService {
                 skipped.add(new UnitProblem(house.label, "Já registrada como paga neste mês."));
                 continue;
             }
+            BigDecimal amount = byFraction ? parts.get(house.id) : request.amount();
+            if (byFraction && amount == null) {
+                skipped.add(new UnitProblem(house.label, "Sem fração ideal cadastrada."));
+                continue;
+            }
             try {
-                pix.generateStandardCharge(month, request.amount(), dueDate, resident.id);
+                pix.generateStandardCharge(month, amount, dueDate, resident.id);
                 created++;
             } catch (ResponseStatusException refused) {
                 failed.add(new UnitProblem(house.label, refused.getReason() == null ? "O Asaas recusou esta cobrança." : refused.getReason()));
@@ -275,6 +302,7 @@ class BillingService {
         }
         if (created > 0 || !failed.isEmpty()) {
             audit.record("CHARGES_GENERATED", "BILLING", null, month + ": " + created + " cobrança(s) criada(s)"
+                + (byFraction ? " (rateio de " + AuditService.money(total) + " por fração ideal)" : "")
                 + (failed.isEmpty() ? "" : ", " + failed.size() + " com erro"));
         }
         if (created > 0) {
@@ -386,6 +414,78 @@ class BillingService {
             }
         }
         return reminded;
+    }
+
+    /** The units' ideal fractions, each one's share of the condominium and what it pays of the month's total. */
+    @Transactional(readOnly = true)
+    FractionsView fractions() {
+        Settings settings = settings();
+        List<House> units = houses.findByActiveTrueOrderByNumberAsc();
+        BigDecimal sum = fractionSum(units);
+        Map<Long, BigDecimal> parts = apportion(units, settings.monthlyTotal);
+        List<UnitFraction> rows = units.stream()
+            .map(house -> new UnitFraction(
+                house.id,
+                house.label,
+                residents.findFirstByHouseIdAndStatusOrderByCreatedAtDesc(house.id, "ACTIVE").isPresent(),
+                house.idealFraction,
+                house.idealFraction == null || sum.signum() == 0 ? null
+                    : house.idealFraction.multiply(BigDecimal.valueOf(100)).divide(sum, 4, RoundingMode.HALF_UP),
+                parts.get(house.id)))
+            .toList();
+        return new FractionsView(settings.monthlyTotal, sum, rows);
+    }
+
+    /**
+     * Sets the units' ideal fractions (empty or zero clears one). Any weight works — the convention's fraction, a percent,
+     * the area — as long as every unit uses the same: the month is divided in proportion.
+     */
+    @Transactional
+    FractionsView updateFractions(List<FractionUpdate> updates) {
+        int changed = 0;
+        for (FractionUpdate update : updates == null ? List.<FractionUpdate>of() : updates) {
+            House house = houses.findById(update.houseId()).filter(found -> found.active)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unidade não encontrada."));
+            BigDecimal fraction = update.fraction() == null || update.fraction().signum() == 0 ? null : update.fraction();
+            if (fraction != null && fraction.signum() < 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, house.label + ": a fração ideal não pode ser negativa.");
+            }
+            if (fraction != null && (fraction.scale() > 6 || fraction.compareTo(BigDecimal.valueOf(100_000_000)) >= 0)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, house.label + ": use no máximo 6 casas depois da vírgula.");
+            }
+            if (!java.util.Objects.equals(house.idealFraction == null ? null : house.idealFraction.stripTrailingZeros(),
+                fraction == null ? null : fraction.stripTrailingZeros())) {
+                house.idealFraction = fraction;
+                houses.save(house);
+                changed++;
+            }
+        }
+        if (changed > 0) {
+            audit.record("FRACTIONS_CHANGED", "HOUSE", null, changed + " fração(ões) ideal(is) alterada(s)");
+        }
+        return fractions();
+    }
+
+    private static BigDecimal fractionSum(List<House> units) {
+        return units.stream()
+            .map(house -> house.idealFraction)
+            .filter(fraction -> fraction != null && fraction.signum() > 0)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /** Each unit's part of the total, in proportion to its ideal fraction. A unit without one gets no part. */
+    private static Map<Long, BigDecimal> apportion(List<House> units, BigDecimal total) {
+        BigDecimal sum = fractionSum(units);
+        Map<Long, BigDecimal> parts = new LinkedHashMap<>();
+        if (total == null || total.signum() <= 0 || sum.signum() == 0) {
+            return parts;
+        }
+        for (House house : units) {
+            if (house.idealFraction != null && house.idealFraction.signum() > 0) {
+                parts.put(house.id, total.multiply(house.idealFraction).divide(sum, 2, RoundingMode.HALF_UP));
+            }
+        }
+        return parts;
     }
 
     /** A unit gets the month's charge when it has none yet and nothing of the month was already paid outside the system. */
