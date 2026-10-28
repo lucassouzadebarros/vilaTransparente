@@ -55,6 +55,9 @@ export type OpenInvite = { id: number; houseId: number; houseNumber: number; hou
 
 export type IssuedInvite = { id: number; houseId: number; houseNumber: number; houseLabel: string; code: string; expiresAt: string };
 
+/** PIX, or BOLETO: a boleto that also carries a Pix QR code. */
+export type BillingType = 'PIX' | 'BOLETO';
+
 export type CondominiumSettings = {
   id: number;
   villageName: string;
@@ -62,7 +65,47 @@ export type CondominiumSettings = {
   paymentDueDay: number;
   gatewayProvider: string;
   budgetRequiredAbove: number | null;
+  billingType: BillingType;
+  finePercent: number;
+  interestPercent: number;
+  chargeTitle: string;
 };
+
+export type BillingRules = Pick<CondominiumSettings, 'billingType' | 'finePercent' | 'interestPercent' | 'chargeTitle'>;
+
+/** NOT_CHARGED: a resident, no charge yet this month. NO_RESIDENT: nobody to charge. */
+export type BillingStatus = 'PAID' | 'PENDING' | 'OVERDUE' | 'CANCELLED' | 'NOT_CHARGED' | 'NO_RESIDENT';
+
+export type BillingRow = {
+  houseId: number;
+  houseLabel: string;
+  residentName: string | null;
+  contributionId: number | null;
+  chargeId: number | null;
+  amount: number | null;
+  paidAmount: number | null;
+  dueDate: string | null;
+  status: BillingStatus;
+  extra: boolean;
+  manual: boolean;
+  invoiceUrl: string | null;
+  receiptUrl: string | null;
+  paidAt: string | null;
+};
+
+export type BillingMonth = {
+  month: string;
+  pixConnected: boolean;
+  monthlyAmount: number;
+  dueDate: string;
+  unitsToCharge: number;
+  totals: { expected: number; received: number; open: number; overdue: number; paid: number; pending: number; late: number };
+  rows: BillingRow[];
+};
+
+export type UnitProblem = { houseLabel: string; reason: string };
+
+export type GenerateResult = { month: string; created: number; alreadyCharged: number; failed: UnitProblem[]; skipped: UnitProblem[] };
 
 /** PAINEL: connected here with the condominium's own key. SERVIDOR: the key lives in the server's configuration (the Vila). */
 export type PaymentsStatus = {
@@ -246,6 +289,13 @@ export const api = {
     request<CondominiumSettings>('/settings', { method: 'PUT', body: JSON.stringify(settings) }),
   updateBudgetRule: (budgetRequiredAbove: number | null) =>
     request<CondominiumSettings>('/settings/budget-rule', { method: 'PUT', body: JSON.stringify({ budgetRequiredAbove }) }),
+  updateBillingRules: (rules: BillingRules) => request<CondominiumSettings>('/settings/billing', { method: 'PUT', body: JSON.stringify(rules) }),
+  billing: (month: string) => request<BillingMonth>(`/admin/billing?month=${month}`),
+  generateCharges: (input: { month: string; amount: number; dueDate: string }) =>
+    request<GenerateResult>('/admin/billing/generate', { method: 'POST', body: JSON.stringify(input) }),
+  cancelCharge: (chargeId: number, reason: string) =>
+    request<unknown>(`/admin/pix/charges/${chargeId}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  reconcileCharges: (month: string) => request<unknown>(`/admin/pix/reconcile?month=${month}`, { method: 'POST' }),
   paymentsStatus: () => request<PaymentsStatus>('/payments/asaas'),
   connectAsaas: (apiKey: string) => request<PaymentsStatus>('/payments/asaas/connect', { method: 'POST', body: JSON.stringify({ apiKey }) }),
   disconnectAsaas: () => request<PaymentsStatus>('/payments/asaas', { method: 'DELETE' }),

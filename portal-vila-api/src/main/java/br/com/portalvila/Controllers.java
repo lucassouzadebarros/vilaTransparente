@@ -1475,6 +1475,12 @@ class SettingsController {
     SettingsResponse updateBudgetRule(@RequestBody BudgetRuleRequest request) {
         return SettingsResponse.from(financialService.updateBudgetRule(request.budgetRequiredAbove()));
     }
+
+    @PutMapping("/billing")
+    @PreAuthorize("hasRole('ADMIN')")
+    SettingsResponse updateBillingRules(@RequestBody BillingRulesRequest request) {
+        return SettingsResponse.from(financialService.updateBillingRules(request));
+    }
 }
 
 @RestControllerAdvice

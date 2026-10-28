@@ -23,6 +23,27 @@ export function monthName(month: string) {
   const [year, number] = month.split('-').map(Number);
   return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(new Date(year, number - 1, 1));
 }
+
+/** "2026-12" + 1 -> "2027-01" */
+export function shiftMonth(month: string, delta: number) {
+  const [year, number] = month.split('-').map(Number);
+  const date = new Date(year, number - 1 + delta, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** "1.234,56", "1234.56" or "1234" -> 1234.56; empty -> null; anything else -> NaN. */
+export function parseMoney(raw: string): number | null {
+  const clean = raw.replace(/[^\d,.-]/g, '').trim();
+  if (!clean) return null;
+  const normalized = clean.includes(',') ? clean.replace(/\./g, '').replace(',', '.') : clean;
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : NaN;
+}
+
+/** 1234.5 -> "1234,50", for a field the person edits. */
+export function moneyText(value: number | null | undefined) {
+  return value == null ? '' : Number(value).toFixed(2).replace('.', ',');
+}
 const dates = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
 export function formatNumber(value: number) {
@@ -32,7 +53,9 @@ export function formatNumber(value: number) {
 /** The API sends dates without a zone (São Paulo time); shown as dd/mm/aaaa. */
 export function formatDate(value: string | null | undefined) {
   if (!value) return '—';
-  const date = new Date(value);
+  // A bare day ("2026-10-28") would be read as midnight in London, the day before here: read it as a local day.
+  const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const date = day ? new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3])) : new Date(value);
   return Number.isNaN(date.getTime()) ? '—' : dates.format(date);
 }
 

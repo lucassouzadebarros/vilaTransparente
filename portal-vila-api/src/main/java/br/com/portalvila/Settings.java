@@ -36,6 +36,29 @@ public class Settings {
     /** A service above this value needs a budget approved by the houses before it starts. Empty means no rule. */
     public BigDecimal budgetRequiredAbove;
 
+    /** PIX, or BOLETO: a boleto that also carries a Pix QR code (the unit pays either way). */
+    @Column(nullable = false)
+    public String billingType = BILLING_PIX;
+
+    /** Late fee, in percent of the charge, added by Asaas after the due date. Zero: none. */
+    @Column(nullable = false)
+    public BigDecimal finePercent = BigDecimal.ZERO;
+
+    /** Interest per month, in percent, added by Asaas after the due date. Zero: none. */
+    @Column(nullable = false)
+    public BigDecimal interestPercent = BigDecimal.ZERO;
+
+    /** Names the charge on the invoice ("Taxa condominial - Casa 3 - 2026-11"). Empty: "Taxa condominial". */
+    public String chargeTitle;
+
+    static final String BILLING_PIX = "PIX";
+    static final String BILLING_BOLETO = "BOLETO";
+    static final String DEFAULT_CHARGE_TITLE = "Taxa condominial";
+
+    String chargeTitleOrDefault() {
+        return chargeTitle == null || chargeTitle.isBlank() ? DEFAULT_CHARGE_TITLE : chargeTitle;
+    }
+
     @Column(nullable = false)
     public LocalDateTime createdAt = LocalDateTime.now();
 

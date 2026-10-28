@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -233,6 +234,41 @@ class FinancialService {
         audit.record("BUDGET_RULE_CHANGED", "SETTINGS", saved.id, saved.budgetRequiredAbove == null
             ? "Orçamento aprovado deixou de ser exigido"
             : "Orçamento aprovado exigido acima de " + AuditService.money(saved.budgetRequiredAbove));
+        return saved;
+    }
+
+    /**
+     * How the units are charged from the next charge on (the ones already issued keep what they had). The late fee is
+     * capped at 2%, the most the Civil Code allows a condominium (art. 1.336, par. 1); the convention may ask for less.
+     */
+    public Settings updateBillingRules(BillingRulesRequest request) {
+        String billingType = request.billingType() == null ? null : request.billingType().trim().toUpperCase();
+        if (!Settings.BILLING_PIX.equals(billingType) && !Settings.BILLING_BOLETO.equals(billingType)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escolha Pix ou boleto com Pix.");
+        }
+        BigDecimal fine = request.finePercent() == null ? BigDecimal.ZERO : request.finePercent();
+        if (fine.signum() < 0 || fine.compareTo(BigDecimal.valueOf(2)) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A multa por atraso vai de 0% a 2% (Código Civil, art. 1.336).");
+        }
+        BigDecimal interest = request.interestPercent() == null ? BigDecimal.ZERO : request.interestPercent();
+        if (interest.signum() < 0 || interest.compareTo(BigDecimal.TEN) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Os juros vão de 0% a 10% ao mês.");
+        }
+        String title = request.chargeTitle() == null ? "" : request.chargeTitle().trim().replaceAll("\\s+", " ");
+        if (title.length() < 3 || title.length() > 60) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O nome da cobrança precisa ter de 3 a 60 letras.");
+        }
+        Settings settings = settings();
+        settings.billingType = billingType;
+        settings.finePercent = fine.setScale(2, RoundingMode.HALF_UP);
+        settings.interestPercent = interest.setScale(2, RoundingMode.HALF_UP);
+        settings.chargeTitle = title;
+        settings.updatedAt = LocalDateTime.now();
+        Settings saved = settingsRepository.save(settings);
+        audit.record("BILLING_RULES_CHANGED", "SETTINGS", saved.id,
+            (Settings.BILLING_BOLETO.equals(saved.billingType) ? "Boleto com Pix" : "Pix")
+                + ", multa " + saved.finePercent.toPlainString() + "%, juros " + saved.interestPercent.toPlainString() + "% ao mês, \""
+                + saved.chargeTitle + "\"");
         return saved;
     }
 

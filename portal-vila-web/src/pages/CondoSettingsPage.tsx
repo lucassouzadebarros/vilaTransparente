@@ -5,23 +5,30 @@ import { useLocation } from 'react-router-dom';
 import { PixConnection } from '@/components/PixConnection';
 import { FormAlert } from '@/components/PublicLayout';
 import { Button, Card, Input, Skeleton, Spinner } from '@/components/ui';
-import { Field, PageHeader } from '@/components/ui/page';
+import { Field, PageHeader, Segmented } from '@/components/ui/page';
 import { useToast } from '@/components/ui/toast';
-import { api, type CondominiumSettings } from '@/lib/api';
+import { api, type BillingType, type CondominiumSettings } from '@/lib/api';
 import { useAuth, useSession } from '@/lib/auth';
-import { formatMoney, useDocumentTitle } from '@/lib/utils';
+import { currentMonth, formatMoney, moneyText, parseMoney, useDocumentTitle } from '@/lib/utils';
 
-/** "1.234,56", "1234.56" or "1234" -> 1234.56; empty -> null. */
-function parseMoney(raw: string): number | null {
-  const clean = raw.replace(/[^\d,.-]/g, '').trim();
-  if (!clean) return null;
-  const normalized = clean.includes(',') ? clean.replace(/\./g, '').replace(',', '.') : clean;
-  const value = Number(normalized);
-  return Number.isFinite(value) ? value : NaN;
+const billingTypes: { value: BillingType; label: string }[] = [
+  { value: 'PIX', label: 'Pix' },
+  { value: 'BOLETO', label: 'Boleto com Pix' }
+];
+
+/** A percentage field: "2", "2,5" or "1.5" -> number; empty -> 0. */
+function parsePercent(raw: string) {
+  const value = parseMoney(raw);
+  return value == null ? 0 : value;
 }
 
-function moneyText(value: number | null | undefined) {
-  return value == null ? '' : Number(value).toFixed(2).replace('.', ',');
+function PercentInput({ id, value, onChange }: { id: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <div className="relative">
+      <Input id={id} inputMode="decimal" className="pr-9 tabular-nums" value={value} onChange={(e) => onChange(e.target.value)} />
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">%</span>
+    </div>
+  );
 }
 
 function Section({ icon: Icon, title, description, children }: { icon: typeof Settings2; title: string; description: string; children: ReactNode }) {
@@ -47,20 +54,35 @@ function SettingsForm({ settings }: { settings: CondominiumSettings }) {
   const [monthly, setMonthly] = useState(moneyText(settings.monthlyAmount));
   const [dueDay, setDueDay] = useState(String(settings.paymentDueDay));
   const [rule, setRule] = useState(moneyText(settings.budgetRequiredAbove));
+  const [billingType, setBillingType] = useState<BillingType>(settings.billingType ?? 'PIX');
+  const [fine, setFine] = useState(moneyText(settings.finePercent ?? 0));
+  const [interest, setInterest] = useState(moneyText(settings.interestPercent ?? 0));
+  const [title, setTitle] = useState(settings.chargeTitle ?? 'Taxa condominial');
 
   const monthlyValue = parseMoney(monthly);
   const ruleValue = parseMoney(rule);
+  const fineValue = parsePercent(fine);
+  const interestValue = parsePercent(interest);
   const errors = {
     name: name.trim().length < 3 ? 'Pelo menos 3 letras.' : null,
     monthly: monthlyValue == null || Number.isNaN(monthlyValue) || monthlyValue <= 0 ? 'Informe um valor maior que zero.' : null,
-    rule: ruleValue !== null && (Number.isNaN(ruleValue) || ruleValue < 0) ? 'Informe um valor, ou deixe em branco.' : null
+    rule: ruleValue !== null && (Number.isNaN(ruleValue) || ruleValue < 0) ? 'Informe um valor, ou deixe em branco.' : null,
+    fine: Number.isNaN(fineValue) || fineValue < 0 || fineValue > 2 ? 'De 0% a 2%: o máximo que a lei permite ao condomínio.' : null,
+    interest: Number.isNaN(interestValue) || interestValue < 0 || interestValue > 10 ? 'De 0% a 10% ao mês.' : null,
+    title: title.trim().length < 3 || title.trim().length > 60 ? 'De 3 a 60 letras.' : null
   };
-  const valid = !errors.name && !errors.monthly && !errors.rule;
+  const valid = Object.values(errors).every((error) => !error);
+  const billingChanged =
+    billingType !== settings.billingType ||
+    fineValue !== Number(settings.finePercent) ||
+    interestValue !== Number(settings.interestPercent) ||
+    title.trim() !== settings.chargeTitle;
 
   const save = useMutation({
     mutationFn: async () => {
       await api.updateSettings({ villageName: name.trim(), monthlyAmount: monthlyValue as number, paymentDueDay: Number(dueDay) });
       if ((ruleValue ?? null) !== (settings.budgetRequiredAbove ?? null)) await api.updateBudgetRule(ruleValue);
+      if (billingChanged) await api.updateBillingRules({ billingType, finePercent: fineValue, interestPercent: interestValue, chargeTitle: title.trim() });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['condo'] });
@@ -84,7 +106,7 @@ function SettingsForm({ settings }: { settings: CondominiumSettings }) {
         </Field>
       </Section>
 
-      <Section icon={QrCode} title="Mensalidade" description="O valor que cada unidade paga por mês e o dia em que vence.">
+      <Section icon={QrCode} title="Cobrança" description="O valor de cada unidade, quando vence, como paga e o que acontece com o atraso.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Valor por unidade" htmlFor="valor" error={errors.monthly} hint={monthlyValue && !errors.monthly ? formatMoney(monthlyValue) : undefined}>
             <div className="relative">
@@ -107,6 +129,39 @@ function SettingsForm({ settings }: { settings: CondominiumSettings }) {
             </select>
           </Field>
         </div>
+
+        <div className="space-y-1.5">
+          <p id="forma-label" className="text-sm font-medium text-ink">
+            Forma de pagamento
+          </p>
+          <Segmented label="Forma de pagamento" value={billingType} options={billingTypes} onChange={setBillingType} />
+          <p className="text-xs text-muted">
+            {billingType === 'PIX'
+              ? 'Só Pix: o mais barato no Asaas e o dinheiro cai na hora.'
+              : 'Boleto com o QR Code do Pix impresso nele: a unidade paga como preferir. O boleto tem tarifa maior no Asaas.'}
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Multa por atraso" htmlFor="multa" error={errors.fine} hint="Até 2%, pelo Código Civil (art. 1.336). Use o da convenção.">
+            <PercentInput id="multa" value={fine} onChange={setFine} />
+          </Field>
+          <Field label="Juros por mês de atraso" htmlFor="juros" error={errors.interest} hint="Os da convenção; se ela não disser, os da lei.">
+            <PercentInput id="juros" value={interest} onChange={setInterest} />
+          </Field>
+        </div>
+
+        <Field
+          label="Nome da cobrança"
+          htmlFor="nome-cobranca"
+          error={errors.title}
+          hint={`Aparece na fatura: “${title.trim() || 'Taxa condominial'} - Casa 1 - ${currentMonth()}”.`}
+        >
+          <Input id="nome-cobranca" maxLength={60} value={title} onChange={(e) => setTitle(e.target.value)} />
+        </Field>
+        <p className="rounded-lg bg-surface-alt/70 px-3 py-2 text-xs text-muted">
+          Forma, multa, juros e nome valem para as cobranças geradas daqui em diante. As que já foram emitidas continuam como estão.
+        </p>
       </Section>
 
       <Section icon={Scale} title="Orçamento e votação" description="Gastos grandes só acontecem depois de um orçamento aprovado pelas unidades.">

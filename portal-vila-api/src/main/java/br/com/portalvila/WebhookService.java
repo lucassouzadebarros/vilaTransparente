@@ -19,12 +19,15 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 class WebhookService {
     private static final Logger log = LoggerFactory.getLogger(WebhookService.class);
     /** Value older installs stored in the settings table; it must never be trusted once a real token is in place. */
     static final String LEGACY_DEFAULT_SECRET = "dev-webhook-token";
+    private static final Pattern CHARGE_REFERENCE = Pattern.compile("(?:VILA|C\\d+)-(\\d{4}-\\d{2})");
 
     private final ObjectMapper objectMapper;
     private final WebhookEventRepository events;
@@ -414,12 +417,13 @@ class WebhookService {
         }
     }
 
+    /** "VILA-2026-05-HOUSE-01" (the Vila) or "C7-2026-05-HOUSE-01" (another condominium): the month in the middle. */
     private String monthFromExternalReference(String externalReference) {
-        if (externalReference == null || !externalReference.startsWith("VILA-") || externalReference.length() < 12) {
+        if (externalReference == null) {
             return null;
         }
-        String month = externalReference.substring(5, 12);
-        return month.matches("\\d{4}-\\d{2}") ? month : null;
+        Matcher matcher = CHARGE_REFERENCE.matcher(externalReference);
+        return matcher.lookingAt() ? matcher.group(1) : null;
     }
 
     private String storedExternalReference(JsonNode payment, String gatewayPaymentId) {
