@@ -5,6 +5,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -115,6 +116,19 @@ class PixService {
         LocalDate dueDate = validatedDueDate(month, requestedDueDate, settings);
         Resident resident = residents.findById(residentId).orElseThrow();
         return createMonthlyChargeForResident(month, amount, settings, resident, dueDate);
+    }
+
+    /**
+     * A one-off charge for one unit ("Chamada de capital: pintura"), in a transaction of its own. It belongs to the month
+     * of its due date, next to that month's own charge, which it never replaces.
+     */
+    @Transactional
+    public PixChargeResponse generateExtraCharge(String purpose, BigDecimal requestedAmount, LocalDate dueDate, Long residentId) {
+        String month = validatedMonth(YearMonth.from(dueDate).toString());
+        Settings settings = settingsRepository.findAll().stream().findFirst().orElseGet(Settings::new);
+        BigDecimal amount = validatedAmount(requestedAmount);
+        Resident resident = residents.findById(residentId).orElseThrow();
+        return createChargeForResident(month, amount, settings, resident, true, true, dueDate, purpose);
     }
 
     @Transactional(readOnly = true)
@@ -299,6 +313,23 @@ class PixService {
         boolean allowAdditionalCharge,
         LocalDate dueDate
     ) {
+        return createChargeForResident(month, amount, settings, resident, allowAdditionalCharge, false, dueDate, null);
+    }
+
+    /**
+     * alwaysAdditional: a one-off charge (purpose says what for), always on top of the month's own charge and never
+     * taking its place. The month's own charge carries the reserve fund, when the condominium has one.
+     */
+    private PixChargeResponse createChargeForResident(
+        String month,
+        BigDecimal amount,
+        Settings settings,
+        Resident resident,
+        boolean allowAdditionalCharge,
+        boolean alwaysAdditional,
+        LocalDate dueDate,
+        String purpose
+    ) {
         House house = houses.findById(resident.houseId).orElseThrow();
         String standardExternalReference = externalReference(month, house);
         PixCharge chargeForStandardReference = pixCharges
@@ -315,6 +346,10 @@ class PixService {
         boolean hasChargeForMonth = chargeForStandardReference != null;
         for (Contribution candidate : monthContributions) {
             PixCharge existing = pixCharges.findByContributionId(candidate.id).orElse(null);
+            if (existing != null && isAdditionalExternalReference(existing.externalReference)) {
+                // A one-off or complementary charge is not the month's own charge.
+                continue;
+            }
             if (existing != null) {
                 hasChargeForMonth = true;
                 if (!allowAdditionalCharge) {
@@ -329,13 +364,21 @@ class PixService {
             return toResponse(chargeForStandardReference, contributionForStandardReference);
         }
 
-        boolean additionalCharge = allowAdditionalCharge && hasChargeForMonth;
+        boolean additionalCharge = alwaysAdditional || allowAdditionalCharge && hasChargeForMonth;
+        BigDecimal reserve = additionalCharge || settings.reserveFundPercent == null || settings.reserveFundPercent.signum() <= 0
+            ? null
+            : amount.multiply(settings.reserveFundPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        BigDecimal total = reserve == null ? amount : amount.add(reserve);
         Contribution contribution = additionalCharge
-            ? createContribution(month, amount, resident)
-            : contributionWithoutCharge == null ? createContribution(month, amount, resident) : contributionWithoutCharge;
+            ? createContribution(month, total, resident)
+            : contributionWithoutCharge == null ? createContribution(month, total, resident) : contributionWithoutCharge;
 
         contribution.residentId = resident.id;
-        contribution.amount = amount;
+        contribution.amount = total;
+        contribution.reserveAmount = reserve;
+        if (purpose != null) {
+            contribution.description = purpose;
+        }
         contribution.status = "PENDING";
         contribution.updatedAt = LocalDateTime.now();
         contribution = contributions.save(contribution);
@@ -347,11 +390,15 @@ class PixService {
         String externalReference = additionalCharge
             ? additionalExternalReference(month, house)
             : standardExternalReference;
+        String description = purpose != null
+            ? purpose + " - " + house.label + " - " + month
+            : settings.chargeTitleOrDefault() + (reserve == null ? "" : " + fundo de reserva") + " - " + house.label + " - " + month
+                + (additionalCharge ? " (complementar)" : "");
         CreatePixChargeRequest request = new CreatePixChargeRequest(
             customer.id(),
             externalReference,
-            settings.chargeTitleOrDefault() + " - " + house.label + " - " + month + (additionalCharge ? " (complementar)" : ""),
-            amount,
+            description,
+            total,
             dueDate,
             settings.billingType,
             settings.finePercent,
@@ -362,7 +409,7 @@ class PixService {
             : gatewayClient.findPaymentByExternalReference(externalReference)
             .filter(charge -> externalReference.equals(charge.externalReference()))
             .orElseGet(() -> gatewayClient.createPixCharge(request));
-        return persistGatewayCharge(settings, contribution, externalReference, amount, dueDate, gatewayCharge);
+        return persistGatewayCharge(settings, contribution, externalReference, total, dueDate, gatewayCharge);
     }
 
     private Contribution createContribution(String month, BigDecimal amount, Resident resident) {

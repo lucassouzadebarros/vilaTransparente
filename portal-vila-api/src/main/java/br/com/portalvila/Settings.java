@@ -51,6 +51,17 @@ public class Settings {
     /** Names the charge on the invoice ("Taxa condominial - Casa 3 - 2026-11"). Empty: "Taxa condominial". */
     public String chargeTitle;
 
+    /** Reserve fund added to each monthly charge, in percent of the monthly fee. Zero: none. */
+    @Column(nullable = false)
+    public BigDecimal reserveFundPercent = BigDecimal.ZERO;
+
+    /** Reminders by the app before the due date, on the day and the day after, while the charge is unpaid. */
+    @Column(nullable = false)
+    public boolean remindersEnabled = false;
+
+    @Column(nullable = false)
+    public Integer reminderDaysBefore = 3;
+
     static final String BILLING_PIX = "PIX";
     static final String BILLING_BOLETO = "BOLETO";
     static final String DEFAULT_CHARGE_TITLE = "Taxa condominial";

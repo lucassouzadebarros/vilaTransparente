@@ -24,7 +24,19 @@ class BillingRulesMigrationTest {
             statement.execute("insert into settings(village_name, monthly_amount, payment_due_day, gateway_provider, condominium_id) "
                 + "select 'Jardim', 300, 5, 'ASAAS', id from condominiums where slug = 'jardim'");
         }
-        TestMigrations.run(URL, 28, 28);
+        TestMigrations.run(URL, 28, 29);
+    }
+
+    @Test
+    void v29StartsWithNoReserveFundAndNoReminders() throws SQLException {
+        try (Connection connection = DriverManager.getConnection(URL, "sa", ""); Statement statement = connection.createStatement()) {
+            ResultSet rows = statement.executeQuery("select reserve_fund_percent, reminders_enabled, reminder_days_before from settings");
+            while (rows.next()) {
+                assertThat(rows.getBigDecimal("reserve_fund_percent")).isZero();
+                assertThat(rows.getBoolean("reminders_enabled")).isFalse();
+                assertThat(rows.getInt("reminder_days_before")).isEqualTo(3);
+            }
+        }
     }
 
     @Test

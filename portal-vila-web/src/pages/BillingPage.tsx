@@ -9,9 +9,11 @@ import {
   CircleDollarSign,
   ExternalLink,
   FileCheck2,
+  FilePlus2,
   Landmark,
   Receipt,
   RefreshCw,
+  RotateCcw,
   Search,
   Send,
   TriangleAlert
@@ -79,6 +81,14 @@ function Kpi({ icon: Icon, label, value, detail, tone }: { icon: typeof Receipt;
   );
 }
 
+/** A cancelled charge the unit already has again this month (same thing, not cancelled): no second "charge again". */
+function chargedAgain(cancelled: BillingRow, rows: BillingRow[], chargeTitle: string) {
+  const what = cancelled.description ?? chargeTitle;
+  return rows.some(
+    (row) => row.houseId === cancelled.houseId && row.contributionId !== cancelled.contributionId && row.status !== 'CANCELLED' && (row.description ?? chargeTitle) === what
+  );
+}
+
 /** Today in this computer's calendar, as "2026-10-28". */
 function isoToday() {
   const now = new Date();
@@ -91,7 +101,200 @@ function rulesSummary(settings: CondominiumSettings | undefined) {
   const percent = (value: number) => Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
   parts.push(Number(settings.finePercent) > 0 ? `multa de ${percent(settings.finePercent)}%` : 'sem multa');
   parts.push(Number(settings.interestPercent) > 0 ? `juros de ${percent(settings.interestPercent)}% ao mês` : 'sem juros');
+  if (Number(settings.reserveFundPercent) > 0) parts.push(`fundo de reserva de ${percent(settings.reserveFundPercent)}%`);
   return parts.join(' · ');
+}
+
+/** What a batch did: how many charges went out, and each unit that failed or was left out, with the reason. */
+function ResultDialog({ open, result, onClose }: { open: boolean; result: GenerateResult; onClose: () => void }) {
+  const problems = result.failed.length + result.skipped.length;
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      tone={result.failed.length > 0 ? 'danger' : 'ok'}
+      icon={result.failed.length > 0 ? <TriangleAlert aria-hidden className="size-5" /> : <CheckCircle2 aria-hidden className="size-5" />}
+      title={result.created > 0 ? `${plural(result.created, 'cobrança criada', 'cobranças criadas')}` : 'Nenhuma cobrança nova'}
+      description={
+        <>
+          Mês de {monthName(result.month)}.
+          {result.alreadyCharged > 0 &&
+            ` ${plural(result.alreadyCharged, 'unidade já tinha cobrança e ficou como estava', 'unidades já tinham cobrança e ficaram como estavam')}.`}
+          {result.created > 0 && ' Os moradores já veem a cobrança no aplicativo.'}
+        </>
+      }
+      footer={<Button onClick={onClose}>Concluir</Button>}
+    >
+      {problems > 0 && (
+        <div className="space-y-4">
+          {result.failed.length > 0 && (
+            <div>
+              <p className="mb-2 text-sm font-medium text-danger">Não foi possível cobrar</p>
+              <ul className="divide-y divide-line rounded-xl border border-line">
+                {result.failed.map((problem) => (
+                  <li key={problem.houseLabel} className="px-4 py-3 text-sm">
+                    <p className="font-medium">{problem.houseLabel}</p>
+                    <p className="text-muted">{problem.reason}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {result.skipped.length > 0 && (
+            <div>
+              <p className="mb-2 text-sm font-medium">Ficaram de fora</p>
+              <ul className="divide-y divide-line rounded-xl border border-line">
+                {result.skipped.map((problem) => (
+                  <li key={problem.houseLabel} className="flex flex-wrap justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm">
+                    <span className="font-medium">{problem.houseLabel}</span>
+                    <span className="text-muted">{problem.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
+/** Where a one-off charge starts: for every unit, or one unit already chosen (charging again a cancelled charge). */
+type ExtraStart = { houseId: number | null; description: string; amount: number | null; dueDate: string | null };
+
+/**
+ * A one-off charge ("Chamada de capital: pintura"): for every unit with a resident or one unit, with its own value and
+ * due date. It goes next to the month's own charge and never takes its place.
+ */
+function ExtraDialog({ start, rows, onClose }: { start: ExtraStart; rows: BillingRow[]; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const today = isoToday();
+  const units = useMemo(() => {
+    const seen = new Map<number, string>();
+    rows.filter((row) => row.status !== 'NO_RESIDENT').forEach((row) => seen.set(row.houseId, row.houseLabel));
+    return [...seen.entries()].map(([houseId, label]) => ({ houseId, label }));
+  }, [rows]);
+  const [target, setTarget] = useState<'all' | 'one'>(start.houseId == null ? 'all' : 'one');
+  const [houseId, setHouseId] = useState<number | null>(start.houseId ?? units[0]?.houseId ?? null);
+  const [description, setDescription] = useState(start.description);
+  const [amount, setAmount] = useState(moneyText(start.amount));
+  const [dueDate, setDueDate] = useState(start.dueDate && start.dueDate >= today ? start.dueDate : today);
+  const [result, setResult] = useState<GenerateResult | null>(null);
+  const value = parseMoney(amount);
+  const count = target === 'all' ? units.length : 1;
+  const errors = {
+    description: description.trim().length < 3 || description.trim().length > 80 ? 'Diga para que é, em 3 a 80 letras.' : null,
+    amount: value == null || Number.isNaN(value) || value <= 0 ? 'Informe um valor maior que zero.' : null,
+    dueDate: !dueDate || dueDate < today ? 'Escolha um dia de hoje em diante.' : null,
+    unit: target === 'one' && houseId == null ? 'Escolha a unidade.' : null
+  };
+  const valid = Object.values(errors).every((error) => !error) && count > 0;
+
+  const charge = useMutation({
+    mutationFn: () =>
+      api.extraCharge({ houseId: target === 'all' ? null : houseId, description: description.trim(), amount: value as number, dueDate }),
+    onSuccess: (answer) => {
+      setResult(answer);
+      queryClient.invalidateQueries({ queryKey: ['condo'] });
+    }
+  });
+
+  function close() {
+    if (!charge.isPending) onClose();
+  }
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (valid) charge.mutate();
+  }
+
+  if (result) return <ResultDialog open result={result} onClose={close} />;
+
+  return (
+    <Dialog
+      open
+      onClose={close}
+      icon={<FilePlus2 aria-hidden className="size-5" />}
+      title={start.houseId == null ? 'Cobrança avulsa' : 'Cobrar de novo'}
+      description={
+        start.houseId == null
+          ? 'Para o que não é a mensalidade: chamada de capital, conserto, multa. Ela vai além da cobrança do mês.'
+          : 'Uma cobrança nova para a unidade, no lugar da que foi cancelada. Confira o valor e o vencimento.'
+      }
+      footer={
+        <>
+          <Button variant="secondary" onClick={close} disabled={charge.isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" form="cobranca-avulsa" disabled={charge.isPending || !valid}>
+            {charge.isPending ? <Spinner /> : <Send aria-hidden className="size-4" />}
+            {charge.isPending ? 'Gerando…' : `Gerar ${plural(count, 'cobrança', 'cobranças')}`}
+          </Button>
+        </>
+      }
+    >
+      <form id="cobranca-avulsa" onSubmit={submit} noValidate className="space-y-4">
+        {charge.isError && <FormAlert>{charge.error.message}</FormAlert>}
+        {start.houseId == null && (
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium">Para quem</p>
+            <Segmented
+              label="Para quem"
+              value={target}
+              onChange={setTarget}
+              options={[
+                { value: 'all', label: `Todas as unidades (${units.length})` },
+                { value: 'one', label: 'Uma unidade' }
+              ]}
+            />
+          </div>
+        )}
+        {target === 'one' && (
+          <Field label="Unidade" htmlFor="unidade-avulsa" error={errors.unit}>
+            <select
+              id="unidade-avulsa"
+              value={houseId ?? ''}
+              onChange={(e) => setHouseId(Number(e.target.value))}
+              className="h-10 w-full rounded-lg border border-line-strong/60 bg-surface px-3 text-sm text-ink focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25"
+            >
+              {units.map((unit) => (
+                <option key={unit.houseId} value={unit.houseId}>
+                  {unit.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        <Field label="Para que é" htmlFor="descricao-avulsa" error={errors.description} hint="Aparece na fatura e no aplicativo.">
+          <Input
+            id="descricao-avulsa"
+            data-autofocus
+            maxLength={80}
+            placeholder="Chamada de capital: pintura da fachada"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Valor por unidade" htmlFor="valor-avulsa" error={errors.amount}>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">R$</span>
+              <Input id="valor-avulsa" inputMode="decimal" className="pl-9 tabular-nums" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </div>
+          </Field>
+          <Field label="Vencimento" htmlFor="vencimento-avulsa" error={errors.dueDate}>
+            <Input id="vencimento-avulsa" type="date" min={today} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          </Field>
+        </div>
+        {target === 'all' && value != null && !Number.isNaN(value) && value > 0 && units.length > 0 && (
+          <p className="rounded-lg bg-surface-alt/70 px-3 py-2 text-sm text-muted">
+            Total: <strong className="font-semibold text-ink tabular-nums">{formatMoney(value * units.length)}</strong> em{' '}
+            {plural(units.length, 'unidade', 'unidades')}.
+          </p>
+        )}
+      </form>
+    </Dialog>
+  );
 }
 
 /** Issuing the month: the value and the due date, how many units get a charge, and then what happened unit by unit. */
@@ -137,58 +340,7 @@ function GenerateDialog({ open, month, onClose }: { open: boolean; month: Billin
     if (!errors.amount && !errors.dueDate) generate.mutate();
   }
 
-  if (result) {
-    const problems = result.failed.length + result.skipped.length;
-    return (
-      <Dialog
-        open={open}
-        onClose={close}
-        tone={result.failed.length > 0 ? 'danger' : 'ok'}
-        icon={result.failed.length > 0 ? <TriangleAlert aria-hidden className="size-5" /> : <CheckCircle2 aria-hidden className="size-5" />}
-        title={result.created > 0 ? `${plural(result.created, 'cobrança criada', 'cobranças criadas')}` : 'Nenhuma cobrança nova'}
-        description={
-          <>
-            Mês de {monthName(result.month)}.
-            {result.alreadyCharged > 0 &&
-              ` ${plural(result.alreadyCharged, 'unidade já tinha cobrança e ficou como estava', 'unidades já tinham cobrança e ficaram como estavam')}.`}
-            {result.created > 0 && ' Os moradores já veem a cobrança no aplicativo.'}
-          </>
-        }
-        footer={<Button onClick={close}>Concluir</Button>}
-      >
-        {problems > 0 && (
-          <div className="space-y-4">
-            {result.failed.length > 0 && (
-              <div>
-                <p className="mb-2 text-sm font-medium text-danger">Não foi possível cobrar</p>
-                <ul className="divide-y divide-line rounded-xl border border-line">
-                  {result.failed.map((problem) => (
-                    <li key={problem.houseLabel} className="px-4 py-3 text-sm">
-                      <p className="font-medium">{problem.houseLabel}</p>
-                      <p className="text-muted">{problem.reason}</p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {result.skipped.length > 0 && (
-              <div>
-                <p className="mb-2 text-sm font-medium">Ficaram de fora</p>
-                <ul className="divide-y divide-line rounded-xl border border-line">
-                  {result.skipped.map((problem) => (
-                    <li key={problem.houseLabel} className="flex flex-wrap justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm">
-                      <span className="font-medium">{problem.houseLabel}</span>
-                      <span className="text-muted">{problem.reason}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-      </Dialog>
-    );
-  }
+  if (result) return <ResultDialog open={open} result={result} onClose={close} />;
 
   return (
     <Dialog
@@ -216,7 +368,18 @@ function GenerateDialog({ open, month, onClose }: { open: boolean; month: Billin
       <form id="gerar-cobrancas" onSubmit={submit} noValidate className="space-y-4">
         {generate.isError && <FormAlert>{generate.error.message}</FormAlert>}
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Valor por unidade" htmlFor="valor-cobranca" error={errors.amount}>
+          <Field
+            label="Valor por unidade"
+            htmlFor="valor-cobranca"
+            error={errors.amount}
+            hint={
+              value && !errors.amount && Number(settings.data?.reserveFundPercent) > 0
+                ? `+ ${formatMoney((value * Number(settings.data!.reserveFundPercent)) / 100)} de fundo de reserva = ${formatMoney(
+                    value * (1 + Number(settings.data!.reserveFundPercent) / 100)
+                  )}`
+                : undefined
+            }
+          >
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">R$</span>
               <Input id="valor-cobranca" data-autofocus inputMode="decimal" className="pl-9 tabular-nums" value={amount} onChange={(e) => setAmount(e.target.value)} />
@@ -286,7 +449,26 @@ function CancelDialog({ row, onClose }: { row: BillingRow | null; onClose: () =>
   );
 }
 
-function RowActions({ row, onCancel }: { row: BillingRow; onCancel: (row: BillingRow) => void }) {
+function RowActions({
+  row,
+  onCancel,
+  onChargeAgain
+}: {
+  row: BillingRow;
+  onCancel: (row: BillingRow) => void;
+  /** Absent when the unit was already charged again for the same thing. */
+  onChargeAgain?: (row: BillingRow) => void;
+}) {
+  if (row.status === 'CANCELLED' && row.residentName && onChargeAgain) {
+    return (
+      <div className="flex justify-end">
+        <Button variant="secondary" size="sm" onClick={() => onChargeAgain(row)} aria-label={`Cobrar de novo ${row.houseLabel}`}>
+          <RotateCcw aria-hidden className="size-4" />
+          Cobrar de novo
+        </Button>
+      </div>
+    );
+  }
   if ((row.status === 'PENDING' || row.status === 'OVERDUE') && row.chargeId) {
     return (
       <div className="flex justify-end gap-2">
@@ -337,7 +519,10 @@ export function BillingPage() {
   const [search, setSearch] = useState('');
   const [generating, setGenerating] = useState(false);
   const [cancelling, setCancelling] = useState<BillingRow | null>(null);
+  const [extra, setExtra] = useState<ExtraStart | null>(null);
   const billing = useQuery({ queryKey: ['condo', 'billing', month], queryFn: () => api.billing(month) });
+  const settings = useQuery({ queryKey: ['condo', 'settings'], queryFn: api.settings });
+  const chargeTitle = settings.data?.chargeTitle ?? 'Taxa condominial';
   const data = billing.data;
 
   const reconcile = useMutation({
@@ -371,6 +556,14 @@ export function BillingPage() {
             <Button variant="secondary" onClick={() => reconcile.mutate()} disabled={reconcile.isPending || !data?.pixConnected}>
               {reconcile.isPending ? <Spinner /> : <RefreshCw aria-hidden className="size-4" />}
               Conferir com o Asaas
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setExtra({ houseId: null, description: '', amount: null, dueDate: null })}
+              disabled={!data?.pixConnected}
+            >
+              <FilePlus2 aria-hidden className="size-4" />
+              Cobrança avulsa
             </Button>
             <Button onClick={() => setGenerating(true)} disabled={!data?.pixConnected || data.unitsToCharge === 0}>
               <Send aria-hidden className="size-4" />
@@ -428,7 +621,12 @@ export function BillingPage() {
           label="Previsto no mês"
           tone="brand"
           value={loading ? <Skeleton className="h-7 w-28" /> : formatMoney(totals?.expected)}
-          detail={loading ? '…' : plural((totals?.paid ?? 0) + (totals?.pending ?? 0) + (totals?.late ?? 0), 'cobrança', 'cobranças')}
+          detail={
+            loading
+              ? '…'
+              : plural((totals?.paid ?? 0) + (totals?.pending ?? 0) + (totals?.late ?? 0), 'cobrança', 'cobranças') +
+                (Number(totals?.reserve) > 0 ? ` · ${formatMoney(totals?.reserve)} de fundo de reserva` : '')
+          }
         />
         <Kpi
           icon={CircleDollarSign}
@@ -522,9 +720,10 @@ export function BillingPage() {
                         <span className="font-medium">{row.houseLabel}</span>
                         {row.extra && (
                           <Badge tone="neutral" className="ml-2">
-                            Extra
+                            Avulsa
                           </Badge>
                         )}
+                        {row.description && <p className="max-w-56 truncate text-xs text-muted">{row.description}</p>}
                       </td>
                       <td className="max-w-56 truncate px-4 py-3.5">{row.residentName ?? <span className="text-muted">—</span>}</td>
                       <td className="px-4 py-3.5 text-right tabular-nums">
@@ -548,7 +747,16 @@ export function BillingPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3.5">
-                        <RowActions row={row} onCancel={setCancelling} />
+                        <RowActions
+                          row={row}
+                          onCancel={setCancelling}
+                          onChargeAgain={
+                            chargedAgain(row, data?.rows ?? [], chargeTitle)
+                              ? undefined
+                              : (cancelled) =>
+                                  setExtra({ houseId: cancelled.houseId, description: cancelled.description ?? chargeTitle, amount: cancelled.amount, dueDate: cancelled.dueDate })
+                          }
+                        />
                       </td>
                     </tr>
                   ))}
@@ -573,6 +781,7 @@ export function BillingPage() {
 
       {data && generating && <GenerateDialog open={generating} month={data} onClose={() => setGenerating(false)} />}
       <CancelDialog row={cancelling} onClose={() => setCancelling(null)} />
+      {extra && data && <ExtraDialog start={extra} rows={data.rows} onClose={() => setExtra(null)} />}
     </div>
   );
 }

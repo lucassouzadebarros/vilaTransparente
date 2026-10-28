@@ -69,9 +69,15 @@ export type CondominiumSettings = {
   finePercent: number;
   interestPercent: number;
   chargeTitle: string;
+  reserveFundPercent: number;
+  remindersEnabled: boolean;
+  reminderDaysBefore: number;
 };
 
-export type BillingRules = Pick<CondominiumSettings, 'billingType' | 'finePercent' | 'interestPercent' | 'chargeTitle'>;
+export type BillingRules = Pick<
+  CondominiumSettings,
+  'billingType' | 'finePercent' | 'interestPercent' | 'chargeTitle' | 'reserveFundPercent' | 'remindersEnabled' | 'reminderDaysBefore'
+>;
 
 /** NOT_CHARGED: a resident, no charge yet this month. NO_RESIDENT: nobody to charge. */
 export type BillingStatus = 'PAID' | 'PENDING' | 'OVERDUE' | 'CANCELLED' | 'NOT_CHARGED' | 'NO_RESIDENT';
@@ -91,6 +97,9 @@ export type BillingRow = {
   invoiceUrl: string | null;
   receiptUrl: string | null;
   paidAt: string | null;
+  /** What a one-off charge is for; empty on the monthly fee. */
+  description: string | null;
+  reserveAmount: number | null;
 };
 
 export type BillingMonth = {
@@ -99,9 +108,12 @@ export type BillingMonth = {
   monthlyAmount: number;
   dueDate: string;
   unitsToCharge: number;
-  totals: { expected: number; received: number; open: number; overdue: number; paid: number; pending: number; late: number };
+  totals: { expected: number; received: number; open: number; overdue: number; reserve: number; paid: number; pending: number; late: number };
   rows: BillingRow[];
 };
+
+/** houseId empty: every unit with a resident. */
+export type ExtraCharge = { houseId: number | null; description: string; amount: number; dueDate: string };
 
 export type UnitProblem = { houseLabel: string; reason: string };
 
@@ -293,6 +305,7 @@ export const api = {
   billing: (month: string) => request<BillingMonth>(`/admin/billing?month=${month}`),
   generateCharges: (input: { month: string; amount: number; dueDate: string }) =>
     request<GenerateResult>('/admin/billing/generate', { method: 'POST', body: JSON.stringify(input) }),
+  extraCharge: (input: ExtraCharge) => request<GenerateResult>('/admin/billing/extra', { method: 'POST', body: JSON.stringify(input) }),
   cancelCharge: (chargeId: number, reason: string) =>
     request<unknown>(`/admin/pix/charges/${chargeId}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
   reconcileCharges: (month: string) => request<unknown>(`/admin/pix/reconcile?month=${month}`, { method: 'POST' }),

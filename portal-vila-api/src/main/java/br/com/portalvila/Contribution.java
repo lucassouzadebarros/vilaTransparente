@@ -40,6 +40,15 @@ public class Contribution {
     public String manualReason;
     public Long pixChargeId;
 
+    /** What a one-off charge is for ("Chamada de capital: pintura"). Empty on the monthly fee. */
+    public String description;
+
+    /** The part of the amount that goes to the reserve fund. */
+    public BigDecimal reserveAmount;
+
+    /** The day the last reminder about this charge went out. */
+    public java.time.LocalDate remindedOn;
+
     @Column(nullable = false)
     public LocalDateTime createdAt = LocalDateTime.now();
 
