@@ -5,6 +5,7 @@ import {
   ChevronRight,
   ClipboardList,
   FileClock,
+  HandCoins,
   History,
   KeyRound,
   ListChecks,
@@ -32,6 +33,8 @@ type MenuItem = {
   /** An address outside the app: the row opens it instead of a screen. */
   url?: string;
   adminOnly?: boolean;
+  /** The administration and the síndico. */
+  managersOnly?: boolean;
   danger?: boolean;
 };
 
@@ -66,6 +69,13 @@ const menuItems: MenuItem[] = [
     description: 'Saídas da caixinha, com os comprovantes.',
     icon: ReceiptText,
     route: 'Expenses'
+  },
+  {
+    title: 'Contas a pagar',
+    description: 'Aprove e registre o pagamento das contas do condomínio.',
+    icon: HandCoins,
+    route: 'Payables',
+    managersOnly: true
   },
   {
     title: 'Orçamentos',
@@ -131,7 +141,7 @@ const menuItems: MenuItem[] = [
 
 /** The menu is read in groups, so a long list does not have to be scanned from top to bottom. */
 const menuGroups: Array<{ title: string; routes: string[] }> = [
-  { title: 'Financeiro', routes: ['Contributions', 'Expenses', 'Reports', 'AdminPixCharges'] },
+  { title: 'Financeiro', routes: ['Contributions', 'Expenses', 'Payables', 'Reports', 'AdminPixCharges'] },
   { title: 'Demandas', routes: ['ProblemReports', 'Budgets'] },
   { title: 'Moradores', routes: ['Residents', 'ReleaseHouse'] },
   { title: 'Administração', routes: ['Settings', 'AuditLog', 'WebhookEvents'] },
@@ -140,10 +150,10 @@ const menuGroups: Array<{ title: string; routes: string[] }> = [
 
 export function MoreScreen() {
   const navigation = useNavigation<any>();
-  const { isAdmin } = useAuth();
+  const { isAdmin, canManageBudgets } = useAuth();
   const { width } = useWindowDimensions();
   const compact = Math.min(width, 430) < 560;
-  const visibleItems = menuItems.filter((item) => !item.adminOnly || isAdmin);
+  const visibleItems = menuItems.filter((item) => (!item.adminOnly || isAdmin) && (!item.managersOnly || canManageBudgets));
 
   return (
     <ScrollView role="main" style={styles.screen} contentContainerStyle={[styles.content, compact ? styles.contentCompact : null]}>

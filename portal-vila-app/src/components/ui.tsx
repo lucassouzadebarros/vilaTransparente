@@ -90,6 +90,11 @@ const statusInfo: Record<string, { label: string; tone: Tone }> = {
   PENDING: { label: 'Pendente', tone: 'wait' },
   OVERDUE: { label: 'Vencida', tone: 'bad' },
   CANCELLED: { label: 'Cancelado', tone: 'off' },
+  // Bills to pay.
+  PENDING_APPROVAL: { label: 'Aguardando aprovação', tone: 'wait' },
+  APPROVED: { label: 'A pagar', tone: 'info' },
+  PAGA: { label: 'Paga', tone: 'ok' },
+  CANCELADA: { label: 'Cancelada', tone: 'off' },
   CANCELADO: { label: 'Cancelado', tone: 'off' },
   EM_VOTACAO: { label: 'Em votação', tone: 'wait' },
   EM_ANALISE: { label: 'Em análise', tone: 'wait' },

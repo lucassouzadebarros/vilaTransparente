@@ -18,6 +18,9 @@ import {
   InviteCheck,
   InviteIssued,
   PasswordResetResponse,
+  Payable,
+  PayableInput,
+  Supplier,
   PixCharge,
   PortalDocument,
   ProblemReport,
@@ -290,6 +293,15 @@ export const api = {
   sindico: () => requestData<Sindico>(apiClient.get('/admin/sindico')),
   chooseSindico: (residentId: number | null) => requestData<Sindico>(apiClient.put('/admin/sindico', { residentId })),
   settings: () => requestData(apiClient.get('/settings')),
+  /** Who is signed in now and what they may do (canPay: record, approve and pay the bills). */
+  session: () => requestData<{ role: string; canPay: boolean }>(apiClient.get('/session')),
+  suppliers: () => requestData<Supplier[]>(apiClient.get('/suppliers')),
+  payables: () => requestData<Payable[]>(apiClient.get('/payables')),
+  createPayable: (input: PayableInput) => requestData<Payable[]>(apiClient.post('/payables', input)),
+  approvePayable: (id: number) => requestData<Payable>(apiClient.post(`/payables/${id}/approve`)),
+  payPayable: (id: number, input: { paidAt: string; method: string; receiptDocumentId: number | null; notes: string | null }) =>
+    requestData<Payable>(apiClient.post(`/payables/${id}/pay`, input)),
+  cancelPayable: (id: number, reason: string) => requestData<Payable>(apiClient.post(`/payables/${id}/cancel`, { reason })),
   setBudgetRule: (budgetRequiredAbove: number | null) => requestData(apiClient.put('/settings/budget-rule', { budgetRequiredAbove })),
   registerPushToken: (token: string, platform: string) => requestData<{ status: string }>(apiClient.post('/push-tokens', { token, platform })),
   dashboardEventsUrl: () => `${baseURL.replace(/\/$/, '')}/events/dashboard`
