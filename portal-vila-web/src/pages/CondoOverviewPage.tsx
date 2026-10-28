@@ -126,10 +126,10 @@ export function CondoOverviewPage() {
             <Step done={Number(settings.data?.monthlyAmount ?? 0) > 0} title="Mensalidade" to="/condominio/configuracoes">
               {settings.data ? `${formatMoney(settings.data.monthlyAmount)}, vence todo dia ${settings.data.paymentDueDay}` : '…'}
             </Step>
-            <Step done={condominium.pixConnected} title="Pagamentos por Pix">
+            <Step done={condominium.pixConnected} title="Pagamentos por Pix" to="/condominio/configuracoes#pix">
               {condominium.pixConnected
                 ? 'Conta Asaas conectada: as mensalidades saem por Pix.'
-                : 'Ainda não conectado. A conexão com a conta Asaas do condomínio chega na próxima etapa do painel.'}
+                : 'Conecte a conta Asaas do condomínio: é só colar uma chave, o resto o sistema configura.'}
             </Step>
           </ol>
         </Card>

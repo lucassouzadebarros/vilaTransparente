@@ -89,9 +89,16 @@ class WebhookService {
         }
     }
 
+    /** The Vila's notices, at the address configured by hand in its Asaas account: checked against the server's token. */
     @Transactional
     public WebhookResult processAsaas(String token, JsonNode payload) {
         validateWebhookToken(token);
+        return processVerified(payload);
+    }
+
+    /** A notice whose origin was already checked (a condominium's own address and token), inside its condominium. */
+    @Transactional
+    public WebhookResult processVerified(JsonNode payload) {
         String eventId = text(payload, "id");
         String eventType = text(payload, "event");
         JsonNode payment = payload.path("payment");

@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.ClientRequest;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
@@ -21,14 +22,6 @@ import java.util.Map;
 import java.util.Optional;
 
 interface PixGatewayClient {
-    /**
-     * The one Asaas account configured here is the Vila's. Until each condominium connects its own, only the Vila uses
-     * it: the others have everything but Pix.
-     */
-    static boolean connectedHere() {
-        return TenantContext.current() == TenantContext.VILA;
-    }
-
     String ONE_PIXEL_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
 
     GatewayCustomer createOrUpdateCustomer(Resident resident);
@@ -75,22 +68,23 @@ class AsaasPixGatewayClient implements PixGatewayClient {
     private static final int MAX_PAGES = 200;
 
     private final WebClient webClient;
-    private final String apiKey;
+    private final GatewayCredentials credentials;
     private final ObjectMapper objectMapper;
 
     AsaasPixGatewayClient(
         WebClient.Builder builder,
         ObjectMapper objectMapper,
         @Value("${portal.asaas.base-url}") String baseUrl,
-        @Value("${portal.asaas.api-key:}") String apiKey,
+        GatewayCredentials credentials,
         @Value("${portal.asaas.user-agent:Portal da Vila}") String userAgent
     ) {
-        this.apiKey = apiKey;
+        this.credentials = credentials;
         this.objectMapper = objectMapper;
         this.webClient = builder.baseUrl(baseUrl)
             .defaultHeader(HttpHeaders.ACCEPT, "application/json")
             .defaultHeader(HttpHeaders.USER_AGENT, userAgent)
-            .defaultHeader("access_token", apiKey == null ? "" : apiKey)
+            // Each call carries the key of the condominium it is made for (its own account, or the Vila's server key).
+            .filter((request, next) -> next.exchange(ClientRequest.from(request).header("access_token", keyHere()).build()))
             .build();
     }
 
@@ -181,7 +175,7 @@ class AsaasPixGatewayClient implements PixGatewayClient {
     @Override
     public Optional<String> findCustomerName(String customerId) {
         requireVila();
-        if (apiKey == null || apiKey.isBlank() || customerId == null || customerId.isBlank()) {
+        if (keyHere().isBlank() || customerId == null || customerId.isBlank()) {
             return Optional.empty();
         }
         try {
@@ -514,16 +508,22 @@ class AsaasPixGatewayClient implements PixGatewayClient {
         }
     }
 
-    /** Before any call to Asaas: the account is the Vila's, and no other condominium reaches it. */
-    private static void requireVila() {
-        if (!PixGatewayClient.connectedHere()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "O Pix ainda não está ligado a este condomínio.");
+    /** Before any call to Asaas: the condominium must have an account connected (the Vila has the server's). */
+    private void requireVila() {
+        if (!credentials.connectedHere()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "O Pix ainda não está ligado a este condomínio. Conecte a conta Asaas em Configurações.");
         }
     }
 
     private void requireApiKey() {
-        if (apiKey == null || apiKey.isBlank()) {
+        String key = credentials.apiKeyHere();
+        if (key == null || key.isBlank()) {
             throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED, "Configure ASAAS_API_KEY para usar o gateway Asaas.");
         }
+    }
+
+    private String keyHere() {
+        String key = credentials.apiKeyHere();
+        return key == null ? "" : key;
     }
 }

@@ -24,9 +24,11 @@ import org.springframework.web.server.ResponseStatusException;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.MalformedURLException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -338,10 +340,32 @@ class PixController {
 class WebhookController {
     private final WebhookService webhookService;
     private final WebhookEventRepository events;
+    private final GatewayConnectionRepository connections;
+    private final PaymentsService payments;
 
-    WebhookController(WebhookService webhookService, WebhookEventRepository events) {
+    WebhookController(WebhookService webhookService, WebhookEventRepository events, GatewayConnectionRepository connections, PaymentsService payments) {
         this.webhookService = webhookService;
         this.events = events;
+        this.connections = connections;
+        this.payments = payments;
+    }
+
+    /**
+     * A condominium that connected its own Asaas account: the notices come to its own address, signed with its own
+     * token, and are handled inside that condominium. A wrong address or token gets the same refusal.
+     */
+    @PostMapping("/webhooks/asaas/c/{routeKey}")
+    WebhookResult asaasForCondominium(
+        @PathVariable String routeKey,
+        @RequestHeader(value = "asaas-access-token", required = false) String token,
+        @RequestBody JsonNode payload
+    ) {
+        GatewayConnection connection = connections.findByRouteKey(routeKey)
+            .filter(found -> token != null && MessageDigest.isEqual(
+                SecretBox.digest(token).getBytes(StandardCharsets.UTF_8), found.webhookTokenHash.getBytes(StandardCharsets.UTF_8)))
+            .orElseThrow(InvalidWebhookTokenException::new);
+        payments.noticeArrived(connection);
+        return TenantContext.callAs(connection.condominiumId, () -> webhookService.processVerified(payload));
     }
 
     /** Only the Vila has an Asaas account connected: its notices are the Vila's until each condominium has its own. */
@@ -1010,6 +1034,7 @@ class ResidentController {
     private final LoginAttemptLimiter inviteLimiter;
     private final TransactionTemplate transaction;
     private final CondominiumAccess access;
+    private final GatewayCredentials gatewayCredentials;
 
     ResidentController(
         ResidentRepository residents,
@@ -1021,9 +1046,11 @@ class ResidentController {
         HouseInviteService invites,
         LoginAttemptLimiter inviteLimiter,
         PlatformTransactionManager transactionManager,
-        CondominiumAccess access
+        CondominiumAccess access,
+        GatewayCredentials gatewayCredentials
     ) {
         this.access = access;
+        this.gatewayCredentials = gatewayCredentials;
         this.residents = residents;
         this.houses = houses;
         this.users = users;
@@ -1235,7 +1262,7 @@ class ResidentController {
 
     /** A condominium without Pix still registers and edits its residents; it just has no customer in Asaas. */
     private void syncGatewayCustomer(Resident resident) {
-        if (!PixGatewayClient.connectedHere()) {
+        if (!gatewayCredentials.connectedHere()) {
             return;
         }
         GatewayCustomer customer = gatewayClient.createOrUpdateCustomer(resident);

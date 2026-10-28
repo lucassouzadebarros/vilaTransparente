@@ -23,6 +23,12 @@ interface ResidentRepository extends JpaRepository<Resident, Long> {
     long countByStatus(String status);
 }
 
+interface GatewayConnectionRepository extends JpaRepository<GatewayConnection, Long> {
+    Optional<GatewayConnection> findByCondominiumId(Long condominiumId);
+    Optional<GatewayConnection> findByRouteKey(String routeKey);
+    boolean existsByCondominiumId(Long condominiumId);
+}
+
 interface CondominiumRequestRepository extends JpaRepository<CondominiumRequest, Long> {
     List<CondominiumRequest> findByStatusOrderByCreatedAtDesc(String status);
     List<CondominiumRequest> findAllByOrderByCreatedAtDesc();

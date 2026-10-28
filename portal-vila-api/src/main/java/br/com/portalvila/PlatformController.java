@@ -124,18 +124,20 @@ class SessionController {
     private final CurrentUserService currentUser;
     private final PlatformAdmins platformAdmins;
     private final CondominiumRepository condominiums;
+    private final GatewayCredentials credentials;
 
-    SessionController(CurrentUserService currentUser, PlatformAdmins platformAdmins, CondominiumRepository condominiums) {
+    SessionController(CurrentUserService currentUser, PlatformAdmins platformAdmins, CondominiumRepository condominiums, GatewayCredentials credentials) {
         this.currentUser = currentUser;
         this.platformAdmins = platformAdmins;
         this.condominiums = condominiums;
+        this.credentials = credentials;
     }
 
     @GetMapping
     SessionResponse current() {
         AppUser user = currentUser.current();
         SessionCondominium condominium = condominiums.findById(user.condominiumId)
-            .map(found -> new SessionCondominium(found.id, found.name, found.slug, found.status, PixGatewayClient.connectedHere()))
+            .map(found -> new SessionCondominium(found.id, found.name, found.slug, found.status, credentials.connected(found.id)))
             .orElse(null);
         return new SessionResponse(user.name, user.email, user.role, user.residentId, platformAdmins.includes(user.email), condominium);
     }

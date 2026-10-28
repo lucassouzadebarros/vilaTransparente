@@ -61,6 +61,8 @@ class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/residents/invite-check", "/api/residents/register-with-invite").permitAll()
                 // Asking for a condominium to be registered, and activating the account of whoever runs a new one.
                 .requestMatchers(HttpMethod.POST, "/api/public/**").permitAll()
+                // Each condominium's own Asaas notices (checked by their address and token, in the controller).
+                .requestMatchers(HttpMethod.POST, "/api/webhooks/asaas/c/*").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/documents/*/file").permitAll()
                 .requestMatchers("/api/platform/**").hasRole("PLATFORM_ADMIN")
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")

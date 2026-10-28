@@ -171,7 +171,7 @@ class TenantIsolationTest {
     @Test
     void everyRepositoryUsesTheCondominiumAwareBase() throws Exception {
         var repositories = context.getBeansOfType(JpaRepository.class).values();
-        assertThat(repositories).hasSize(23);
+        assertThat(repositories).hasSize(24);
         for (JpaRepository<?, ?> repository : repositories) {
             assertThat(((Advised) repository).getTargetSource().getTarget()).isInstanceOf(TenantAwareRepository.class);
         }
