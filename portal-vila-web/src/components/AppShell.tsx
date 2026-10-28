@@ -1,9 +1,27 @@
 import { useQuery } from '@tanstack/react-query';
-import { Building2, Droplets, ExternalLink, Home, Inbox, LayoutDashboard, LogOut, Menu, Monitor, Moon, Receipt, Settings, Sun, X, type LucideIcon } from 'lucide-react';
+import {
+  Building2,
+  Droplets,
+  ExternalLink,
+  HandCoins,
+  Home,
+  Inbox,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Monitor,
+  Moon,
+  Receipt,
+  Settings,
+  Sun,
+  Truck,
+  X,
+  type LucideIcon
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import logo from '@/logo.png';
-import { administersCondominium, api, RESIDENTS_APP_URL, type Session } from '@/lib/api';
+import { administersCondominium, api, managesCondominium, RESIDENTS_APP_URL, type Session } from '@/lib/api';
 import { useAuth, useSession } from '@/lib/auth';
 import { useTheme, type ThemeChoice } from '@/lib/theme';
 import { cn, initials } from '@/lib/utils';
@@ -22,6 +40,22 @@ function sectionsFor(me: Session): { title: string; items: Item[] }[] {
         { to: '/condominio/cobrancas', label: 'Cobranças', icon: Receipt },
         { to: '/condominio/consumo', label: 'Água e gás', icon: Droplets },
         { to: '/condominio/configuracoes', label: 'Configurações', icon: Settings }
+      ]
+    });
+    sections.push({
+      title: 'Contas',
+      items: [
+        { to: '/condominio/contas', label: 'Contas a pagar', icon: HandCoins },
+        { to: '/condominio/fornecedores', label: 'Fornecedores', icon: Truck }
+      ]
+    });
+  } else if (managesCondominium(me)) {
+    // The síndico: the bills and who they are paid to.
+    sections.push({
+      title: 'Meu condomínio',
+      items: [
+        { to: '/condominio/contas', label: 'Contas a pagar', icon: HandCoins },
+        { to: '/condominio/fornecedores', label: 'Fornecedores', icon: Truck }
       ]
     });
   }
@@ -62,7 +96,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">Portal da Vila</p>
           <p className="truncate text-xs text-sidebar-muted">
-            {administersCondominium(me) ? me.condominium!.name : 'Painel da plataforma'}
+            {managesCondominium(me) ? me.condominium!.name : 'Painel da plataforma'}
           </p>
         </div>
       </div>
@@ -102,7 +136,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       <div className="border-t border-white/10 p-4">
-        {administersCondominium(me) && (
+        {managesCondominium(me) && (
           <a
             href={RESIDENTS_APP_URL}
             target="_blank"

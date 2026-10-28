@@ -15,6 +15,15 @@ interface HouseRepository extends JpaRepository<House, Long> {
     long countByActiveTrue();
 }
 
+interface SupplierRepository extends JpaRepository<Supplier, Long> {
+    List<Supplier> findAllByOrderByNameAsc();
+}
+
+interface PayableRepository extends JpaRepository<Payable, Long> {
+    List<Payable> findAllByOrderByDueDateAscIdAsc();
+    List<Payable> findByGroupKeyAndStatus(String groupKey, String status);
+}
+
 interface MeterReadingRepository extends JpaRepository<MeterReading, Long> {
     List<MeterReading> findByKindAndReferenceMonth(String kind, String referenceMonth);
     Optional<MeterReading> findByHouseIdAndKindAndReferenceMonth(Long houseId, String kind, String referenceMonth);

@@ -139,7 +139,8 @@ class SessionController {
         SessionCondominium condominium = condominiums.findById(user.condominiumId)
             .map(found -> new SessionCondominium(found.id, found.name, found.slug, found.status, credentials.connected(found.id)))
             .orElse(null);
-        return new SessionResponse(user.name, user.email, user.role, user.residentId, platformAdmins.includes(user.email), condominium);
+        return new SessionResponse(user.name, user.email, user.role, user.residentId, platformAdmins.includes(user.email), condominium,
+            currentUser.canPay());
     }
 }
 

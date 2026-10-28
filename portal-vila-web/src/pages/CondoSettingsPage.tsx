@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, BellRing, Landmark, PieChart, QrCode, Save, Scale, Settings2 } from 'lucide-react';
+import { AlertTriangle, BellRing, HandCoins, Landmark, PieChart, QrCode, Save, Scale, Settings2 } from 'lucide-react';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { PixConnection } from '@/components/PixConnection';
@@ -109,6 +109,12 @@ function SettingsForm({ settings }: { settings: CondominiumSettings }) {
     .map(({ unit, value }) => ({ houseId: unit.houseId, fraction: value }));
   const badFraction = fractionValues.find(({ value }) => value != null && (Number.isNaN(value) || value < 0));
 
+  const [sindicoCanPay, setSindicoCanPay] = useState(settings.sindicoCanPay ?? false);
+  const [approvalAbove, setApprovalAbove] = useState(moneyText(settings.approvalAbove));
+  const approvalValue = parseMoney(approvalAbove);
+  const paymentRulesChanged =
+    sindicoCanPay !== settings.sindicoCanPay || (approvalValue ?? null) !== (settings.approvalAbove == null ? null : Number(settings.approvalAbove));
+
   const monthlyValue = parseMoney(monthly);
   const ruleValue = parseMoney(rule);
   const fineValue = parsePercent(fine);
@@ -123,7 +129,8 @@ function SettingsForm({ settings }: { settings: CondominiumSettings }) {
     fine: Number.isNaN(fineValue) || fineValue < 0 || fineValue > 2 ? 'De 0% a 2%: o máximo que a lei permite ao condomínio.' : null,
     interest: Number.isNaN(interestValue) || interestValue < 0 || interestValue > 10 ? 'De 0% a 10% ao mês.' : null,
     title: title.trim().length < 3 || title.trim().length > 60 ? 'De 3 a 60 letras.' : null,
-    reserve: Number.isNaN(reserveValue) || reserveValue < 0 || reserveValue > 30 ? 'De 0% a 30% da taxa.' : null
+    reserve: Number.isNaN(reserveValue) || reserveValue < 0 || reserveValue > 30 ? 'De 0% a 30% da taxa.' : null,
+    approval: approvalValue !== null && (Number.isNaN(approvalValue) || approvalValue < 0) ? 'Informe um valor, ou deixe em branco.' : null
   };
   const valid = Object.values(errors).every((error) => !error);
   const billingChanged =
@@ -143,6 +150,7 @@ function SettingsForm({ settings }: { settings: CondominiumSettings }) {
       await api.updateSettings({ villageName: name.trim(), monthlyAmount, paymentDueDay: Number(dueDay) });
       if ((ruleValue ?? null) !== (settings.budgetRequiredAbove ?? null)) await api.updateBudgetRule(ruleValue);
       if (fractionUpdates.length > 0) await api.updateFractions(fractionUpdates);
+      if (paymentRulesChanged) await api.updatePaymentRules({ sindicoCanPay, approvalAbove: approvalValue });
       if (billingChanged)
         await api.updateBillingRules({
           billingType,
@@ -324,6 +332,40 @@ function SettingsForm({ settings }: { settings: CondominiumSettings }) {
           )}
         </Section>
       )}
+
+      <Section icon={HandCoins} title="Contas a pagar" description="Quem lança, aprova e paga as contas do condomínio, e quando uma segunda pessoa precisa aprovar.">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p id="sindico-paga-label" className="text-sm font-medium text-ink">
+              O síndico também lança, aprova e paga contas
+            </p>
+            <p className="mt-0.5 text-xs text-muted">
+              A administração sempre pode. Ligado, o síndico faz o mesmo pelo painel e pelo celular, e tudo fica registrado com o nome de quem fez.
+            </p>
+          </div>
+          <Toggle labelledBy="sindico-paga-label" checked={sindicoCanPay} onChange={setSindicoCanPay} />
+        </div>
+        <Field
+          label="Segunda aprovação acima de"
+          htmlFor="aprovacao-acima"
+          error={errors.approval}
+          hint={
+            approvalValue
+              ? `Contas acima de ${formatMoney(approvalValue)} esperam a aprovação de outra pessoa (nunca de quem lançou).`
+              : 'Em branco: quem lança já aprova.'
+          }
+        >
+          <div className="relative max-w-60">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">R$</span>
+            <Input id="aprovacao-acima" inputMode="decimal" className="pl-9 tabular-nums" placeholder="1.000,00" value={approvalAbove} onChange={(e) => setApprovalAbove(e.target.value)} />
+          </div>
+        </Field>
+        {approvalValue != null && approvalValue > 0 && !sindicoCanPay && (
+          <p className="rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
+            Com só a administração pagando, quem aprova a conta da administração? Ligue o síndico, ou tenha outra conta de administração.
+          </p>
+        )}
+      </Section>
 
       <Section icon={BellRing} title="Lembretes" description="Avisos no celular dos moradores, pelo aplicativo, enquanto a cobrança não é paga.">
         <div className="flex items-start justify-between gap-4">

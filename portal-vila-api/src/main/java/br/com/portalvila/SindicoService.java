@@ -7,7 +7,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * One resident can be the síndico. Besides voting as a house, the síndico manages budgets and the
- * services they are linked to, like the admin. Money (Pix, expenses, finishing a service) stays with the admin.
+ * services they are linked to, like the admin, and follows the bills; recording, approving and paying them only when
+ * the condominium allows (Settings.sindicoCanPay). The rest of the money (charges, expenses, finishing a service) stays
+ * with the admin.
  */
 @Service
 class SindicoService {
