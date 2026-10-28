@@ -353,7 +353,7 @@ class WebhookController {
     @GetMapping("/admin/webhook-events")
     @PreAuthorize("hasRole('ADMIN')")
     List<WebhookEvent> eventLog() {
-        return events.findTop100ByOrderByCreatedAtDesc();
+        return events.findTop100ByCondominiumIdOrderByCreatedAtDesc(TenantContext.current());
     }
 
     @PostMapping("/admin/direct-receipts/reprocess")

@@ -76,7 +76,8 @@ interface PixChargeRepository extends JpaRepository<PixCharge, Long> {
 interface WebhookEventRepository extends JpaRepository<WebhookEvent, Long> {
     boolean existsByGatewayAndEventId(String gateway, String eventId);
     boolean existsByGatewayAndGatewayPaymentIdAndEventType(String gateway, String gatewayPaymentId, String eventType);
-    List<WebhookEvent> findTop100ByOrderByCreatedAtDesc();
+    /** Not filtered by condominium (notices arrive before anyone knows whose they are): lists name it. */
+    List<WebhookEvent> findTop100ByCondominiumIdOrderByCreatedAtDesc(Long condominiumId);
 }
 
 interface ExpenseRepository extends JpaRepository<Expense, Long> {
