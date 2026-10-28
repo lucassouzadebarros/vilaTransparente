@@ -24,7 +24,18 @@ class BillingRulesMigrationTest {
             statement.execute("insert into settings(village_name, monthly_amount, payment_due_day, gateway_provider, condominium_id) "
                 + "select 'Jardim', 300, 5, 'ASAAS', id from condominiums where slug = 'jardim'");
         }
-        TestMigrations.run(URL, 28, 29);
+        TestMigrations.run(URL, 28, 30);
+    }
+
+    @Test
+    void v30KeepsEveryoneOnTheSameValuePerUnit() throws SQLException {
+        try (Connection connection = DriverManager.getConnection(URL, "sa", ""); Statement statement = connection.createStatement()) {
+            ResultSet rows = statement.executeQuery("select charge_mode, monthly_total from settings");
+            while (rows.next()) {
+                assertThat(rows.getString("charge_mode")).isEqualTo("FIXED");
+                assertThat(rows.getBigDecimal("monthly_total")).isNull();
+            }
+        }
     }
 
     @Test

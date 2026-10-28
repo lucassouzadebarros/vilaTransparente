@@ -62,6 +62,20 @@ public class Settings {
     @Column(nullable = false)
     public Integer reminderDaysBefore = 3;
 
+    /** FIXED: the same value for every unit (monthlyAmount). FRACTION: monthlyTotal divided by each unit's ideal fraction. */
+    @Column(nullable = false)
+    public String chargeMode = MODE_FIXED;
+
+    /** What the whole condominium costs in a month, divided among the units in FRACTION mode. */
+    public BigDecimal monthlyTotal;
+
+    /** Price of a cubic meter of water and of gas, for the charges by meter reading. */
+    public BigDecimal waterPrice;
+    public BigDecimal gasPrice;
+
+    static final String MODE_FIXED = "FIXED";
+    static final String MODE_FRACTION = "FRACTION";
+
     static final String BILLING_PIX = "PIX";
     static final String BILLING_BOLETO = "BOLETO";
     static final String DEFAULT_CHARGE_TITLE = "Taxa condominial";

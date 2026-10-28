@@ -377,7 +377,11 @@ record SettingsResponse(
     String chargeTitle,
     BigDecimal reserveFundPercent,
     boolean remindersEnabled,
-    Integer reminderDaysBefore
+    Integer reminderDaysBefore,
+    String chargeMode,
+    BigDecimal monthlyTotal,
+    BigDecimal waterPrice,
+    BigDecimal gasPrice
 ) {
     static SettingsResponse from(Settings settings) {
         return new SettingsResponse(
@@ -393,7 +397,11 @@ record SettingsResponse(
             settings.chargeTitleOrDefault(),
             settings.reserveFundPercent,
             settings.remindersEnabled,
-            settings.reminderDaysBefore
+            settings.reminderDaysBefore,
+            settings.chargeMode,
+            settings.monthlyTotal,
+            settings.waterPrice,
+            settings.gasPrice
         );
     }
 }
@@ -401,7 +409,7 @@ record SettingsResponse(
 record BudgetRuleRequest(BigDecimal budgetRequiredAbove) {
 }
 
-/** The last three may be left out: they keep what they had. */
+/** From reserveFundPercent on, a field may be left out: it keeps what it had. */
 record BillingRulesRequest(
     String billingType,
     BigDecimal finePercent,
@@ -409,8 +417,51 @@ record BillingRulesRequest(
     String chargeTitle,
     BigDecimal reserveFundPercent,
     Boolean remindersEnabled,
-    Integer reminderDaysBefore
+    Integer reminderDaysBefore,
+    String chargeMode,
+    BigDecimal monthlyTotal
 ) {
+}
+
+/** The units' ideal fractions and what each one pays of the month's total. share: percent of the condominium. */
+record FractionsView(BigDecimal monthlyTotal, BigDecimal sum, List<UnitFraction> units) {
+}
+
+record UnitFraction(Long houseId, String houseLabel, boolean hasResident, BigDecimal fraction, BigDecimal share, BigDecimal amount) {
+}
+
+record FractionUpdate(Long houseId, BigDecimal fraction) {
+}
+
+/** One month of water or gas: each unit's meter, the reading before, what it used and what it costs. */
+record ReadingsView(String month, String kind, BigDecimal unitPrice, BigDecimal totalConsumption, BigDecimal totalAmount, List<ReadingRow> rows) {
+}
+
+/**
+ * previousFromHistory: the reading before came from last month's record (not typed now). chargeStatus: the charge it
+ * became, or empty while it can still be corrected.
+ */
+record ReadingRow(
+    Long houseId,
+    String houseLabel,
+    String residentName,
+    BigDecimal previousReading,
+    boolean previousFromHistory,
+    BigDecimal reading,
+    BigDecimal consumption,
+    BigDecimal amount,
+    Long contributionId,
+    String chargeStatus
+) {
+}
+
+record ReadingInput(Long houseId, BigDecimal previousReading, BigDecimal reading) {
+}
+
+record SaveReadingsRequest(BigDecimal unitPrice, List<ReadingInput> readings) {
+}
+
+record ChargeReadingsRequest(@NotNull LocalDate dueDate) {
 }
 
 /** A one-off charge: for one unit (houseId) or every unit with a resident (houseId empty). */
@@ -421,6 +472,8 @@ record ExtraChargeRequest(Long houseId, @NotBlank String description, @Positive 
 record BillingMonth(
     String month,
     boolean pixConnected,
+    String chargeMode,
+    BigDecimal monthlyTotal,
     BigDecimal monthlyAmount,
     LocalDate dueDate,
     int unitsToCharge,
@@ -457,7 +510,8 @@ record BillingRow(
 ) {
 }
 
-record GenerateChargesRequest(@NotBlank String month, @Positive BigDecimal amount, LocalDate dueDate) {
+/** amount: per unit, when every unit pays the same. total: the month's total, when it is divided by ideal fraction. */
+record GenerateChargesRequest(@NotBlank String month, @Positive BigDecimal amount, LocalDate dueDate, @Positive BigDecimal total) {
 }
 
 /** What a batch did, unit by unit: one unit failing (a resident without a full CPF, say) does not stop the others. */

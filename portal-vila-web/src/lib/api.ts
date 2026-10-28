@@ -72,12 +72,44 @@ export type CondominiumSettings = {
   reserveFundPercent: number;
   remindersEnabled: boolean;
   reminderDaysBefore: number;
+  /** FIXED: the same value for every unit. FRACTION: monthlyTotal divided by each unit's ideal fraction. */
+  chargeMode: ChargeMode;
+  monthlyTotal: number | null;
+  waterPrice: number | null;
+  gasPrice: number | null;
 };
+
+export type ChargeMode = 'FIXED' | 'FRACTION';
 
 export type BillingRules = Pick<
   CondominiumSettings,
-  'billingType' | 'finePercent' | 'interestPercent' | 'chargeTitle' | 'reserveFundPercent' | 'remindersEnabled' | 'reminderDaysBefore'
+  'billingType' | 'finePercent' | 'interestPercent' | 'chargeTitle' | 'reserveFundPercent' | 'remindersEnabled' | 'reminderDaysBefore' | 'chargeMode' | 'monthlyTotal'
 >;
+
+/** share: percent of the condominium; amount: what the unit pays of the month's total. */
+export type UnitFraction = { houseId: number; houseLabel: string; hasResident: boolean; fraction: number | null; share: number | null; amount: number | null };
+
+export type FractionsView = { monthlyTotal: number | null; sum: number; units: UnitFraction[] };
+
+export type MeterKind = 'WATER' | 'GAS';
+
+/** previousFromHistory: the reading before is last month's (fixed). chargeStatus: empty while it can still be corrected. */
+export type ReadingRow = {
+  houseId: number;
+  houseLabel: string;
+  residentName: string | null;
+  previousReading: number | null;
+  previousFromHistory: boolean;
+  reading: number | null;
+  consumption: number | null;
+  amount: number | null;
+  contributionId: number | null;
+  chargeStatus: string | null;
+};
+
+export type ReadingsView = { month: string; kind: MeterKind; unitPrice: number | null; totalConsumption: number; totalAmount: number; rows: ReadingRow[] };
+
+export type ReadingInput = { houseId: number; previousReading: number | null; reading: number | null };
 
 /** NOT_CHARGED: a resident, no charge yet this month. NO_RESIDENT: nobody to charge. */
 export type BillingStatus = 'PAID' | 'PENDING' | 'OVERDUE' | 'CANCELLED' | 'NOT_CHARGED' | 'NO_RESIDENT';
@@ -105,6 +137,8 @@ export type BillingRow = {
 export type BillingMonth = {
   month: string;
   pixConnected: boolean;
+  chargeMode: ChargeMode;
+  monthlyTotal: number | null;
   monthlyAmount: number;
   dueDate: string;
   unitsToCharge: number;
@@ -303,8 +337,16 @@ export const api = {
     request<CondominiumSettings>('/settings/budget-rule', { method: 'PUT', body: JSON.stringify({ budgetRequiredAbove }) }),
   updateBillingRules: (rules: BillingRules) => request<CondominiumSettings>('/settings/billing', { method: 'PUT', body: JSON.stringify(rules) }),
   billing: (month: string) => request<BillingMonth>(`/admin/billing?month=${month}`),
-  generateCharges: (input: { month: string; amount: number; dueDate: string }) =>
+  generateCharges: (input: { month: string; amount?: number; total?: number; dueDate: string }) =>
     request<GenerateResult>('/admin/billing/generate', { method: 'POST', body: JSON.stringify(input) }),
+  fractions: () => request<FractionsView>('/admin/billing/fractions'),
+  updateFractions: (updates: { houseId: number; fraction: number | null }[]) =>
+    request<FractionsView>('/admin/billing/fractions', { method: 'PUT', body: JSON.stringify(updates) }),
+  readings: (month: string, kind: MeterKind) => request<ReadingsView>(`/admin/readings?month=${month}&kind=${kind}`),
+  saveReadings: (month: string, kind: MeterKind, unitPrice: number, readings: ReadingInput[]) =>
+    request<ReadingsView>(`/admin/readings?month=${month}&kind=${kind}`, { method: 'PUT', body: JSON.stringify({ unitPrice, readings }) }),
+  chargeReadings: (month: string, kind: MeterKind, dueDate: string) =>
+    request<GenerateResult>(`/admin/readings/charge?month=${month}&kind=${kind}`, { method: 'POST', body: JSON.stringify({ dueDate }) }),
   extraCharge: (input: ExtraCharge) => request<GenerateResult>('/admin/billing/extra', { method: 'POST', body: JSON.stringify(input) }),
   cancelCharge: (chargeId: number, reason: string) =>
     request<unknown>(`/admin/pix/charges/${chargeId}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),

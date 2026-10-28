@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, BellRing, Landmark, QrCode, Save, Scale, Settings2 } from 'lucide-react';
+import { AlertTriangle, BellRing, Landmark, PieChart, QrCode, Save, Scale, Settings2 } from 'lucide-react';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { PixConnection } from '@/components/PixConnection';
@@ -7,7 +7,7 @@ import { FormAlert } from '@/components/PublicLayout';
 import { Button, Card, Input, Skeleton, Spinner } from '@/components/ui';
 import { Field, PageHeader, Segmented } from '@/components/ui/page';
 import { useToast } from '@/components/ui/toast';
-import { api, type BillingType, type CondominiumSettings } from '@/lib/api';
+import { api, type BillingType, type ChargeMode, type CondominiumSettings } from '@/lib/api';
 import { useAuth, useSession } from '@/lib/auth';
 import { cn, currentMonth, formatMoney, moneyText, parseMoney, useDocumentTitle } from '@/lib/utils';
 
@@ -15,6 +15,16 @@ const billingTypes: { value: BillingType; label: string }[] = [
   { value: 'PIX', label: 'Pix' },
   { value: 'BOLETO', label: 'Boleto com Pix' }
 ];
+
+const chargeModes: { value: ChargeMode; label: string }[] = [
+  { value: 'FIXED', label: 'Valor igual por unidade' },
+  { value: 'FRACTION', label: 'Rateio por fração ideal' }
+];
+
+/** 0.0625 -> "0,0625"; empty -> "". */
+function fractionText(value: number | null) {
+  return value == null ? '' : Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 6, useGrouping: false });
+}
 
 /** A percentage field: "2", "2,5" or "1.5" -> number; empty -> 0. */
 function parsePercent(raw: string) {
@@ -59,7 +69,8 @@ function Section({ icon: Icon, title, description, children }: { icon: typeof Se
         <h2 className="mt-3 text-base font-semibold">{title}</h2>
         <p className="mt-1 text-sm text-muted">{description}</p>
       </div>
-      <div className="space-y-4">{children}</div>
+      {/* min-w-0: a wide table inside scrolls on its own instead of widening the page on a phone. */}
+      <div className="min-w-0 space-y-4">{children}</div>
     </Card>
   );
 }
@@ -79,6 +90,24 @@ function SettingsForm({ settings }: { settings: CondominiumSettings }) {
   const [reserve, setReserve] = useState(moneyText(settings.reserveFundPercent ?? 0));
   const [reminders, setReminders] = useState(settings.remindersEnabled ?? false);
   const [daysBefore, setDaysBefore] = useState(String(settings.reminderDaysBefore ?? 3));
+  const [mode, setMode] = useState<ChargeMode>(settings.chargeMode ?? 'FIXED');
+  const [total, setTotal] = useState(moneyText(settings.monthlyTotal));
+  const fractions = useQuery({ queryKey: ['condo', 'fractions'], queryFn: api.fractions });
+  const [fractionInputs, setFractionInputs] = useState<Record<number, string> | null>(null);
+
+  useEffect(() => {
+    if (fractions.data && fractionInputs === null) {
+      setFractionInputs(Object.fromEntries(fractions.data.units.map((unit) => [unit.houseId, fractionText(unit.fraction)])));
+    }
+  }, [fractions.data, fractionInputs]);
+
+  const totalValue = parseMoney(total);
+  const fractionValues = (fractions.data?.units ?? []).map((unit) => ({ unit, value: parseMoney(fractionInputs?.[unit.houseId] ?? '') }));
+  const fractionSum = fractionValues.reduce((sum, { value }) => (value != null && value > 0 ? sum + value : sum), 0);
+  const fractionUpdates = fractionValues
+    .filter(({ unit, value }) => (value ?? null) !== (unit.fraction == null ? null : Number(unit.fraction)))
+    .map(({ unit, value }) => ({ houseId: unit.houseId, fraction: value }));
+  const badFraction = fractionValues.find(({ value }) => value != null && (Number.isNaN(value) || value < 0));
 
   const monthlyValue = parseMoney(monthly);
   const ruleValue = parseMoney(rule);
@@ -87,7 +116,9 @@ function SettingsForm({ settings }: { settings: CondominiumSettings }) {
   const reserveValue = parsePercent(reserve);
   const errors = {
     name: name.trim().length < 3 ? 'Pelo menos 3 letras.' : null,
-    monthly: monthlyValue == null || Number.isNaN(monthlyValue) || monthlyValue <= 0 ? 'Informe um valor maior que zero.' : null,
+    monthly: mode === 'FIXED' && (monthlyValue == null || Number.isNaN(monthlyValue) || monthlyValue <= 0) ? 'Informe um valor maior que zero.' : null,
+    total: mode === 'FRACTION' && (totalValue == null || Number.isNaN(totalValue) || totalValue <= 0) ? 'Informe o total do mês a dividir.' : null,
+    fractions: badFraction ? `${badFraction.unit.houseLabel}: informe um número positivo, ou deixe em branco.` : null,
     rule: ruleValue !== null && (Number.isNaN(ruleValue) || ruleValue < 0) ? 'Informe um valor, ou deixe em branco.' : null,
     fine: Number.isNaN(fineValue) || fineValue < 0 || fineValue > 2 ? 'De 0% a 2%: o máximo que a lei permite ao condomínio.' : null,
     interest: Number.isNaN(interestValue) || interestValue < 0 || interestValue > 10 ? 'De 0% a 10% ao mês.' : null,
@@ -102,12 +133,16 @@ function SettingsForm({ settings }: { settings: CondominiumSettings }) {
     title.trim() !== settings.chargeTitle ||
     reserveValue !== Number(settings.reserveFundPercent) ||
     reminders !== settings.remindersEnabled ||
-    Number(daysBefore) !== settings.reminderDaysBefore;
+    Number(daysBefore) !== settings.reminderDaysBefore ||
+    mode !== settings.chargeMode ||
+    (mode === 'FRACTION' && totalValue !== (settings.monthlyTotal == null ? null : Number(settings.monthlyTotal)));
 
   const save = useMutation({
     mutationFn: async () => {
-      await api.updateSettings({ villageName: name.trim(), monthlyAmount: monthlyValue as number, paymentDueDay: Number(dueDay) });
+      const monthlyAmount = monthlyValue != null && !Number.isNaN(monthlyValue) && monthlyValue > 0 ? monthlyValue : settings.monthlyAmount;
+      await api.updateSettings({ villageName: name.trim(), monthlyAmount, paymentDueDay: Number(dueDay) });
       if ((ruleValue ?? null) !== (settings.budgetRequiredAbove ?? null)) await api.updateBudgetRule(ruleValue);
+      if (fractionUpdates.length > 0) await api.updateFractions(fractionUpdates);
       if (billingChanged)
         await api.updateBillingRules({
           billingType,
@@ -116,10 +151,13 @@ function SettingsForm({ settings }: { settings: CondominiumSettings }) {
           chargeTitle: title.trim(),
           reserveFundPercent: reserveValue,
           remindersEnabled: reminders,
-          reminderDaysBefore: Number(daysBefore)
+          reminderDaysBefore: Number(daysBefore),
+          chargeMode: mode,
+          monthlyTotal: mode === 'FRACTION' ? totalValue : settings.monthlyTotal
         });
     },
     onSuccess: () => {
+      // The fields already hold what was saved; filling them again from the cache would bring back the old values.
       queryClient.invalidateQueries({ queryKey: ['condo'] });
       refresh();
       notify('ok', 'Configurações salvas.');
@@ -142,13 +180,32 @@ function SettingsForm({ settings }: { settings: CondominiumSettings }) {
       </Section>
 
       <Section icon={QrCode} title="Cobrança" description="O valor de cada unidade, quando vence, como paga e o que acontece com o atraso.">
+        <div className="space-y-1.5">
+          <p className="text-sm font-medium text-ink">Como dividir</p>
+          <Segmented label="Como dividir" value={mode} options={chargeModes} onChange={setMode} />
+          <p className="text-xs text-muted">
+            {mode === 'FIXED'
+              ? 'Todas as unidades pagam o mesmo valor.'
+              : 'O total do mês é dividido pela fração ideal de cada unidade (quadro “Frações ideais”, logo abaixo).'}
+          </p>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Valor por unidade" htmlFor="valor" error={errors.monthly} hint={monthlyValue && !errors.monthly ? formatMoney(monthlyValue) : undefined}>
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">R$</span>
-              <Input id="valor" inputMode="decimal" className="pl-9 tabular-nums" value={monthly} onChange={(e) => setMonthly(e.target.value)} />
-            </div>
-          </Field>
+          {mode === 'FIXED' ? (
+            <Field label="Valor por unidade" htmlFor="valor" error={errors.monthly} hint={monthlyValue && !errors.monthly ? formatMoney(monthlyValue) : undefined}>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">R$</span>
+                <Input id="valor" inputMode="decimal" className="pl-9 tabular-nums" value={monthly} onChange={(e) => setMonthly(e.target.value)} />
+              </div>
+            </Field>
+          ) : (
+            <Field label="Total do mês" htmlFor="total" error={errors.total} hint={totalValue && !errors.total ? `${formatMoney(totalValue)} divididos entre as unidades` : undefined}>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">R$</span>
+                <Input id="total" inputMode="decimal" className="pl-9 tabular-nums" value={total} onChange={(e) => setTotal(e.target.value)} />
+              </div>
+            </Field>
+          )}
           <Field label="Dia do vencimento" htmlFor="vencimento" hint="De 1 a 28, para valer em todos os meses.">
             <select
               id="vencimento"
@@ -212,6 +269,61 @@ function SettingsForm({ settings }: { settings: CondominiumSettings }) {
           Forma, multa, juros, fundo e nome valem para as cobranças geradas daqui em diante. As que já foram emitidas continuam como estão.
         </p>
       </Section>
+
+      {mode === 'FRACTION' && (
+        <Section icon={PieChart} title="Frações ideais" description="A parte de cada unidade no condomínio, como está na convenção.">
+          <p className="text-xs text-muted">
+            Use a fração da convenção (0,0625), o percentual (6,25) ou a área em m² (85): o sistema divide o total na proporção. Unidade em branco não
+            entra no rateio.
+          </p>
+          {errors.fractions && <FormAlert>{errors.fractions}</FormAlert>}
+          {fractions.isPending || fractionInputs === null ? (
+            <Skeleton className="h-40 rounded-xl" />
+          ) : (
+            <div className="relative overflow-x-auto rounded-xl border border-line">
+              <table className="w-full min-w-[460px] text-sm">
+                <caption className="sr-only">Fração ideal de cada unidade</caption>
+                <thead className="bg-surface-alt/60 text-left text-xs uppercase tracking-wide text-muted">
+                  <tr>
+                    <th scope="col" className="px-4 py-2.5 font-medium">Unidade</th>
+                    <th scope="col" className="px-4 py-2.5 font-medium">Fração ideal</th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-medium">Parte</th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-medium">Paga por mês</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {fractionValues.map(({ unit, value }) => {
+                    const share = value != null && value > 0 && fractionSum > 0 ? value / fractionSum : null;
+                    return (
+                      <tr key={unit.houseId}>
+                        <td className="px-4 py-2 font-medium">{unit.houseLabel}</td>
+                        <td className="px-4 py-2">
+                          <label htmlFor={`fracao-${unit.houseId}`} className="sr-only">
+                            Fração ideal de {unit.houseLabel}
+                          </label>
+                          <Input
+                            id={`fracao-${unit.houseId}`}
+                            inputMode="decimal"
+                            className="h-9 max-w-36 tabular-nums"
+                            value={fractionInputs[unit.houseId] ?? ''}
+                            onChange={(e) => setFractionInputs({ ...fractionInputs, [unit.houseId]: e.target.value })}
+                          />
+                        </td>
+                        <td className="px-4 py-2 text-right tabular-nums text-muted">
+                          {share == null ? '—' : `${(share * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`}
+                        </td>
+                        <td className="px-4 py-2 text-right tabular-nums">
+                          {share == null || !totalValue || Number.isNaN(totalValue) ? '—' : formatMoney(Math.round(totalValue * share * 100) / 100)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Section>
+      )}
 
       <Section icon={BellRing} title="Lembretes" description="Avisos no celular dos moradores, pelo aplicativo, enquanto a cobrança não é paga.">
         <div className="flex items-start justify-between gap-4">
