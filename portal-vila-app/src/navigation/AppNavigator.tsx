@@ -22,6 +22,7 @@ import { ExpensesScreen } from '../screens/ExpensesScreen';
 import { FinishServiceScreen } from '../screens/FinishServiceScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { MoreScreen } from '../screens/MoreScreen';
+import { PayablesScreen } from '../screens/PayablesScreen';
 import { PixPaymentScreen } from '../screens/PixPaymentScreen';
 import { ProblemDetailsScreen } from '../screens/ProblemDetailsScreen';
 import { ProblemReportsScreen } from '../screens/ProblemReportsScreen';
@@ -210,6 +211,7 @@ function PortalTabs({ wide }: { wide: boolean }) {
       <Tabs.Screen name="Contributions" component={ContributionsScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="PixPayment" component={PixPaymentScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="Expenses" component={ExpensesScreen} options={hiddenTabOptions} />
+      <Tabs.Screen name="Payables" component={PayablesScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="Budgets" component={BudgetsScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="BudgetForm" component={BudgetFormScreen} options={hiddenTabOptions} />
       <Tabs.Screen name="BudgetDetails" component={BudgetDetailsScreen} options={hiddenTabOptions} />

@@ -79,6 +79,9 @@ function read(config: InternalAxiosRequestConfig, path: string): unknown {
     case '/residents/invites': return data.invites();
     case '/admin/sindico': return data.sindico();
     case '/settings': return data.settings();
+    case '/session': return { role: demoRole(), canPay: demoRole() === 'ADMIN' };
+    case '/payables': return data.payables();
+    case '/suppliers': return data.suppliers();
     case '/services': return data.services().filter((service) => !params.status || service.status === params.status);
     case '/budgets': return data.budgets();
     case '/budgets/votes':
@@ -170,6 +173,14 @@ function write(config: InternalAxiosRequestConfig, path: string, method: string)
   }
   if ((id = idIn(path, /^\/services\/(\d+)\/finish$/)) != null) {
     return { ...(data.services().find((item) => item.id === id) ?? {}), status: 'FINALIZADO' };
+  }
+  if ((id = idIn(path, /^\/payables\/(\d+)\/(approve|pay|cancel)$/)) != null) {
+    const action = path.split('/').pop();
+    const row = data.payables().find((item) => item.id === id);
+    return { ...(row ?? {}), status: action === 'approve' ? 'APPROVED' : action === 'pay' ? 'PAID' : 'CANCELLED', canApprove: false };
+  }
+  if (path === '/payables') {
+    return [{ ...body, id: nextId(), status: 'APPROVED', overdue: false, canApprove: false }];
   }
   if ((id = idIn(path, /^\/admin\/pix\/charges\/(\d+)\/cancel$/)) != null) {
     return { ...(data.allPixCharges().find((item) => item.id === id) ?? {}), status: 'CANCELLED' };

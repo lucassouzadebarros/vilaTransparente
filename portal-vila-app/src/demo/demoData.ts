@@ -9,6 +9,7 @@ import type {
   Invite,
   Movement,
   MonthlyReport,
+  Payable,
   PixCharge,
   PortalDocument,
   ProblemReport,
@@ -17,6 +18,7 @@ import type {
   Resident,
   ServiceOrder,
   Sindico,
+  Supplier,
   WebhookEvent
 } from '../types';
 
@@ -499,5 +501,31 @@ export function webhookEvents(): WebhookEvent[] {
   return [
     { id: 2, eventType: 'PAYMENT_RECEIVED', gatewayPaymentId: 'pay_demo_1', payloadJson: '{"demo":true,"event":"PAYMENT_RECEIVED"}', processed: true, processedAt: offsetStamp(-3), createdAt: offsetStamp(-3) },
     { id: 1, eventType: 'PAYMENT_CREATED', gatewayPaymentId: 'pay_demo_2', payloadJson: '{"demo":true,"event":"PAYMENT_CREATED"}', processed: true, processedAt: offsetStamp(-10), createdAt: offsetStamp(-10) }
+  ];
+}
+
+// ---- Bills to pay -----------------------------------------------------------------------------------------------
+
+export function suppliers(): Supplier[] {
+  return [
+    { id: 1, name: 'Hidro Serviços (exemplo)', document: '12345678000190', pixKey: '12345678000190', pixKeyType: 'CNPJ', active: true },
+    { id: 2, name: 'Limpa Bem (exemplo)', pixKey: 'contato@limpabem.exemplo', pixKeyType: 'EMAIL', active: true }
+  ];
+}
+
+export function payables(): Payable[] {
+  return [
+    {
+      id: 1, description: "Limpeza da caixa d'água", category: 'Manutenção', amount: 800, dueDate: offsetDay(5), status: 'PENDING_APPROVAL', overdue: false,
+      supplierId: 1, supplierName: 'Hidro Serviços (exemplo)', createdBy: 'Administração', canApprove: true
+    },
+    {
+      id: 2, description: 'Limpeza das áreas comuns', category: 'Limpeza', amount: 450, dueDate: offsetDay(2), status: 'APPROVED', overdue: false,
+      supplierId: 2, supplierName: 'Limpa Bem (exemplo)', recurrence: 'MONTHLY', createdBy: 'Administração', approvedBy: 'Administração', canApprove: false
+    },
+    {
+      id: 3, description: 'Conta de energia', category: 'Energia', amount: 312.4, dueDate: offsetDay(-12), status: 'PAID', overdue: false,
+      createdBy: 'Administração', approvedBy: 'Administração', paidBy: 'Administração', paidAt: offsetDay(-13), paymentMethod: 'BOLETO', canApprove: false
+    }
   ];
 }

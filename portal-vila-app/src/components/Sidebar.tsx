@@ -5,6 +5,7 @@ import {
   ClipboardList,
   FileClock,
   FileText,
+  HandCoins,
   History,
   Home,
   KeyRound,
@@ -34,6 +35,8 @@ type Entry = {
   /** Screens that count as being "in" this entry, so it stays marked while you move around inside it. */
   match: string[];
   adminOnly?: boolean;
+  /** The administration and the síndico. */
+  managersOnly?: boolean;
 };
 
 type Section = { title?: string; entries: Entry[] };
@@ -59,6 +62,7 @@ const sections: Section[] = [
     entries: [
       { label: 'Contribuições', icon: ListChecks, route: 'Contributions', match: ['Contributions', 'PixPayment'] },
       { label: 'Despesas', icon: ReceiptText, route: 'Expenses', match: ['Expenses'] },
+      { label: 'Contas a pagar', icon: HandCoins, route: 'Payables', match: ['Payables'], managersOnly: true },
       { label: 'Prestação de contas', icon: BarChart3, route: 'Reports', match: ['Reports'] },
       { label: 'Cobranças Pix', icon: WalletCards, route: 'AdminPixCharges', match: ['AdminPixCharges'], adminOnly: true }
     ]
@@ -95,7 +99,7 @@ type Props = {
 
 /** The side menu of the wide (computer) layout: the same places as the bottom bar and the Menu, always in view. */
 export function Sidebar({ navigationRef, current }: Props) {
-  const { isAdmin, logout } = useAuth();
+  const { isAdmin, canManageBudgets, logout } = useAuth();
 
   function open(entry: Entry) {
     if (!navigationRef.isReady()) {
@@ -117,7 +121,7 @@ export function Sidebar({ navigationRef, current }: Props) {
       </View>
       <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
         {sections.map((section, index) => {
-          const entries = section.entries.filter((entry) => !entry.adminOnly || isAdmin);
+          const entries = section.entries.filter((entry) => (!entry.adminOnly || isAdmin) && (!entry.managersOnly || canManageBudgets));
           if (entries.length === 0) {
             return null;
           }

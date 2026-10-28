@@ -328,3 +328,54 @@ export type ProblemReportEvent = {
   message: string;
   createdAt: string;
 };
+
+/** Someone the condominium pays, with the Pix key the payments go to. */
+export type Supplier = {
+  id: number;
+  name: string;
+  document?: string | null;
+  pixKey?: string | null;
+  pixKeyType?: 'CPF' | 'CNPJ' | 'EMAIL' | 'PHONE' | 'EVP' | null;
+  active: boolean;
+};
+
+/** A bill of the condominium: waits for a second person above the limit, and once paid becomes an expense. */
+export type Payable = {
+  id: number;
+  description: string;
+  category?: string | null;
+  amount: number;
+  dueDate: string;
+  status: 'PENDING_APPROVAL' | 'APPROVED' | 'PAID' | 'CANCELLED';
+  overdue: boolean;
+  supplierId?: number | null;
+  supplierName?: string | null;
+  installment?: number | null;
+  installments?: number | null;
+  recurrence?: 'MONTHLY' | null;
+  documentId?: number | null;
+  exceptionReason?: string | null;
+  createdBy?: string | null;
+  approvedBy?: string | null;
+  paidBy?: string | null;
+  paidAt?: string | null;
+  paymentMethod?: string | null;
+  receiptDocumentId?: number | null;
+  cancelledBy?: string | null;
+  cancelReason?: string | null;
+  /** The signed-in person may approve it: may pay bills and did not record it. */
+  canApprove: boolean;
+};
+
+export type PayableInput = {
+  supplierId: number | null;
+  description: string;
+  category: string | null;
+  amount: number;
+  dueDate: string;
+  installments: number;
+  monthly: boolean;
+  documentId: number | null;
+  exceptionReason: string | null;
+  notes: string | null;
+};
