@@ -66,6 +66,20 @@ class PixTransfersTest {
     private static final AtomicInteger ids = new AtomicInteger();
     /** What the fake answers when asked about a transfer: its status, and the receipt once it is done. */
     private static final Map<String, String> statuses = new ConcurrentHashMap<>();
+    /** Transfers Asaas holds until someone types the account's token. */
+    private static final java.util.Set<String> unauthorized = ConcurrentHashMap.newKeySet();
+    private static final ObjectMapper READER = new ObjectMapper();
+    /** The "copia e cola" codes the fake knows, and what Asaas reads in each. */
+    private static final Map<String, String> codes = Map.of(
+        "CODIGO-MERCADO", "{\"payload\":\"CODIGO-MERCADO\",\"pixKey\":\"vendas@loja.exemplo\",\"value\":189.90,\"totalValue\":189.90,"
+            + "\"canBePaidWithDifferentValue\":false,\"expirationDate\":\"2030-10-30 11:00:00\",\"canBePaid\":true,"
+            + "\"receiver\":{\"name\":\"LOJA EXEMPLO LTDA\",\"tradingName\":\"Loja Exemplo\",\"cpfCnpj\":\"12.345.678/0001-90\",\"ispbName\":\"Banco Exemplo\"}}",
+        "CODIGO-LIVRE", "{\"payload\":\"CODIGO-LIVRE\",\"value\":0,\"canBePaidWithDifferentValue\":true,\"canBePaid\":true,"
+            + "\"receiver\":{\"name\":\"Feira do Bairro\",\"cpfCnpj\":\"***.456.789-**\",\"ispbName\":\"Banco Exemplo\"}}",
+        "CODIGO-VENCIDO", "{\"payload\":\"CODIGO-VENCIDO\",\"value\":30,\"canBePaid\":false,\"cannotBePaidReason\":\"QR Code expirado.\","
+            + "\"receiver\":{\"name\":\"Loja Antiga\"}}",
+        "CODIGO-RECUSA", "{\"payload\":\"CODIGO-RECUSA\",\"value\":444,\"canBePaid\":true,\"receiver\":{\"name\":\"Loja Sem Saldo\"}}"
+    );
 
     @BeforeAll
     static void fakeAsaas() throws IOException {
@@ -90,12 +104,33 @@ class PixTransfersTest {
                 }
                 String id = "tra_" + ids.incrementAndGet();
                 statuses.put(id, "PENDING");
-                answer(exchange, 200, "{\"id\":\"" + id + "\",\"status\":\"PENDING\",\"transferFee\":0}");
+                if (body.contains("\"value\":555")) {
+                    unauthorized.add(id); // this account asks for the token before the transfer goes
+                }
+                answer(exchange, 200, "{\"id\":\"" + id + "\",\"status\":\"PENDING\",\"transferFee\":0,\"authorized\":" + !unauthorized.contains(id) + "}");
             } else if (path.startsWith("/transfers/") && method.equals("GET")) {
                 String id = path.substring("/transfers/".length());
                 String status = statuses.getOrDefault(id, "PENDING");
                 String receipt = status.equals("DONE") ? ",\"transactionReceiptUrl\":\"https://www.asaas.com/comprovantes/" + id + "\",\"effectiveDate\":\"" + LocalDate.now() + "\"" : "";
                 String reason = status.equals("FAILED") ? ",\"failReason\":\"Chave Pix não encontrada\"" : "";
+                answer(exchange, 200, "{\"id\":\"" + id + "\",\"status\":\"" + status + "\",\"authorized\":" + !unauthorized.contains(id) + receipt + reason + "}");
+            } else if (path.equals("/pix/qrCodes/decode") && method.equals("POST")) {
+                String code = READER.readTree(body).path("payload").asText();
+                String read = codes.get(code);
+                answer(exchange, read == null ? 400 : 200, read == null ? "{\"errors\":[{\"description\":\"QR Code inválido.\"}]}" : read);
+            } else if (path.equals("/pix/qrCodes/pay") && method.equals("POST")) {
+                if (body.contains("CODIGO-RECUSA")) {
+                    answer(exchange, 400, "{\"errors\":[{\"description\":\"Saldo insuficiente para pagar o QR Code.\"}]}");
+                    return;
+                }
+                String id = "pix_" + ids.incrementAndGet();
+                statuses.put(id, "AWAITING_CRITICAL_ACTION_AUTHORIZATION");
+                answer(exchange, 200, "{\"id\":\"" + id + "\",\"status\":\"AWAITING_CRITICAL_ACTION_AUTHORIZATION\",\"type\":\"DEBIT\"}");
+            } else if (path.startsWith("/pix/transactions/") && method.equals("GET")) {
+                String id = path.substring("/pix/transactions/".length());
+                String status = statuses.getOrDefault(id, "AWAITING_REQUEST");
+                String receipt = status.equals("DONE") ? ",\"transactionReceiptUrl\":\"https://www.asaas.com/comprovantes/" + id + "\",\"effectiveDate\":\"" + LocalDate.now() + " 10:00:00\"" : "";
+                String reason = status.equals("REFUSED") ? ",\"refusalReason\":\"Recusado pelo banco do recebedor\"" : "";
                 answer(exchange, 200, "{\"id\":\"" + id + "\",\"status\":\"" + status + "\"" + receipt + reason + "}");
             } else {
                 answer(exchange, 404, "{}");
@@ -152,6 +187,7 @@ class PixTransfersTest {
     void aConnectedCondominiumWithSuppliers() {
         calls.clear();
         statuses.clear();
+        unauthorized.clear();
         if (!condominiums.existsById(TenantContext.VILA)) {
             jdbc.update("insert into condominiums(id, name, slug, status, created_at) values (?, 'Vila', ?, 'ACTIVE', current_timestamp)",
                 TenantContext.VILA, "vila-" + UUID.randomUUID());
@@ -411,6 +447,138 @@ class PixTransfersTest {
         JsonNode body = json.readTree(transfersSent().get(transfersSent().size() - 1).body());
         assertThat(body.get("pixAddressKey").asText()).isEqualTo("21912345678");
         assertThat(body.get("pixAddressKeyType").asText()).isEqualTo("PHONE");
+    }
+
+    private JsonNode readCode(String code, int expected) throws Exception {
+        return call(post("/api/payables/pix-code/read"), admin, "{\"code\":\"" + code + "\"}", expected);
+    }
+
+    private JsonNode payCode(String code, String amount, String password, int expected) throws Exception {
+        return call(post("/api/payables/pix-code"), admin, "{\"code\":\"" + code + "\",\"amount\":" + amount
+            + ",\"description\":\"Roldanas do portão\",\"category\":\"Manutenção\",\"password\":\"" + password + "\"}", expected);
+    }
+
+    private List<Call> codesPaid() {
+        return calls.stream().filter(call -> call.method().equals("POST") && call.path().equals("/pix/qrCodes/pay")).toList();
+    }
+
+    @Test
+    void aCopyAndPasteCodeIsReadPaidAndSettledWithTheReceipt() throws Exception {
+        // Reading says who receives it and how much; nothing is paid.
+        JsonNode read = readCode("CODIGO-MERCADO\\n", 200);
+        assertThat(read.get("receiverName").asText()).isEqualTo("Loja Exemplo");
+        assertThat(read.get("value").decimalValue()).isEqualByComparingTo("189.90");
+        assertThat(read.get("valueFixed").asBoolean()).isTrue();
+        assertThat(read.get("canBePaid").asBoolean()).isTrue();
+        JsonNode expired = readCode("CODIGO-VENCIDO", 200);
+        assertThat(expired.get("canBePaid").asBoolean()).isFalse();
+        assertThat(expired.get("reason").asText()).contains("QR Code expirado");
+        assertThat(readCode("isso nao e um codigo", 400).get("error").asText()).contains("QR Code inválido");
+        call(post("/api/payables/pix-code/read"), sindico, "{\"code\":\"CODIGO-MERCADO\"}", 403);
+        assertThat(codesPaid()).isEmpty();
+
+        // Without the right password nothing goes to Asaas.
+        payCode("CODIGO-MERCADO", "null", "senha-errada", 403);
+        assertThat(codesPaid()).isEmpty();
+
+        // Paid: the bill is recorded and approved at once, with the code's value (a fixed one cannot change), to its receiver.
+        JsonNode bill = payCode("CODIGO-MERCADO", "1", PASSWORD, 200);
+        assertThat(bill.get("status").asText()).isEqualTo(Payable.APPROVED);
+        assertThat(bill.get("amount").decimalValue()).isEqualByComparingTo("189.90");
+        assertThat(bill.get("supplierName").asText()).isEqualTo("Loja Exemplo");
+        assertThat(bill.get("pixKind").asText()).isEqualTo(PixTransfer.CODE);
+        // Asaas holds it until someone types the account's token: the list says so.
+        assertThat(bill.get("pixStatus").asText()).isEqualTo(PayableView.AWAITING_AUTHORIZATION);
+        JsonNode sent = json.readTree(codesPaid().get(0).body());
+        assertThat(sent.get("qrCode").get("payload").asText()).isEqualTo("CODIGO-MERCADO");
+        assertThat(sent.get("value").decimalValue()).isEqualByComparingTo("189.90");
+        long billId = bill.get("id").asLong();
+
+        // The same code is not paid twice, nor the bill another way meanwhile.
+        assertThat(payCode("CODIGO-MERCADO", "null", PASSWORD, 409).get("error").asText()).contains("já está sendo pago");
+        call(post("/api/payables/" + billId + "/pay"), admin, "{\"method\":\"PIX\"}", 409);
+        assertThat(codesPaid()).hasSize(1);
+
+        // Asaas asks before paying: this payment of a code was requested here; another value or kind is refused.
+        String transactionId = TenantContext.callAs(jardim, () -> transfers.findFirstByPayableIdOrderByIdDesc(billId).orElseThrow().gatewayTransferId);
+        JsonNode validation = call(post("/api/payments/pix-validation"), admin, "", 200);
+        String url = validation.get("url").asText();
+        String route = url.substring(url.lastIndexOf('/') + 1);
+        String token = validation.get("token").asText();
+        assertThat(validation(route, token, "{\"type\":\"PIX_QR_CODE\",\"pixQrCode\":{\"id\":\"" + transactionId + "\",\"value\":189.9,"
+            + "\"externalAccount\":{\"addressKey\":\"vendas@loja.exemplo\"}}}")).containsEntry("status", "APPROVED");
+        assertThat(validation(route, token, "{\"type\":\"PIX_QR_CODE\",\"pixQrCode\":{\"id\":\"" + transactionId + "\",\"value\":1899}}"))
+            .containsEntry("status", "REFUSED");
+        assertThat(validation(route, token, "{\"type\":\"TRANSFER\",\"transfer\":{\"id\":\"" + transactionId + "\",\"value\":189.9}}"))
+            .containsEntry("status", "REFUSED");
+        assertThat(validation(route, token, "{\"type\":\"PIX_QR_CODE\",\"pixQrCode\":{\"id\":\"pix_999\",\"value\":189.9,"
+            + "\"externalAccount\":{\"addressKey\":\"outra@loja.exemplo\"}}}")).containsEntry("status", "REFUSED");
+
+        // Asaas confirms it: paid with Asaas's receipt, an expense to the code's receiver.
+        statuses.put(transactionId, "DONE");
+        assertThat(TenantContext.callAs(jardim, pix::refreshInFlight)).isEqualTo(1);
+        Payable paid = TenantContext.callAs(jardim, () -> payables.findById(billId).orElseThrow());
+        assertThat(paid.status).isEqualTo(Payable.PAID);
+        assertThat(paid.supplierId).isNull();
+        Expense expense = TenantContext.callAs(jardim, () -> expenses.findById(paid.expenseId).orElseThrow());
+        assertThat(expense.supplier).isEqualTo("Loja Exemplo");
+        assertThat(expense.amount).isEqualByComparingTo("189.90");
+        assertThat(expense.documentId).isEqualTo(paid.receiptDocumentId);
+        JsonNode access = call(get("/api/documents/" + paid.receiptDocumentId + "/access"), admin, "", 200);
+        assertThat(access.get("url").asText()).isEqualTo("https://www.asaas.com/comprovantes/" + transactionId);
+        assertThat(payCode("CODIGO-MERCADO", "null", PASSWORD, 409).get("error").asText()).contains("já foi pago pelo Portal");
+    }
+
+    @Test
+    void aCodeThatDoesNotGoOutCancelsItsBill() throws Exception {
+        // Asaas refuses at once: the bill of the code is cancelled with the reason (the code is spent).
+        JsonNode error = payCode("CODIGO-RECUSA", "null", PASSWORD, 502);
+        assertThat(error.get("error").asText()).contains("Saldo insuficiente");
+        Payable refused = TenantContext.callAs(jardim, () -> payables.findAll().stream().filter(found -> found.amount.compareTo(new BigDecimal("444")) == 0)
+            .findFirst().orElseThrow());
+        assertThat(refused.status).isEqualTo(Payable.CANCELLED);
+        assertThat(refused.cancelReason).contains("copia e cola").contains("Saldo insuficiente");
+
+        // A code without a value takes the one typed; a code Asaas cannot pay is not paid.
+        assertThat(payCode("CODIGO-LIVRE", "null", PASSWORD, 400).get("error").asText()).contains("informe quanto pagar");
+        assertThat(payCode("CODIGO-VENCIDO", "null", PASSWORD, 409).get("error").asText()).contains("QR Code expirado");
+        JsonNode bill = payCode("CODIGO-LIVRE", "50", PASSWORD, 200);
+        assertThat(bill.get("amount").decimalValue()).isEqualByComparingTo("50.00");
+        long billId = bill.get("id").asLong();
+
+        // Asaas refuses it later: the bill is cancelled, with Asaas's reason.
+        String transactionId = TenantContext.callAs(jardim, () -> transfers.findFirstByPayableIdOrderByIdDesc(billId).orElseThrow().gatewayTransferId);
+        statuses.put(transactionId, "REFUSED");
+        TenantContext.callAs(jardim, pix::refreshInFlight);
+        Payable cancelled = TenantContext.callAs(jardim, () -> payables.findById(billId).orElseThrow());
+        assertThat(cancelled.status).isEqualTo(Payable.CANCELLED);
+        assertThat(cancelled.cancelReason).contains("Recusado pelo banco do recebedor");
+        PixTransfer failed = TenantContext.callAs(jardim, () -> transfers.findFirstByPayableIdOrderByIdDesc(billId).orElseThrow());
+        assertThat(failed.status).isEqualTo(PixTransfer.FAILED);
+
+        // Above the approval value a second person must approve first, and the day's limit counts codes too.
+        call(put("/api/settings/payments"), admin, "{\"sindicoCanPay\":false,\"approvalAbove\":40,\"pixDailyLimit\":3000}", 200);
+        assertThat(payCode("CODIGO-LIVRE", "60", PASSWORD, 409).get("error").asText()).contains("aprovação de outra pessoa");
+        call(put("/api/settings/payments"), admin, "{\"sindicoCanPay\":false,\"approvalAbove\":null,\"pixDailyLimit\":100}", 200);
+        assertThat(payCode("CODIGO-MERCADO", "null", PASSWORD, 409).get("error").asText()).contains("limite de Pix por dia");
+        assertThat(codesPaid()).hasSize(2);
+    }
+
+    @Test
+    void aTransferWaitingForTheTokenSaysSo() throws Exception {
+        long billId = bill("Portão eletrônico", "555", withKey);
+        assertThat(payByPix(billId, admin, PASSWORD, 200).get("pixStatus").asText()).isEqualTo(PayableView.AWAITING_AUTHORIZATION);
+        // Someone typed the token in Asaas: it is on its way again.
+        String transferId = TenantContext.callAs(jardim, () -> transfers.findFirstByPayableIdOrderByIdDesc(billId).orElseThrow().gatewayTransferId);
+        unauthorized.remove(transferId);
+        assertThat(TenantContext.callAs(jardim, pix::refreshInFlight)).isEqualTo(1);
+        JsonNode list = call(get("/api/payables"), admin, "", 200);
+        for (JsonNode item : list) {
+            if (item.get("id").asLong() == billId) {
+                assertThat(item.get("pixStatus").asText()).isEqualTo(PixTransfer.PENDING);
+                assertThat(item.get("pixKind").asText()).isEqualTo(PixTransfer.KEY);
+            }
+        }
     }
 
     @Test

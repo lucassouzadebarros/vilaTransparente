@@ -9,6 +9,7 @@ import {
   Hourglass,
   Info,
   Plus,
+  QrCode,
   Receipt,
   Repeat,
   Search,
@@ -25,7 +26,7 @@ import { Badge, Button, Card, Input, Skeleton, Spinner } from '@/components/ui';
 import { Dialog } from '@/components/ui/dialog';
 import { Field, PageHeader, Segmented } from '@/components/ui/page';
 import { useToast } from '@/components/ui/toast';
-import { api, PIX_IN_FLIGHT, type Budget, type ExpenseRecord, type Payable, type PaymentMethod, type ServiceOrder } from '@/lib/api';
+import { api, PIX_IN_FLIGHT, type Budget, type ExpenseRecord, type Payable, type PaymentMethod, type PixCode, type ServiceOrder } from '@/lib/api';
 import { useSession } from '@/lib/auth';
 import { paymentTermsText } from '@/lib/paymentTerms';
 import { cn, formatDate, formatMoney, moneyText, parseMoney, plural, useDocumentTitle } from '@/lib/utils';
@@ -571,6 +572,244 @@ export function PayDialog({ payable, onClose }: { payable: Payable; onClose: () 
   );
 }
 
+/** The Pix on its way through Asaas, or held by Asaas until someone types the account's token (SMS or app). */
+export function PixInFlightBadge({ payable }: { payable: Pick<Payable, 'pixStatus'> }) {
+  if (payable.pixStatus === 'AWAITING_AUTHORIZATION') {
+    return (
+      <span title="Autorize no app ou no site do Asaas com o token da conta (SMS ou aplicativo).">
+        <Badge tone="warn">Aguardando autorização no Asaas</Badge>
+      </span>
+    );
+  }
+  return (
+    <Badge tone="brand">
+      <Send aria-hidden className="size-3" /> Pix a caminho
+    </Badge>
+  );
+}
+
+/** "2030-10-30 11:00:00" (as Asaas writes it) -> "30/10/2030 às 11:00". */
+function codeMoment(value: string | null) {
+  if (!value) return null;
+  const [day, time] = value.split(' ');
+  return `${formatDate(day)}${time ? ` às ${time.slice(0, 5)}` : ''}`;
+}
+
+/**
+ * Paying a Pix "copia e cola" (a purchase online, a code a supplier sent): Asaas reads the code first and says who
+ * receives it and how much; then the bill is recorded, approved and paid at once from the condominium's Asaas account,
+ * with the person's password. No supplier to register: the receiver comes from the code. When Asaas confirms it, the
+ * bill is paid with the receipt, like any Pix sent here.
+ */
+export function PixCodeDialog({ onClose, service: forService }: { onClose: () => void; service?: ServiceOrder }) {
+  const queryClient = useQueryClient();
+  const notify = useToast();
+  const pixStatus = useQuery({ queryKey: ['condo', 'pix-status'], queryFn: api.pixStatus });
+  const services = useQuery({ queryKey: ['condo', 'services'], queryFn: api.services });
+  const [code, setCode] = useState('');
+  const [read, setRead] = useState<PixCode | null>(null);
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('Manutenção');
+  const [serviceId, setServiceId] = useState(forService ? String(forService.id) : '');
+  const [reason, setReason] = useState('');
+  const [password, setPassword] = useState('');
+
+  const readCode = useMutation({
+    mutationFn: () => api.readPixCode(code),
+    onSuccess: (result) => {
+      setRead(result);
+      setAmount(result.value != null ? moneyText(result.value) : '');
+      setDescription((current) => current || (result.description ?? ''));
+    }
+  });
+
+  const value = read?.valueFixed ? Number(read.value) : parseMoney(amount);
+  const status = pixStatus.data;
+  const left = status?.dailyLimit != null ? Number(status.dailyLimit) - Number(status.usedToday) : null;
+  // Nothing to do here (Pix off, a code Asaas will not pay) hides the form; a value over today's limit only stops paying.
+  const blocked = !status ? null : !status.available ? status.reason : read && !read.canBePaid ? read.reason : null;
+  const overLimit =
+    left != null && value != null && !Number.isNaN(value) && value > left ? `Passa do limite de Pix de hoje: ainda dá para mandar ${formatMoney(Math.max(0, left))}.` : null;
+  const errors = {
+    amount: value == null || Number.isNaN(value) || value <= 0 ? 'Informe quanto pagar.' : overLimit,
+    description: description.trim().length < 3 ? 'Diga o que foi comprado ou pago.' : null
+  };
+  const openServices = (services.data ?? []).filter((item) => item.status !== 'CANCELADO' && item.status !== 'FINALIZADO');
+
+  const pay = useMutation({
+    mutationFn: () =>
+      api.payPixCode({
+        code,
+        amount: read?.valueFixed ? null : (value as number),
+        description: description.trim(),
+        category,
+        serviceOrderId: serviceId ? Number(serviceId) : null,
+        exceptionReason: reason.trim() || null,
+        notes: null,
+        password
+      }),
+    onSuccess: (bill) => {
+      queryClient.invalidateQueries({ queryKey: ['condo'] });
+      notify(
+        'ok',
+        bill.pixStatus === 'AWAITING_AUTHORIZATION'
+          ? `Pix de ${formatMoney(bill.amount)} pedido. O Asaas espera a autorização com o token da conta; depois a baixa e o comprovante entram sozinhos.`
+          : `Pix de ${formatMoney(bill.amount)} enviado para ${bill.supplierName ?? 'o recebedor'}. A baixa e o comprovante entram sozinhos quando o Asaas confirmar.`
+      );
+      onClose();
+    }
+  });
+  const askReason = pay.isError && /justificativa/i.test(pay.error.message);
+  const busy = readCode.isPending || pay.isPending;
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!read) {
+      if (code.trim()) readCode.mutate();
+    } else if (!blocked && !errors.amount && !errors.description && password) {
+      pay.mutate();
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={() => !busy && onClose()}
+      icon={<QrCode aria-hidden className="size-5" />}
+      title="Pagar Pix copia e cola"
+      description="Uma compra pela internet ou um código que o fornecedor mandou: o Pix sai da conta Asaas do condomínio."
+      footer={
+        <>
+          <Button
+            variant="secondary"
+            onClick={
+              read
+                ? () => {
+                    setRead(null);
+                    setCode('');
+                    pay.reset();
+                  }
+                : onClose
+            }
+            disabled={busy}
+          >
+            {read ? 'Outro código' : 'Cancelar'}
+          </Button>
+          {read ? (
+            <Button type="submit" form="pix-copia-e-cola" disabled={busy || !!blocked || !!errors.amount || !!errors.description || !password}>
+              {pay.isPending ? <Spinner /> : <Send aria-hidden className="size-4" />}
+              {value != null && !Number.isNaN(value) && value > 0 ? `Pagar ${formatMoney(value)}` : 'Pagar'}
+            </Button>
+          ) : (
+            <Button type="submit" form="pix-copia-e-cola" disabled={busy || !code.trim()}>
+              {readCode.isPending && <Spinner />}
+              Ler código
+            </Button>
+          )}
+        </>
+      }
+    >
+      <form id="pix-copia-e-cola" onSubmit={submit} noValidate className="space-y-4">
+        {!read ? (
+          <>
+            {readCode.isError && <FormAlert>{readCode.error.message}</FormAlert>}
+            <Field label="Código Pix copia e cola" htmlFor="pix-codigo" hint="Copie o código no site ou no app da compra e cole aqui. Nada é pago só de ler.">
+              <Textarea
+                id="pix-codigo"
+                data-autofocus
+                rows={4}
+                spellCheck={false}
+                className="font-mono text-xs"
+                placeholder="00020126..."
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
+            </Field>
+          </>
+        ) : (
+          <>
+            <dl className="grid gap-3 rounded-lg border border-line p-4 text-sm sm:grid-cols-2">
+              <div className="min-w-0">
+                <dt className="text-xs text-muted">Para</dt>
+                <dd className="truncate font-medium">{read.receiverName ?? 'Recebedor não informado'}</dd>
+                {(read.receiverDocument || read.bank) && <dd className="break-words text-xs text-muted">{[read.receiverDocument, read.bank].filter(Boolean).join(' · ')}</dd>}
+              </div>
+              <div>
+                <dt className="text-xs text-muted">Valor</dt>
+                <dd className="font-semibold tabular-nums">{read.valueFixed ? formatMoney(read.value) : read.value != null ? `${formatMoney(read.value)} (pode mudar)` : 'O código não traz o valor'}</dd>
+              </div>
+              {read.expiresAt && (
+                <div>
+                  <dt className="text-xs text-muted">Vale até</dt>
+                  <dd>{codeMoment(read.expiresAt)}</dd>
+                </div>
+              )}
+              <div>
+                <dt className="text-xs text-muted">Hoje pelo Asaas</dt>
+                <dd className="tabular-nums">
+                  {status?.dailyLimit != null ? `${formatMoney(status.usedToday)} de ${formatMoney(status.dailyLimit)}` : '—'}
+                  {status?.balance != null && <span className="block text-xs text-muted">Saldo na conta: {formatMoney(status.balance)}</span>}
+                </dd>
+              </div>
+              {read.description && (
+                <div className="min-w-0 sm:col-span-2">
+                  <dt className="text-xs text-muted">Descrição no código</dt>
+                  <dd className="break-words">{read.description}</dd>
+                </div>
+              )}
+            </dl>
+            {blocked ? (
+              <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{blocked}</p>
+            ) : (
+              <>
+                {pay.isError && <FormAlert>{pay.error.message}</FormAlert>}
+                {read.valueFixed && overLimit && <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{overLimit}</p>}
+                {!read.valueFixed && (
+                  <Field label="Quanto pagar" htmlFor="pix-codigo-valor" error={amount && errors.amount ? errors.amount : null}>
+                    <MoneyInput id="pix-codigo-valor" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                  </Field>
+                )}
+                <Field label="O que é" htmlFor="pix-codigo-descricao" error={description && errors.description ? errors.description : null}>
+                  <Input id="pix-codigo-descricao" data-autofocus maxLength={200} placeholder="Roldanas do portão (Mercado Livre)" value={description} onChange={(e) => setDescription(e.target.value)} />
+                </Field>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Categoria" htmlFor="pix-codigo-categoria">
+                    <select id="pix-codigo-categoria" value={category} onChange={(e) => setCategory(e.target.value)} className={selectClass}>
+                      {categories.map((name) => (
+                        <option key={name}>{name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Serviço" htmlFor="pix-codigo-servico" hint="Opcional. Se a compra é de um serviço, ela entra na conta dele.">
+                    <select id="pix-codigo-servico" value={serviceId} onChange={(e) => setServiceId(e.target.value)} className={selectClass}>
+                      <option value="">Nenhum</option>
+                      {openServices.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.title}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+                {askReason && (
+                  <Field label="Justificativa de emergência" htmlFor="pix-codigo-justificativa" hint="Pelo menos 20 letras. Aparece para todas as unidades, como nas despesas.">
+                    <Textarea id="pix-codigo-justificativa" maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} />
+                  </Field>
+                )}
+                <Field label="Sua senha" htmlFor="pix-codigo-senha" hint="A senha da sua conta no Portal confirma que é você mandando o dinheiro.">
+                  <Input id="pix-codigo-senha" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                </Field>
+                <p className="text-xs text-muted">A conta é lançada já aprovada, em seu nome. Quando o Asaas confirmar, ela é dada como paga e o comprovante entra sozinho.</p>
+              </>
+            )}
+          </>
+        )}
+      </form>
+    </Dialog>
+  );
+}
+
 function CancelDialog({ payable, onClose }: { payable: Payable; onClose: () => void }) {
   const queryClient = useQueryClient();
   const notify = useToast();
@@ -635,6 +874,7 @@ export function PayablesPage() {
   const [filter, setFilter] = useState<Filter>('open');
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState(false);
+  const [payingCode, setPayingCode] = useState(false);
   const [paying, setPaying] = useState<Payable | null>(null);
   const [cancelling, setCancelling] = useState<Payable | null>(null);
 
@@ -682,10 +922,16 @@ export function PayablesPage() {
         description="O que o condomínio deve pagar, quem aprovou e o que já foi pago, com os comprovantes."
         actions={
           me.canPay && (
-            <Button onClick={() => setCreating(true)}>
-              <Plus aria-hidden className="size-4" />
-              Nova conta
-            </Button>
+            <>
+              <Button variant="secondary" onClick={() => setPayingCode(true)}>
+                <QrCode aria-hidden className="size-4" />
+                Pix copia e cola
+              </Button>
+              <Button onClick={() => setCreating(true)}>
+                <Plus aria-hidden className="size-4" />
+                Nova conta
+              </Button>
+            </>
           )
         }
       />
@@ -774,7 +1020,7 @@ export function PayablesPage() {
                             )}
                           </p>
                           <p className="text-xs text-muted">
-                            {[payable.supplierName, payable.category].filter(Boolean).join(' · ') || 'Sem fornecedor'}
+                            {[payable.supplierName, payable.category, payable.pixKind === 'CODE' && 'Pix copia e cola'].filter(Boolean).join(' · ') || 'Sem fornecedor'}
                             {payable.serviceOrderId && (
                               <>
                                 {' · '}
@@ -789,7 +1035,9 @@ export function PayablesPage() {
                           {isOpen && (payable.pixStatus === 'FAILED' || payable.pixStatus === 'CANCELLED') && (
                             <p className="text-xs text-danger">O último Pix não saiu{payable.pixFailReason ? `: ${payable.pixFailReason}` : ''}.</p>
                           )}
-                        </td>
+                          {payable.pixStatus === 'AWAITING_AUTHORIZATION' && (
+                            <p className="text-xs text-warn">O Asaas espera a autorização com o token da conta (SMS ou app do Asaas). Depois, a baixa entra sozinha.</p>
+                          )}                        </td>
                         <td className="px-4 py-3.5 text-right font-medium tabular-nums">{formatMoney(payable.amount)}</td>
                         <td className="px-4 py-3.5">
                           <StatusBadge payable={payable} />
@@ -814,9 +1062,7 @@ export function PayablesPage() {
                               </Button>
                             )}
                             {payable.pixStatus && PIX_IN_FLIGHT.includes(payable.pixStatus) ? (
-                              <Badge tone="brand">
-                                <Send aria-hidden className="size-3" /> Pix a caminho
-                              </Badge>
+                              <PixInFlightBadge payable={payable} />
                             ) : (
                               me.canPay &&
                               payable.status === 'APPROVED' && (
@@ -856,6 +1102,7 @@ export function PayablesPage() {
       </Card>
 
       {creating && <NewPayableDialog onClose={() => setCreating(false)} />}
+      {payingCode && <PixCodeDialog onClose={() => setPayingCode(false)} />}
       {paying && <PayDialog payable={paying} onClose={() => setPaying(null)} />}
       {cancelling && <CancelDialog payable={cancelling} onClose={() => setCancelling(null)} />}
     </div>

@@ -417,15 +417,19 @@ class PayableService {
     /**
      * The bill is paid: it becomes an expense of the cash box, with the receipt, under the same spending rules as any
      * expense. A monthly bill creates next month's, already approved. Paying by Pix through Asaas ends here too, once
-     * Asaas confirms it.
+     * Asaas confirms it. payee: who received it when the bill has no supplier (the receiver of a "copia e cola" code).
      */
     Payable settle(Payable payable, LocalDate paidAt, String method, Long receiptDocumentId, String notes, String paidBy) {
+        return settle(payable, paidAt, method, receiptDocumentId, notes, paidBy, null);
+    }
+
+    Payable settle(Payable payable, LocalDate paidAt, String method, Long receiptDocumentId, String notes, String paidBy, String payee) {
         Expense expense = new Expense();
         expense.description = payable.description + (payable.installments == null ? "" : " (parcela " + payable.installment + "/" + payable.installments + ")");
         expense.category = payable.category;
         expense.amount = payable.amount;
         expense.expenseDate = paidAt;
-        expense.supplier = payable.supplierId == null ? null : suppliers.findById(payable.supplierId).map(found -> found.name).orElse(null);
+        expense.supplier = payable.supplierId == null ? payee : suppliers.findById(payable.supplierId).map(found -> found.name).orElse(payee);
         expense.paymentMethod = method;
         expense.notes = notes == null ? payable.notes : notes;
         expense.documentId = receiptDocumentId != null ? receiptDocumentId : payable.documentId;
@@ -497,6 +501,42 @@ class PayableService {
         Payable saved = payables.save(payable);
         audit.record("PAYABLE_CANCELLED", "PAYABLE", saved.id, saved.description + " - " + AuditService.money(saved.amount) + " - motivo: " + why);
         return view(saved, me, true, Map.of(), new java.util.HashMap<>());
+    }
+
+    /**
+     * The bill of a Pix "copia e cola" paid at once through Asaas: one bill, due today, approved by whoever pays it, with no
+     * supplier (the code says who receives it), under the same spending rules as any bill. Above the approval value it
+     * would wait for a second person, and a code does not wait: that one is recorded and approved first, then paid.
+     */
+    @Transactional
+    Payable recordForPixCode(PayableRequest request, AppUser me, String receiver) {
+        if (request.amount() != null && needsApproval(request.amount())) {
+            BigDecimal above = settingsRepository.findAll().stream().findFirst().map(found -> found.approvalAbove).orElseThrow();
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Acima de " + AuditService.money(above)
+                + " a conta precisa da aprovação de outra pessoa antes de ser paga, e o código não espera. Lance a conta para aprovação e pague depois.");
+        }
+        Payable bill = new Payable();
+        apply(bill, request);
+        bill.dueDate = BudgetVotingService.today();
+        Payable saved = payables.save(prepared(bill, me, false, null, false));
+        audit.record("PAYABLE_CREATED", "PAYABLE", saved.id, saved.description + " - " + AuditService.money(saved.amount)
+            + " - Pix copia e cola" + (receiver == null ? "" : " para " + receiver));
+        return saved;
+    }
+
+    /** A bill whose payment can no longer go (the Pix of a code that did not go out): cancelled, with the reason, by the system. */
+    @Transactional
+    void cancelUnpaid(Payable payable, String reason, String by) {
+        if (!Payable.APPROVED.equals(payable.status) && !Payable.PENDING_APPROVAL.equals(payable.status)) {
+            return;
+        }
+        payable.status = Payable.CANCELLED;
+        payable.cancelledBy = by;
+        payable.cancelledAt = LocalDateTime.now();
+        payable.cancelReason = reason.length() > 500 ? reason.substring(0, 500) : reason;
+        payable.updatedAt = LocalDateTime.now();
+        payables.save(payable);
+        audit.record("PAYABLE_CANCELLED", "PAYABLE", payable.id, payable.description + " - " + AuditService.money(payable.amount) + " - motivo: " + reason);
     }
 
     // ---- Helpers
@@ -691,7 +731,7 @@ class PayableService {
             payable.status,
             open && payable.dueDate.isBefore(BudgetVotingService.today()),
             payable.supplierId,
-            supplier == null ? null : supplier.name,
+            supplier != null ? supplier.name : pix == null ? null : pix.receiverName,
             supplier != null && supplier.pixKey != null,
             payable.installment,
             payable.installments,
@@ -713,8 +753,9 @@ class PayableService {
             nameOf(payable.cancelledBy, names),
             payable.cancelReason,
             canPay && Payable.PENDING_APPROVAL.equals(payable.status) && !me.email.equalsIgnoreCase(payable.createdBy),
-            pix == null ? null : pix.status,
-            pix == null ? null : pix.failReason
+            pix == null ? null : pix.awaitingAuthorization && PixTransfer.IN_FLIGHT.contains(pix.status) ? PayableView.AWAITING_AUTHORIZATION : pix.status,
+            pix == null ? null : pix.failReason,
+            pix == null ? null : pix.kind
         );
     }
 

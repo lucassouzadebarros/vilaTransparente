@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Ban, CheckCircle2, FileText, Paperclip, Pencil, Plus, Siren } from 'lucide-react';
+import { AlertTriangle, Ban, CheckCircle2, FileText, Paperclip, Pencil, Plus, QrCode, Siren } from 'lucide-react';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { AttachServiceFileDialog, FinishServiceDialog, ServiceDialog } from '@/components/demandForms';
@@ -13,12 +13,12 @@ import { api, PIX_IN_FLIGHT, type Payable } from '@/lib/api';
 import { useSession } from '@/lib/auth';
 import { paymentTermsText } from '@/lib/paymentTerms';
 import { formatDate, formatMoney, useDocumentTitle } from '@/lib/utils';
-import { NewPayableDialog, PayDialog, serviceSpending } from '@/pages/PayablesPage';
+import { NewPayableDialog, PayDialog, PixCodeDialog, PixInFlightBadge, serviceSpending } from '@/pages/PayablesPage';
 import { formatDocument } from '@/pages/SuppliersPage';
 
 function BillBadge({ bill }: { bill: Payable }) {
   if (bill.status === 'PAID') return <Badge tone="ok">Pago</Badge>;
-  if (bill.pixStatus && PIX_IN_FLIGHT.includes(bill.pixStatus)) return <Badge tone="brand">Pix a caminho</Badge>;
+  if (bill.pixStatus && PIX_IN_FLIGHT.includes(bill.pixStatus)) return <PixInFlightBadge payable={bill} />;
   if (bill.status === 'PENDING_APPROVAL') return <Badge tone="warn">Aguardando aprovação</Badge>;
   return bill.overdue ? <Badge tone="danger">Vencida</Badge> : <Badge tone="brand">A pagar</Badge>;
 }
@@ -39,7 +39,7 @@ export function ServiceDetailPage() {
   const service = services.data?.find((item) => item.id === id);
   useDocumentTitle(service?.title ?? 'Serviço');
   const [confirm, setConfirm] = useState(false);
-  const [dialog, setDialog] = useState<'edit' | 'finish' | 'attach' | 'pay' | null>(null);
+  const [dialog, setDialog] = useState<'edit' | 'finish' | 'attach' | 'pay' | 'code' | null>(null);
   const [paying, setPaying] = useState<Payable | null>(null);
 
   const cancel = useMutation({
@@ -172,10 +172,18 @@ export function ServiceDetailPage() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-semibold">Pagamento</h2>
               {me.canPay && service.status !== 'CANCELADO' && (
-                <Button size="sm" variant="secondary" onClick={() => setDialog('pay')}>
-                  <Plus aria-hidden className="size-4" />
-                  Lançar pagamento
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {service.status !== 'FINALIZADO' && (
+                    <Button size="sm" variant="ghost" onClick={() => setDialog('code')}>
+                      <QrCode aria-hidden className="size-4" />
+                      Pix copia e cola
+                    </Button>
+                  )}
+                  <Button size="sm" variant="secondary" onClick={() => setDialog('pay')}>
+                    <Plus aria-hidden className="size-4" />
+                    Lançar pagamento
+                  </Button>
+                </div>
               )}
             </div>
             {approved && (
@@ -301,6 +309,7 @@ export function ServiceDetailPage() {
       {dialog === 'finish' && <FinishServiceDialog service={service} onClose={() => setDialog(null)} />}
       {dialog === 'attach' && <AttachServiceFileDialog serviceId={service.id} onClose={() => setDialog(null)} />}
       {dialog === 'pay' && <NewPayableDialog service={service} onClose={() => setDialog(null)} />}
+      {dialog === 'code' && <PixCodeDialog service={service} onClose={() => setDialog(null)} />}
       {paying && <PayDialog payable={paying} onClose={() => setPaying(null)} />}
 
       <Dialog

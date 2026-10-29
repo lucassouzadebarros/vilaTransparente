@@ -376,11 +376,38 @@ export type Payable = {
   /** The last Pix sent for it through Asaas; absent when none was. */
   pixStatus?: PixStatus | null;
   pixFailReason?: string | null;
+  /** KEY: to the supplier's key; CODE: a "copia e cola" code (supplierName is then who the code pays). */
+  pixKind?: 'KEY' | 'CODE' | null;
 };
 
-export type PixStatus = 'REQUESTED' | 'PENDING' | 'BANK_PROCESSING' | 'DONE' | 'FAILED' | 'CANCELLED';
+/** AWAITING_AUTHORIZATION: Asaas holds it until someone types the account's token (SMS or app). */
+export type PixStatus = 'REQUESTED' | 'PENDING' | 'AWAITING_AUTHORIZATION' | 'BANK_PROCESSING' | 'DONE' | 'FAILED' | 'CANCELLED';
 /** Still on its way: the bill is settled by itself when Asaas confirms it. */
-export const PIX_IN_FLIGHT: PixStatus[] = ['REQUESTED', 'PENDING', 'BANK_PROCESSING'];
+export const PIX_IN_FLIGHT: PixStatus[] = ['REQUESTED', 'PENDING', 'AWAITING_AUTHORIZATION', 'BANK_PROCESSING'];
+
+/** A "copia e cola" code as Asaas read it. valueFixed: it can only be paid with value. expiresAt: "2026-10-30 11:00:00". */
+export type PixCode = {
+  receiverName: string | null;
+  receiverDocument: string | null;
+  bank: string | null;
+  value: number | null;
+  valueFixed: boolean;
+  expiresAt: string | null;
+  description: string | null;
+  canBePaid: boolean;
+  reason: string | null;
+};
+
+export type PayPixCodeInput = {
+  code: string;
+  amount: number | null;
+  description: string;
+  category: string | null;
+  serviceOrderId: number | null;
+  exceptionReason: string | null;
+  notes: string | null;
+  password: string;
+};
 
 export type PixPaymentStatus = { available: boolean; reason: string | null; dailyLimit: number | null; usedToday: number; balance: number | null };
 
