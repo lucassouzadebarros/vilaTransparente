@@ -3,6 +3,7 @@ import { AlertTriangle, BellRing, HandCoins, Landmark, PieChart, QrCode, Save, S
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { PixConnection } from '@/components/PixConnection';
+import { PixValidationBox } from '@/components/PixValidationBox';
 import { FormAlert } from '@/components/PublicLayout';
 import { Button, Card, Input, Skeleton, Spinner } from '@/components/ui';
 import { Field, PageHeader, Segmented } from '@/components/ui/page';
@@ -111,9 +112,13 @@ function SettingsForm({ settings }: { settings: CondominiumSettings }) {
 
   const [sindicoCanPay, setSindicoCanPay] = useState(settings.sindicoCanPay ?? false);
   const [approvalAbove, setApprovalAbove] = useState(moneyText(settings.approvalAbove));
+  const [pixLimit, setPixLimit] = useState(moneyText(settings.pixDailyLimit));
   const approvalValue = parseMoney(approvalAbove);
+  const pixLimitValue = parseMoney(pixLimit);
   const paymentRulesChanged =
-    sindicoCanPay !== settings.sindicoCanPay || (approvalValue ?? null) !== (settings.approvalAbove == null ? null : Number(settings.approvalAbove));
+    sindicoCanPay !== settings.sindicoCanPay ||
+    (approvalValue ?? null) !== (settings.approvalAbove == null ? null : Number(settings.approvalAbove)) ||
+    (pixLimitValue ?? null) !== (settings.pixDailyLimit == null ? null : Number(settings.pixDailyLimit));
 
   const monthlyValue = parseMoney(monthly);
   const ruleValue = parseMoney(rule);
@@ -130,7 +135,8 @@ function SettingsForm({ settings }: { settings: CondominiumSettings }) {
     interest: Number.isNaN(interestValue) || interestValue < 0 || interestValue > 10 ? 'De 0% a 10% ao mês.' : null,
     title: title.trim().length < 3 || title.trim().length > 60 ? 'De 3 a 60 letras.' : null,
     reserve: Number.isNaN(reserveValue) || reserveValue < 0 || reserveValue > 30 ? 'De 0% a 30% da taxa.' : null,
-    approval: approvalValue !== null && (Number.isNaN(approvalValue) || approvalValue < 0) ? 'Informe um valor, ou deixe em branco.' : null
+    approval: approvalValue !== null && (Number.isNaN(approvalValue) || approvalValue < 0) ? 'Informe um valor, ou deixe em branco.' : null,
+    pixLimit: pixLimitValue !== null && (Number.isNaN(pixLimitValue) || pixLimitValue < 0) ? 'Informe um valor, ou deixe em branco.' : null
   };
   const valid = Object.values(errors).every((error) => !error);
   const billingChanged =
@@ -150,7 +156,7 @@ function SettingsForm({ settings }: { settings: CondominiumSettings }) {
       await api.updateSettings({ villageName: name.trim(), monthlyAmount, paymentDueDay: Number(dueDay) });
       if ((ruleValue ?? null) !== (settings.budgetRequiredAbove ?? null)) await api.updateBudgetRule(ruleValue);
       if (fractionUpdates.length > 0) await api.updateFractions(fractionUpdates);
-      if (paymentRulesChanged) await api.updatePaymentRules({ sindicoCanPay, approvalAbove: approvalValue });
+      if (paymentRulesChanged) await api.updatePaymentRules({ sindicoCanPay, approvalAbove: approvalValue, pixDailyLimit: pixLimitValue });
       if (billingChanged)
         await api.updateBillingRules({
           billingType,
@@ -365,6 +371,22 @@ function SettingsForm({ settings }: { settings: CondominiumSettings }) {
             Com só a administração pagando, quem aprova a conta da administração? Ligue o síndico, ou tenha outra conta de administração.
           </p>
         )}
+        <Field
+          label="Pix pelo Asaas: limite por dia"
+          htmlFor="pix-limite"
+          error={errors.pixLimit}
+          hint={
+            pixLimitValue
+              ? `Pagar contas por Pix, direto da conta Asaas do condomínio, até ${formatMoney(pixLimitValue)} por dia, somando todas.`
+              : 'Em branco: pagar contas por Pix pelo Asaas fica desligado (o pagamento feito por fora continua).'
+          }
+        >
+          <div className="relative max-w-60">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">R$</span>
+            <Input id="pix-limite" inputMode="decimal" className="pl-9 tabular-nums" placeholder="3.000,00" value={pixLimit} onChange={(e) => setPixLimit(e.target.value)} />
+          </div>
+        </Field>
+        <PixValidationBox />
       </Section>
 
       <Section icon={BellRing} title="Lembretes" description="Avisos no celular dos moradores, pelo aplicativo, enquanto a cobrança não é paga.">

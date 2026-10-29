@@ -76,6 +76,9 @@ public class Settings {
     /** Above this, a bill waits for the approval of a second person (not whoever recorded it). Empty: no second approval. */
     public BigDecimal approvalAbove;
 
+    /** Most that may leave the condominium's Asaas account by Pix in a day. Empty: paying bills by Pix is off. */
+    public BigDecimal pixDailyLimit = new BigDecimal("3000.00");
+
     /** Price of a cubic meter of water and of gas, for the charges by meter reading. */
     public BigDecimal waterPrice;
     public BigDecimal gasPrice;

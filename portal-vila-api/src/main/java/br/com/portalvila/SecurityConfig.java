@@ -63,6 +63,8 @@ class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/public/**").permitAll()
                 // Each condominium's own Asaas notices (checked by their address and token, in the controller).
                 .requestMatchers(HttpMethod.POST, "/api/webhooks/asaas/c/*").permitAll()
+                // Asaas asking, before a withdrawal leaves an account, whether this server requested it (same kind of check).
+                .requestMatchers(HttpMethod.POST, "/api/webhooks/asaas/saque/*").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/documents/*/file").permitAll()
                 .requestMatchers("/api/platform/**").hasRole("PLATFORM_ADMIN")
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")

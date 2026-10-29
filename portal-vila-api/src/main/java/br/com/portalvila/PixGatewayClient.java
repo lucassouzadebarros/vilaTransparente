@@ -36,6 +36,30 @@ interface PixGatewayClient {
     List<JsonNode> listPixPaymentsReceivedBetween(LocalDate start, LocalDate end);
     BigDecimal getBalance();
     List<GatewayTransaction> listFinancialTransactions(LocalDate start, LocalDate end);
+    /** Sends a Pix from the condominium's account to a key. Asaas answers at once; it is settled later (see getTransfer). */
+    GatewayTransfer createPixTransfer(BigDecimal value, String pixKey, String pixKeyType, String description, String externalReference);
+    GatewayTransfer getTransfer(String gatewayTransferId);
+}
+
+/** A transfer as Asaas sees it: status PENDING, BANK_PROCESSING, DONE, FAILED or CANCELLED; the receipt once it is done. */
+record GatewayTransfer(String id, String status, BigDecimal value, BigDecimal fee, String failReason, String receiptUrl, String endToEndId, LocalDate effectiveDate) {
+    static GatewayTransfer from(JsonNode node) {
+        return new GatewayTransfer(
+            text(node, "id"),
+            text(node, "status"),
+            node.hasNonNull("value") ? node.get("value").decimalValue() : null,
+            node.hasNonNull("transferFee") ? node.get("transferFee").decimalValue() : null,
+            text(node, "failReason"),
+            text(node, "transactionReceiptUrl"),
+            text(node, "endToEndIdentifier"),
+            node.hasNonNull("effectiveDate") ? LocalDate.parse(node.get("effectiveDate").asText().substring(0, 10)) : null
+        );
+    }
+
+    private static String text(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        return value == null || value.isNull() || value.asText().isBlank() ? null : value.asText();
+    }
 }
 
 record GatewayCustomer(String id) {
@@ -486,6 +510,60 @@ class AsaasPixGatewayClient implements PixGatewayClient {
                 item.path("paymentId").asText(null)
             ))
             .toList();
+    }
+
+    @Override
+    public GatewayTransfer createPixTransfer(BigDecimal value, String pixKey, String pixKeyType, String description, String externalReference) {
+        requireVila();
+        requireApiKey();
+        Map<String, Object> body = new HashMap<>();
+        body.put("value", value);
+        body.put("pixAddressKey", pixKey);
+        body.put("pixAddressKeyType", pixKeyType);
+        body.put("operationType", "PIX");
+        body.put("description", description);
+        body.put("externalReference", externalReference);
+        try {
+            JsonNode response = webClient.post()
+                .uri("/transfers")
+                .bodyValue(body)
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .block(Duration.ofSeconds(20));
+            if (response == null || !response.hasNonNull("id")) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: a transferência não voltou com um identificador.");
+            }
+            return GatewayTransfer.from(response);
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (WebClientResponseException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
+        }
+    }
+
+    @Override
+    public GatewayTransfer getTransfer(String gatewayTransferId) {
+        requireVila();
+        requireApiKey();
+        try {
+            JsonNode response = webClient.get()
+                .uri("/transfers/{id}", gatewayTransferId)
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .block(Duration.ofSeconds(15));
+            if (response == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: a consulta da transferência veio vazia.");
+            }
+            return GatewayTransfer.from(response);
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (WebClientResponseException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
+        }
     }
 
     private List<JsonNode> fetchAllPages(String path, Map<String, String> filters) {

@@ -22,6 +22,7 @@ import {
   PayableInput,
   Supplier,
   PixCharge,
+  PixPaymentStatus,
   PortalDocument,
   ProblemReport,
   ProblemReportEvent,
@@ -255,8 +256,9 @@ export const api = {
     requestData<{ status: string }>(apiClient.delete(`/problem-reports/${reportId}/photos/${documentId}`)),
   /** A short-lived address a photo can be shown from (an <Image> cannot send the login header). */
   documentAccessUrl: async (documentId: number) => {
-    const access = await requestData<{ path: string }>(apiClient.get(`/documents/${documentId}/access`));
-    return `${publicBaseURL}${access.path}`;
+    // A receipt kept by Asaas (a Pix sent through it) comes back as its own link.
+    const access = await requestData<{ path?: string; url?: string }>(apiClient.get(`/documents/${documentId}/access`));
+    return access.url ?? `${publicBaseURL}${access.path}`;
   },
   documentUrl: (url: string) => (url.startsWith('/') ? `${publicBaseURL}${url}` : url),
   /**
@@ -271,8 +273,8 @@ export const api = {
     // The tab is opened before the request so the browser still counts it as a click and does not block it.
     const tab = Platform.OS === 'web' && typeof window !== 'undefined' ? window.open('', '_blank') : null;
     try {
-      const access = await requestData<{ path: string }>(apiClient.get(`/documents/${stored[1]}/access`));
-      const target = `${publicBaseURL}${access.path}`;
+      const access = await requestData<{ path?: string; url?: string }>(apiClient.get(`/documents/${stored[1]}/access`));
+      const target = access.url ?? `${publicBaseURL}${access.path}`;
       if (tab) {
         tab.location.href = target;
         return undefined;
@@ -302,6 +304,10 @@ export const api = {
   payPayable: (id: number, input: { paidAt: string; method: string; receiptDocumentId: number | null; notes: string | null }) =>
     requestData<Payable>(apiClient.post(`/payables/${id}/pay`, input)),
   cancelPayable: (id: number, reason: string) => requestData<Payable>(apiClient.post(`/payables/${id}/cancel`, { reason })),
+  /** Whether bills can be paid by Pix through Asaas here, and how much of today's limit is used. */
+  pixStatus: () => requestData<PixPaymentStatus>(apiClient.get('/payables/pix')),
+  /** Sends the bill's Pix from the condominium's Asaas account, confirmed with the person's own password. */
+  payByPix: (id: number, password: string) => requestData<Payable>(apiClient.post(`/payables/${id}/pix`, { password })),
   setBudgetRule: (budgetRequiredAbove: number | null) => requestData(apiClient.put('/settings/budget-rule', { budgetRequiredAbove })),
   registerPushToken: (token: string, platform: string) => requestData<{ status: string }>(apiClient.post('/push-tokens', { token, platform })),
   dashboardEventsUrl: () => `${baseURL.replace(/\/$/, '')}/events/dashboard`

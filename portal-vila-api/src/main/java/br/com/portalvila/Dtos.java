@@ -384,7 +384,8 @@ record SettingsResponse(
     BigDecimal waterPrice,
     BigDecimal gasPrice,
     boolean sindicoCanPay,
-    BigDecimal approvalAbove
+    BigDecimal approvalAbove,
+    BigDecimal pixDailyLimit
 ) {
     static SettingsResponse from(Settings settings) {
         return new SettingsResponse(
@@ -406,13 +407,17 @@ record SettingsResponse(
             settings.waterPrice,
             settings.gasPrice,
             settings.sindicoCanPay,
-            settings.approvalAbove
+            settings.approvalAbove,
+            settings.pixDailyLimit
         );
     }
 }
 
-/** Who pays the bills besides the administration, and above which value a second person approves (empty: nobody). */
-record PaymentRulesRequest(Boolean sindicoCanPay, BigDecimal approvalAbove) {
+/**
+ * Who pays the bills besides the administration, above which value a second person approves (empty: nobody), and the
+ * most that may leave by Pix in a day (empty: paying by Pix is off).
+ */
+record PaymentRulesRequest(Boolean sindicoCanPay, BigDecimal approvalAbove, BigDecimal pixDailyLimit) {
 }
 
 record SupplierRequest(String name, String document, String pixKey, String pixKeyType, String phone, String email, String notes) {
@@ -476,7 +481,10 @@ record PayableView(
     Long expenseId,
     String cancelledBy,
     String cancelReason,
-    boolean canApprove
+    boolean canApprove,
+    /** The last Pix sent for it through Asaas: REQUESTED, PENDING, BANK_PROCESSING, DONE, FAILED, CANCELLED; null if none. */
+    String pixStatus,
+    String pixFailReason
 ) {
 }
 

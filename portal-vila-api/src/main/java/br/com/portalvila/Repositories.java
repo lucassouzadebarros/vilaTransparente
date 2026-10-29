@@ -24,6 +24,24 @@ interface PayableRepository extends JpaRepository<Payable, Long> {
     List<Payable> findByGroupKeyAndStatus(String groupKey, String status);
     List<Payable> findByServiceOrderId(Long serviceOrderId);
     List<Payable> findByBudgetId(Long budgetId);
+
+    /** Held until the transaction ends: two clicks on "pay by Pix" cannot both send money for the same bill. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Payable p where p.id = :id")
+    Optional<Payable> findByIdForUpdate(@Param("id") Long id);
+}
+
+interface PixTransferRepository extends JpaRepository<PixTransfer, Long> {
+    Optional<PixTransfer> findByGatewayTransferId(String gatewayTransferId);
+    Optional<PixTransfer> findFirstByPayableIdOrderByIdDesc(Long payableId);
+    List<PixTransfer> findByStatusIn(java.util.Collection<String> statuses);
+    List<PixTransfer> findByRequestedAtGreaterThanEqual(java.time.LocalDateTime since);
+    boolean existsByPayableIdAndStatusIn(Long payableId, java.util.Collection<String> statuses);
+}
+
+interface PixValidationRepository extends JpaRepository<PixValidation, Long> {
+    Optional<PixValidation> findByCondominiumId(Long condominiumId);
+    Optional<PixValidation> findByRouteKey(String routeKey);
 }
 
 interface MeterReadingRepository extends JpaRepository<MeterReading, Long> {
@@ -80,6 +98,10 @@ interface PasswordResetCodeRepository extends JpaRepository<PasswordResetCode, L
 }
 
 interface SettingsRepository extends JpaRepository<Settings, Long> {
+    /** The condominium's settings, held until the transaction ends: two Pix at the same time count against one daily limit. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from Settings s")
+    List<Settings> findAllForUpdate();
 }
 
 interface ContributionRepository extends JpaRepository<Contribution, Long> {

@@ -43,6 +43,7 @@ class WebhookService {
     private final ExcludedGatewayPaymentRepository excludedPayments;
     private final String configuredToken;
     private final boolean acceptStoredSecret;
+    private final PixTransferService pixTransfers;
 
     WebhookService(
         ObjectMapper objectMapper,
@@ -58,8 +59,10 @@ class WebhookService {
         GatewayPaymentLockService paymentLocks,
         ExcludedGatewayPaymentRepository excludedPayments,
         @Value("${portal.asaas.webhook-token:}") String configuredToken,
-        @Value("${portal.asaas.accept-stored-webhook-secret:true}") boolean acceptStoredSecret
+        @Value("${portal.asaas.accept-stored-webhook-secret:true}") boolean acceptStoredSecret,
+        PixTransferService pixTransfers
     ) {
+        this.pixTransfers = pixTransfers;
         this.objectMapper = objectMapper;
         this.events = events;
         this.pixCharges = pixCharges;
@@ -105,7 +108,10 @@ class WebhookService {
         String eventId = text(payload, "id");
         String eventType = text(payload, "event");
         JsonNode payment = payload.path("payment");
-        String gatewayPaymentId = text(payment, "id");
+        // Transfer notices (a bill paid by Pix through Asaas) carry the transfer instead of a payment.
+        JsonNode transfer = payload.path("transfer");
+        boolean transferNotice = eventType != null && eventType.startsWith("TRANSFER_");
+        String gatewayPaymentId = transferNotice ? text(transfer, "id") : text(payment, "id");
 
         if (eventId == null || eventId.isBlank()) {
             eventId = eventType + ":" + gatewayPaymentId + ":" + text(payload, "dateCreated");
@@ -132,7 +138,7 @@ class WebhookService {
         }
 
         try {
-            boolean changed = applyPaymentEvent(event.eventType, gatewayPaymentId, payment);
+            boolean changed = transferNotice ? pixTransfers.applyNotice(transfer) : applyPaymentEvent(event.eventType, gatewayPaymentId, payment);
             event.processed = true;
             event.processedAt = LocalDateTime.now();
             events.save(event);

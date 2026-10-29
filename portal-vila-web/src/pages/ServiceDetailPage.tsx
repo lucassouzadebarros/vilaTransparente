@@ -9,7 +9,7 @@ import { Badge, Button, Card, Skeleton, Spinner } from '@/components/ui';
 import { Dialog } from '@/components/ui/dialog';
 import { PageHeader } from '@/components/ui/page';
 import { useToast } from '@/components/ui/toast';
-import { api, type Payable } from '@/lib/api';
+import { api, PIX_IN_FLIGHT, type Payable } from '@/lib/api';
 import { useSession } from '@/lib/auth';
 import { paymentTermsText } from '@/lib/paymentTerms';
 import { formatDate, formatMoney, useDocumentTitle } from '@/lib/utils';
@@ -18,6 +18,7 @@ import { formatDocument } from '@/pages/SuppliersPage';
 
 function BillBadge({ bill }: { bill: Payable }) {
   if (bill.status === 'PAID') return <Badge tone="ok">Pago</Badge>;
+  if (bill.pixStatus && PIX_IN_FLIGHT.includes(bill.pixStatus)) return <Badge tone="brand">Pix a caminho</Badge>;
   if (bill.status === 'PENDING_APPROVAL') return <Badge tone="warn">Aguardando aprovação</Badge>;
   return bill.overdue ? <Badge tone="danger">Vencida</Badge> : <Badge tone="brand">A pagar</Badge>;
 }
@@ -80,7 +81,7 @@ export function ServiceDetailPage() {
         amount: bill.amount,
         documentId: bill.receiptDocumentId,
         badge: <BillBadge bill={bill} />,
-        payable: me.canPay && bill.status === 'APPROVED' ? bill : null
+        payable: me.canPay && bill.status === 'APPROVED' && !(bill.pixStatus && PIX_IN_FLIGHT.includes(bill.pixStatus)) ? bill : null
       })),
     ...(expenses.data ?? [])
       .filter((expense) => expense.serviceOrderId === service.id && !billed.has(expense.id))
