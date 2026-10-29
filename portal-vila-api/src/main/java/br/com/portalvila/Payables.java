@@ -214,22 +214,37 @@ class PayableService {
 
     /** The key as Asaas expects it: digits for CPF, CNPJ and phone, lower case for e-mail. */
     private static String normalizedPixKey(String key, String type) {
-        String value = switch (type) {
-            case "CPF", "CNPJ", "PHONE" -> key.replaceAll("\\D", "");
-            case "EMAIL" -> key.toLowerCase(Locale.ROOT);
-            default -> key;
-        };
+        String value = asaasPixKey(key, type);
         boolean valid = switch (type) {
             case "CPF" -> value.length() == 11;
             case "CNPJ" -> value.length() == 14;
-            case "PHONE" -> value.length() >= 10 && value.length() <= 13;
+            case "PHONE" -> value.length() == 11;
             case "EMAIL" -> value.matches("[^@\\s]+@[^@\\s]+\\.[^@\\s]+");
             default -> value.length() >= 32 && value.length() <= 36;
         };
+        if (!valid && "PHONE".equals(type)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A chave Pix de telefone é o celular com DDD: 11 números, como (21) 98765-4321.");
+        }
         if (!valid) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A chave Pix não parece um " + pixKeyLabel(type) + " válido.");
         }
         return value;
+    }
+
+    /**
+     * Digits for CPF, CNPJ and phone, lower case for e-mail. Asaas takes a phone key as the 11 digits with the area code,
+     * so a country code typed in front (+55) is dropped, also from keys saved before this rule.
+     */
+    static String asaasPixKey(String key, String type) {
+        return switch (type) {
+            case "CPF", "CNPJ" -> key.replaceAll("\\D", "");
+            case "PHONE" -> {
+                String digits = key.replaceAll("\\D", "");
+                yield digits.length() == 13 && digits.startsWith("55") ? digits.substring(2) : digits;
+            }
+            case "EMAIL" -> key.trim().toLowerCase(Locale.ROOT);
+            default -> key.trim();
+        };
     }
 
     private static String pixKeyLabel(String type) {

@@ -84,6 +84,10 @@ class PixTransfersTest {
                     answer(exchange, 400, "{\"errors\":[{\"description\":\"Saldo insuficiente para a transferência.\"}]}");
                     return;
                 }
+                if (body.contains("\"value\":777")) {
+                    answer(exchange, 400, "{\"errors\":[{\"description\":\"A chave de API fornecida não possui permissão para realizar operações de saque via API.\"}]}");
+                    return;
+                }
                 String id = "tra_" + ids.incrementAndGet();
                 statuses.put(id, "PENDING");
                 answer(exchange, 200, "{\"id\":\"" + id + "\",\"status\":\"PENDING\",\"transferFee\":0}");
@@ -383,6 +387,30 @@ class PixTransfersTest {
                 + "\",\"status\":\"DONE\",\"transactionReceiptUrl\":\"https://www.asaas.com/comprovantes/" + retry + "\",\"effectiveDate\":\"" + LocalDate.now() + "\"}}"))
             .andExpect(status().isOk());
         assertThat(TenantContext.callAs(jardim, () -> payables.findById(billId).orElseThrow().status)).isEqualTo(Payable.PAID);
+    }
+
+    @Test
+    void refusalsSayWhatToDoAndPhoneKeysGoAsAsaasExpects() throws Exception {
+        // A phone key is the 11 digits with the area code: a +55 typed in front is dropped, a short number is refused.
+        JsonNode phone = call(post("/api/suppliers"), admin, "{\"name\":\"Vidraceiro\",\"pixKey\":\"+55 (21) 98765-4321\",\"pixKeyType\":\"PHONE\"}", 200);
+        assertThat(phone.get("pixKey").asText()).isEqualTo("21987654321");
+        JsonNode shortNumber = call(post("/api/suppliers"), admin, "{\"name\":\"Fixo\",\"pixKey\":\"(21) 8765-4321\",\"pixKeyType\":\"PHONE\"}", 400);
+        assertThat(shortNumber.get("error").asText()).contains("celular com DDD");
+
+        // An account where Asaas never released withdrawals through the API: the refusal says what to do.
+        long refused = bill("Vidros da portaria", "777", phone.get("id").asLong());
+        JsonNode error = payByPix(refused, admin, PASSWORD, 502);
+        assertThat(error.get("error").asText()).contains("Peça ao suporte do Asaas para liberar transferências");
+        assertThat(TenantContext.callAs(jardim, () -> transfers.findFirstByPayableIdOrderByIdDesc(refused).orElseThrow().failReason))
+            .contains("Peça ao suporte do Asaas");
+        assertThat(PixTransferService.explain("Asaas: A chave informada não foi encontrada.")).contains("cadastro do fornecedor");
+
+        // A phone key saved with the country code before this rule still goes to Asaas as it expects.
+        Long older = TenantContext.callAs(jardim, () -> supplier("Eletricista antigo", "5521912345678", "PHONE"));
+        payByPix(bill("Tomadas", "120", older), admin, PASSWORD, 200);
+        JsonNode body = json.readTree(transfersSent().get(transfersSent().size() - 1).body());
+        assertThat(body.get("pixAddressKey").asText()).isEqualTo("21912345678");
+        assertThat(body.get("pixAddressKeyType").asText()).isEqualTo("PHONE");
     }
 
     @Test

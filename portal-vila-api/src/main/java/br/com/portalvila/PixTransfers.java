@@ -208,7 +208,7 @@ class PixTransferService {
             answer = gateway.createPixTransfer(requested.amount, requested.pixKey, requested.pixKeyType,
                 trimTo("Pagamento: " + bill.description, 140), "PIX-" + requested.id);
         } catch (RuntimeException refused) {
-            String why = refused instanceof ResponseStatusException status && status.getReason() != null ? status.getReason() : "o Asaas não respondeu.";
+            String why = explain(refused instanceof ResponseStatusException status && status.getReason() != null ? status.getReason() : "o Asaas não respondeu.");
             transaction.executeWithoutResult(status -> transfers.findById(requested.id).ifPresent(transfer -> {
                 transfer.status = PixTransfer.FAILED;
                 transfer.failReason = why;
@@ -262,7 +262,7 @@ class PixTransferService {
         PixTransfer transfer = new PixTransfer();
         transfer.payableId = bill.id;
         transfer.amount = bill.amount;
-        transfer.pixKey = supplier.pixKey;
+        transfer.pixKey = PayableService.asaasPixKey(supplier.pixKey, supplier.pixKeyType);
         transfer.pixKeyType = supplier.pixKeyType;
         transfer.requestedBy = me.email;
         transfer.requestedAt = LocalDateTime.now(ZONE);
@@ -270,6 +270,22 @@ class PixTransferService {
         PixTransfer saved = transfers.save(transfer);
         audit.record("PIX_REQUESTED", "PAYABLE", bill.id, bill.description + " - " + AuditService.money(bill.amount) + " para " + supplier.name);
         return saved;
+    }
+
+    /**
+     * Asaas's refusals that need someone to act get a sentence saying what to do; the others go as Asaas wrote them.
+     * The permission one comes from accounts where withdrawals through the API were never released.
+     */
+    static String explain(String reason) {
+        String text = reason.toLowerCase(Locale.ROOT);
+        if (text.contains("permissão para realizar operações de saque") || text.contains("saque via api")) {
+            return "O Asaas ainda não liberou Pix pela API nesta conta. Peça ao suporte do Asaas para liberar transferências (saques) via API "
+                + "na chave usada pelo Portal; depois é só pagar de novo.";
+        }
+        if (text.contains("chave informada não foi encontrada")) {
+            return "O Asaas não encontrou a chave Pix do fornecedor. Confira a chave e o tipo no cadastro do fornecedor.";
+        }
+        return reason;
     }
 
     // ---- Following Asaas
@@ -322,7 +338,7 @@ class PixTransferService {
         transfer.fee = answer.fee() != null ? answer.fee() : transfer.fee;
         transfer.receiptUrl = answer.receiptUrl() != null ? answer.receiptUrl() : transfer.receiptUrl;
         transfer.endToEndId = answer.endToEndId() != null ? answer.endToEndId() : transfer.endToEndId;
-        transfer.failReason = answer.failReason();
+        transfer.failReason = answer.failReason() == null ? null : explain(answer.failReason());
         transfer.updatedAt = LocalDateTime.now();
         transfers.save(transfer);
         Payable bill = payables.findById(transfer.payableId).orElse(null);
