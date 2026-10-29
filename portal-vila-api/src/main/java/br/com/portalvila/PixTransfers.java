@@ -28,9 +28,12 @@ import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** Before paying by Pix: whether it can be done here, how much of the day's limit is used, and the Asaas balance. */
 record PixPaymentStatus(boolean available, String reason, BigDecimal dailyLimit, BigDecimal usedToday, BigDecimal balance) {
@@ -77,6 +80,20 @@ class PixPaymentController {
     @PreAuthorize("@access.canPay()")
     PayableView payCode(@RequestBody PayPixCodeRequest request) {
         return pix.payCode(request);
+    }
+
+    /** Who holds a Pix key typed at the moment (name, masked document, bank), before paying it. Nothing is paid. */
+    @PostMapping("/pix-key/read")
+    @PreAuthorize("@access.canPay()")
+    PixKeyView readKey(@RequestBody ReadPixKeyRequest request) {
+        return pix.readKey(request);
+    }
+
+    /** Pays a key typed at the moment, as in a bank app: the bill is recorded, approved and paid at once, with the password. */
+    @PostMapping("/pix-key")
+    @PreAuthorize("@access.canPay()")
+    PayableView payKey(@RequestBody PayPixKeyRequest request) {
+        return pix.payKey(request);
     }
 }
 
@@ -246,8 +263,8 @@ class PixTransferService {
                 transfers.save(transfer);
                 audit.record("PIX_FAILED", "PAYABLE", bill.id, bill.description + " - " + AuditService.money(transfer.amount) + " - " + why);
             });
-            if (PixTransfer.CODE.equals(requested.kind)) {
-                payables.findById(bill.id).ifPresent(found -> payableService.cancelUnpaid(found, "O Pix copia e cola não saiu: " + why, requested.requestedBy));
+            if (requested.ownBill) {
+                payables.findById(bill.id).ifPresent(found -> payableService.cancelUnpaid(found, notSentReason(requested) + why, requested.requestedBy));
             }
         });
         return new ResponseStatusException(HttpStatus.BAD_GATEWAY, "O Pix não saiu. " + why, refused);
@@ -369,10 +386,12 @@ class PixTransferService {
             });
         checkDailyLimit(row, amount);
         String receiver = read.receiverName() == null ? "o recebedor do código" : read.receiverName();
-        Payable bill = payableService.recordForPixCode(new PayableRequest(null, request.description(), request.category(), amount,
-            BudgetVotingService.today(), null, null, null, request.serviceOrderId(), null, request.exceptionReason(), request.notes(), null, null), me, receiver);
+        Payable bill = payableService.recordForImmediatePix(new PayableRequest(null, request.description(), request.category(), amount,
+            BudgetVotingService.today(), null, null, null, request.serviceOrderId(), null, request.exceptionReason(), request.notes(), null, null),
+            me, "Pix copia e cola", receiver);
         PixTransfer transfer = new PixTransfer();
         transfer.kind = PixTransfer.CODE;
+        transfer.ownBill = true;
         transfer.payableId = bill.id;
         transfer.amount = amount;
         transfer.pixKey = read.pixKey();
@@ -400,6 +419,166 @@ class PixTransferService {
 
     private static String cannotPay(PixCode read) {
         return "O Asaas não aceita pagar este código" + (read.cannotBePaidReason() == null ? "." : ": " + read.cannotBePaidReason());
+    }
+
+    private static String notSentReason(PixTransfer transfer) {
+        return PixTransfer.CODE.equals(transfer.kind) ? "O Pix copia e cola não saiu: " : "O Pix não saiu: ";
+    }
+
+    // ---- Paying a key typed at the moment, as in a bank app
+
+    /** A holder looked up lately: paying right after does not ask the Pix directory again (lookups are counted there). */
+    private record LookedUp(PixKeyOwner owner, long at) {
+    }
+
+    private static final long LOOKUP_MEMORY_MS = 30 * 60_000L;
+    private static final long LOOKUP_WINDOW_MS = 10 * 60_000L;
+    private static final int LOOKUPS_PER_WINDOW = 20;
+    private static final long REPEAT_WINDOW_MINUTES = 2;
+    private final Map<String, LookedUp> lookedUp = new ConcurrentHashMap<>();
+    private final Map<String, Deque<Long>> lookupsBy = new ConcurrentHashMap<>();
+
+    PixKeyView readKey(ReadPixKeyRequest request) {
+        AppUser me = currentUser.current();
+        String type = keyType(request == null ? null : request.type());
+        String key = PayableService.normalizedPixKey(requireKey(request == null ? null : request.key()), type);
+        PixKeyOwner owner = lookup(me, type, key);
+        Supplier supplier = payableService.supplierWithKey(key, type).orElse(null);
+        return new PixKeyView(type, key, owner.name(), owner.document(), owner.bank(), supplier == null ? null : supplier.id, supplier == null ? null : supplier.name);
+    }
+
+    /**
+     * The key's holder is the one shown before (looked up again if it was a while ago), the bill is recorded and approved
+     * with the request kept (to the supplier with that key, or a new one when asked), and only then the Pix goes.
+     */
+    PayableView payKey(PayPixKeyRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe a chave Pix.");
+        }
+        AppUser me = checkPassword(request.password(), null);
+        String type = keyType(request.type());
+        String key = PayableService.normalizedPixKey(requireKey(request.key()), type);
+        if (request.amount() == null || request.amount().signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe quanto pagar.");
+        }
+        BigDecimal amount = request.amount().setScale(2, java.math.RoundingMode.HALF_UP);
+        PixKeyOwner owner = lookup(me, type, key);
+        PixTransfer requested = transaction.execute(status -> requestKey(request, type, key, owner, amount, me));
+        Payable bill = payables.findById(requested.payableId).orElseThrow();
+        GatewayTransfer answer;
+        try {
+            answer = gateway.createPixTransfer(amount, key, type, trimTo("Pagamento: " + bill.description, 140), "PIX-" + requested.id);
+        } catch (RuntimeException refused) {
+            throw notSent(requested, bill, refused);
+        }
+        accepted(requested, bill, answer);
+        return payableService.viewOf(payables.findById(bill.id).orElseThrow());
+    }
+
+    private PixTransfer requestKey(PayPixKeyRequest request, String type, String key, PixKeyOwner owner, BigDecimal amount, AppUser me) {
+        Settings row = lockedSettings();
+        // The same Pix sent twice in a row is a double click, not a second purchase.
+        LocalDateTime recent = LocalDateTime.now(ZONE).minusMinutes(REPEAT_WINDOW_MINUTES);
+        boolean repeated = transfers.findByRequestedAtGreaterThanEqual(recent).stream()
+            .anyMatch(earlier -> PixTransfer.KEY.equals(earlier.kind) && key.equals(earlier.pixKey) && amount.compareTo(earlier.amount) == 0
+                && (PixTransfer.DONE.equals(earlier.status) || PixTransfer.IN_FLIGHT.contains(earlier.status)));
+        if (repeated) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Um Pix igual (mesma chave e mesmo valor) acabou de sair. Se for outro pagamento, espere "
+                + REPEAT_WINDOW_MINUTES + " minutos e mande de novo.");
+        }
+        checkDailyLimit(row, amount);
+        Supplier supplier = payableService.supplierWithKey(key, type).orElse(null);
+        if (supplier == null && Boolean.TRUE.equals(request.saveSupplier())) {
+            String name = request.supplierName() == null || request.supplierName().isBlank() ? owner.name() : request.supplierName().trim();
+            supplier = payableService.saveSupplier(null, new SupplierRequest(trimTo(name, 160), null, key, type, null, null, null));
+        }
+        String receiver = supplier != null ? supplier.name : owner.name();
+        Payable bill = payableService.recordForImmediatePix(new PayableRequest(supplier == null ? null : supplier.id, request.description(), request.category(),
+            amount, BudgetVotingService.today(), null, null, null, request.serviceOrderId(), null, request.exceptionReason(), request.notes(), null, null),
+            me, "Pix para chave " + keyLabel(type), receiver);
+        PixTransfer transfer = new PixTransfer();
+        transfer.kind = PixTransfer.KEY;
+        transfer.ownBill = true;
+        transfer.payableId = bill.id;
+        transfer.amount = amount;
+        transfer.pixKey = key;
+        transfer.pixKeyType = type;
+        transfer.receiverName = trimTo(owner.name(), 160);
+        transfer.requestedBy = me.email;
+        transfer.requestedAt = LocalDateTime.now(ZONE);
+        transfer.updatedAt = LocalDateTime.now();
+        PixTransfer saved = transfers.save(transfer);
+        audit.record("PIX_REQUESTED", "PAYABLE", bill.id, bill.description + " - " + AuditService.money(amount) + " para " + owner.name()
+            + " (chave " + keyLabel(type) + ")");
+        return saved;
+    }
+
+    /** Who holds the key: remembered for a while, otherwise asked to the Pix directory, at most so many times per person. */
+    private PixKeyOwner lookup(AppUser me, String type, String key) {
+        long now = System.currentTimeMillis();
+        String memo = TenantContext.current() + ":" + type + ":" + key;
+        LookedUp known = lookedUp.get(memo);
+        if (known != null && now - known.at() < LOOKUP_MEMORY_MS) {
+            return known.owner();
+        }
+        throttleLookups(TenantContext.current() + ":" + me.email, now);
+        PixKeyOwner owner;
+        try {
+            owner = gateway.lookupPixKey(key, type);
+        } catch (ResponseStatusException ex) {
+            if (ex.getStatusCode().value() == HttpStatus.NOT_FOUND.value()) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, notFound(), ex);
+            }
+            throw ex;
+        }
+        if (owner.name() == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, notFound());
+        }
+        lookedUp.values().removeIf(entry -> now - entry.at() >= LOOKUP_MEMORY_MS);
+        lookedUp.put(memo, new LookedUp(owner, now));
+        return owner;
+    }
+
+    /** Asking the Pix directory for many keys in a row looks like someone sweeping keys: a few minutes' pause. */
+    private void throttleLookups(String who, long now) {
+        Deque<Long> times = lookupsBy.computeIfAbsent(who, ignored -> new ArrayDeque<>());
+        synchronized (times) {
+            while (!times.isEmpty() && now - times.peekFirst() >= LOOKUP_WINDOW_MS) {
+                times.pollFirst();
+            }
+            if (times.size() >= LOOKUPS_PER_WINDOW) {
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Muitas consultas de chave em pouco tempo. Espere alguns minutos e tente de novo.");
+            }
+            times.addLast(now);
+        }
+    }
+
+    private static String notFound() {
+        return "Não achei essa chave Pix. Confira a chave e o tipo (CPF, CNPJ, celular, e-mail ou aleatória).";
+    }
+
+    private static String keyType(String type) {
+        String value = type == null ? "" : type.trim().toUpperCase(Locale.ROOT);
+        if (!PayableService.PIX_KEY_TYPES.contains(value)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Diga o tipo da chave Pix: CPF, CNPJ, celular, e-mail ou aleatória.");
+        }
+        return value;
+    }
+
+    private static String requireKey(String key) {
+        if (key == null || key.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe a chave Pix.");
+        }
+        return key.trim();
+    }
+
+    private static String keyLabel(String type) {
+        return switch (type) {
+            case "PHONE" -> "celular";
+            case "EMAIL" -> "e-mail";
+            case "EVP" -> "aleatória";
+            default -> type;
+        };
     }
 
     /**
@@ -491,9 +670,10 @@ class PixTransferService {
             String why = transfer.failReason == null ? (PixTransfer.CANCELLED.equals(status) ? "cancelado no Asaas" : "o Asaas não informou o motivo") : transfer.failReason;
             audit.record(PixTransfer.CANCELLED.equals(status) ? "PIX_CANCELLED" : "PIX_FAILED", "PAYABLE", bill.id,
                 bill.description + " - " + AuditService.money(transfer.amount) + " - " + why);
-            if (PixTransfer.CODE.equals(transfer.kind)) {
-                payableService.cancelUnpaid(bill, "O Pix copia e cola não saiu: " + why, transfer.requestedBy);
-                notify(transfer, "O Pix não saiu", bill.description + ": " + why + ". A conta foi cancelada: pague com um código novo ou por fora.");
+            if (transfer.ownBill) {
+                payableService.cancelUnpaid(bill, notSentReason(transfer) + why, transfer.requestedBy);
+                notify(transfer, "O Pix não saiu", bill.description + ": " + why + ". A conta foi cancelada: "
+                    + (PixTransfer.CODE.equals(transfer.kind) ? "pague com um código novo ou por fora." : "faça o Pix de novo ou pague por fora."));
             } else {
                 notify(transfer, "O Pix não saiu", bill.description + ": " + why + ". A conta continua a pagar.");
             }

@@ -112,6 +112,31 @@ export type PixCode = {
   reason: string | null;
 };
 
+/** Who holds a Pix key (the document comes masked); supplierId when a supplier of the condominium already has it. */
+export type PixKeyView = {
+  type: PixKeyType;
+  key: string;
+  ownerName: string;
+  ownerDocument: string | null;
+  bank: string | null;
+  supplierId: number | null;
+  supplierName: string | null;
+};
+
+export type PayPixKeyInput = {
+  type: PixKeyType;
+  key: string;
+  amount: number;
+  description: string;
+  category: string | null;
+  serviceOrderId: number | null;
+  exceptionReason: string | null;
+  notes: string | null;
+  saveSupplier: boolean;
+  supplierName: string | null;
+  password: string;
+};
+
 export type PayPixCodeInput = {
   code: string;
   amount: number | null;
@@ -636,6 +661,10 @@ export const api = {
   readPixCode: (code: string) => request<PixCode>('/payables/pix-code/read', { method: 'POST', body: JSON.stringify({ code }) }),
   /** Records the code's bill and pays it from the condominium's Asaas account; the person's own password confirms it. */
   payPixCode: (input: PayPixCodeInput) => request<Payable>('/payables/pix-code', { method: 'POST', body: JSON.stringify(input) }),
+  /** Asks who holds a Pix key (name, masked document, bank) before paying it. Nothing is paid. */
+  readPixKey: (type: PixKeyType, key: string) => request<PixKeyView>('/payables/pix-key/read', { method: 'POST', body: JSON.stringify({ type, key }) }),
+  /** Records the bill and pays a key typed at the moment from the condominium's Asaas account, with the person's password. */
+  payPixKey: (input: PayPixKeyInput) => request<Payable>('/payables/pix-key', { method: 'POST', body: JSON.stringify(input) }),
   pixValidation: () => request<PixValidation>('/payments/pix-validation'),
   createPixValidation: () => request<PixValidation>('/payments/pix-validation', { method: 'POST' }),
   suppliers: () => request<Supplier[]>('/suppliers'),

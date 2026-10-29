@@ -114,6 +114,16 @@ class PixTransfersTest {
                 String receipt = status.equals("DONE") ? ",\"transactionReceiptUrl\":\"https://www.asaas.com/comprovantes/" + id + "\",\"effectiveDate\":\"" + LocalDate.now() + "\"" : "";
                 String reason = status.equals("FAILED") ? ",\"failReason\":\"Chave Pix não encontrada\"" : "";
                 answer(exchange, 200, "{\"id\":\"" + id + "\",\"status\":\"" + status + "\",\"authorized\":" + !unauthorized.contains(id) + receipt + reason + "}");
+            } else if (path.equals("/pix/addressKeys/external") && method.equals("GET")) {
+                String query = exchange.getRequestURI().getQuery();
+                if (query.contains("key=21987650000") && query.contains("type=PHONE")) {
+                    answer(exchange, 200, "{\"type\":\"PHONE\",\"key\":\"21987650000\",\"owner\":{\"name\":\"Casa do Construtor Ltda\",\"cpfCnpj\":\"12.***.***/0001-**\"},"
+                        + "\"financialInstitution\":{\"name\":\"Banco Exemplo\"}}");
+                } else if (query.contains("key=52998224725") && query.contains("type=CPF")) {
+                    answer(exchange, 200, "{\"type\":\"CPF\",\"key\":\"52998224725\",\"owner\":{\"name\":\"Maria da Silva\",\"cpfCnpj\":\"***.982.247-**\"},\"ispbName\":\"Banco Exemplo\"}");
+                } else {
+                    answer(exchange, 404, "{\"errors\":[{\"description\":\"Chave não encontrada.\"}]}");
+                }
             } else if (path.equals("/pix/qrCodes/decode") && method.equals("POST")) {
                 String code = READER.readTree(body).path("payload").asText();
                 String read = codes.get(code);
@@ -562,6 +572,86 @@ class PixTransfersTest {
         call(put("/api/settings/payments"), admin, "{\"sindicoCanPay\":false,\"approvalAbove\":null,\"pixDailyLimit\":100}", 200);
         assertThat(payCode("CODIGO-MERCADO", "null", PASSWORD, 409).get("error").asText()).contains("limite de Pix por dia");
         assertThat(codesPaid()).hasSize(2);
+    }
+
+    private JsonNode readKey(String type, String key, int expected) throws Exception {
+        return call(post("/api/payables/pix-key/read"), admin, "{\"type\":\"" + type + "\",\"key\":\"" + key + "\"}", expected);
+    }
+
+    private JsonNode payKey(String type, String key, String amount, boolean save, String password, int expected) throws Exception {
+        return call(post("/api/payables/pix-key"), admin, "{\"type\":\"" + type + "\",\"key\":\"" + key + "\",\"amount\":" + amount
+            + ",\"description\":\"Cimento e areia\",\"category\":\"Obras\",\"saveSupplier\":" + save + ",\"supplierName\":\"Casa do Construtor\",\"password\":\""
+            + password + "\"}", expected);
+    }
+
+    @Test
+    void aKeyTypedAtTheMomentShowsItsHolderAndIsPaidLikeInABank() throws Exception {
+        // Before paying, the holder of the key: name, masked document, bank.
+        JsonNode holder = readKey("PHONE", "+55 (21) 98765-0000", 200);
+        assertThat(holder.get("ownerName").asText()).isEqualTo("Casa do Construtor Ltda");
+        assertThat(holder.get("ownerDocument").asText()).isEqualTo("12.***.***/0001-**");
+        assertThat(holder.get("bank").asText()).isEqualTo("Banco Exemplo");
+        assertThat(holder.get("key").asText()).isEqualTo("21987650000");
+        assertThat(holder.get("supplierId").isNull()).isTrue();
+        assertThat(readKey("EMAIL", "ninguem@exemplo.com", 404).get("error").asText()).contains("Não achei essa chave Pix");
+        readKey("BANCO", "123", 400);
+        call(post("/api/payables/pix-key/read"), sindico, "{\"type\":\"PHONE\",\"key\":\"21987650000\"}", 403);
+
+        // Without the right password nothing goes to Asaas.
+        payKey("PHONE", "21987650000", "250", true, "senha-errada", 403);
+        assertThat(transfersSent()).isEmpty();
+
+        // Paid: the bill is recorded and approved at once, the key kept as a supplier when asked.
+        JsonNode bill = payKey("PHONE", "(21) 98765-0000", "250", true, PASSWORD, 200);
+        assertThat(bill.get("status").asText()).isEqualTo(Payable.APPROVED);
+        assertThat(bill.get("supplierName").asText()).isEqualTo("Casa do Construtor");
+        assertThat(bill.get("supplierHasPix").asBoolean()).isTrue();
+        assertThat(bill.get("pixKind").asText()).isEqualTo(PixTransfer.KEY);
+        JsonNode sent = json.readTree(transfersSent().get(0).body());
+        assertThat(sent.get("pixAddressKey").asText()).isEqualTo("21987650000");
+        assertThat(sent.get("pixAddressKeyType").asText()).isEqualTo("PHONE");
+        assertThat(sent.get("value").decimalValue()).isEqualByComparingTo("250");
+        long billId = bill.get("id").asLong();
+        long supplierId = bill.get("supplierId").asLong();
+
+        // The same Pix twice in a row is a double click: refused. Another value to the same key uses the same supplier.
+        assertThat(payKey("PHONE", "21987650000", "250", true, PASSWORD, 409).get("error").asText()).contains("Um Pix igual");
+        assertThat(readKey("PHONE", "21987650000", 200).get("supplierId").asLong()).isEqualTo(supplierId);
+        assertThat(payKey("PHONE", "21987650000", "80", true, PASSWORD, 200).get("supplierId").asLong()).isEqualTo(supplierId);
+        assertThat(TenantContext.callAs(jardim, () -> suppliers.findAll().stream().filter(found -> "21987650000".equals(found.pixKey)).count())).isEqualTo(1);
+
+        // Asaas confirms it: paid with the receipt, an expense to the supplier.
+        String transferId = TenantContext.callAs(jardim, () -> transfers.findFirstByPayableIdOrderByIdDesc(billId).orElseThrow().gatewayTransferId);
+        statuses.put(transferId, "DONE");
+        TenantContext.callAs(jardim, pix::refreshInFlight);
+        Payable paid = TenantContext.callAs(jardim, () -> payables.findById(billId).orElseThrow());
+        assertThat(paid.status).isEqualTo(Payable.PAID);
+        assertThat(TenantContext.callAs(jardim, () -> expenses.findById(paid.expenseId).orElseThrow().supplier)).isEqualTo("Casa do Construtor");
+
+        // Not kept as a supplier: the bill goes to the holder's name. Refused at once: that bill is cancelled.
+        JsonNode refused = payKey("CPF", "529.982.247-25", "666", false, PASSWORD, 502);
+        assertThat(refused.get("error").asText()).contains("Saldo insuficiente");
+        Payable cancelled = TenantContext.callAs(jardim, () -> payables.findAll().stream().filter(found -> found.amount.compareTo(new BigDecimal("666")) == 0)
+            .findFirst().orElseThrow());
+        assertThat(cancelled.status).isEqualTo(Payable.CANCELLED);
+        assertThat(cancelled.cancelReason).startsWith("O Pix não saiu:");
+        JsonNode toMaria = payKey("CPF", "52998224725", "90", false, PASSWORD, 200);
+        assertThat(toMaria.get("supplierId").isNull()).isTrue();
+        assertThat(toMaria.get("supplierName").asText()).isEqualTo("Maria da Silva");
+        // Asaas fails it later: cancelled too, with its reason.
+        long mariaBill = toMaria.get("id").asLong();
+        String mariaTransfer = TenantContext.callAs(jardim, () -> transfers.findFirstByPayableIdOrderByIdDesc(mariaBill).orElseThrow().gatewayTransferId);
+        statuses.put(mariaTransfer, "FAILED");
+        TenantContext.callAs(jardim, pix::refreshInFlight);
+        assertThat(TenantContext.callAs(jardim, () -> payables.findById(mariaBill).orElseThrow().status)).isEqualTo(Payable.CANCELLED);
+    }
+
+    @Test
+    void manyKeyLookupsInARowArePaused() throws Exception {
+        for (int i = 0; i < 20; i++) {
+            readKey("EMAIL", "pessoa" + i + "@exemplo.com", 404);
+        }
+        assertThat(readKey("EMAIL", "mais-uma@exemplo.com", 429).get("error").asText()).contains("Muitas consultas de chave");
     }
 
     @Test

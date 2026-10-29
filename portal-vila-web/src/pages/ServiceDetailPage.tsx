@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Ban, CheckCircle2, FileText, Paperclip, Pencil, Plus, QrCode, Siren } from 'lucide-react';
+import { AlertTriangle, Ban, CheckCircle2, FileText, Paperclip, Pencil, Plus, Send, Siren } from 'lucide-react';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { AttachServiceFileDialog, FinishServiceDialog, ServiceDialog } from '@/components/demandForms';
@@ -13,7 +13,7 @@ import { api, PIX_IN_FLIGHT, type Payable } from '@/lib/api';
 import { useSession } from '@/lib/auth';
 import { paymentTermsText } from '@/lib/paymentTerms';
 import { formatDate, formatMoney, useDocumentTitle } from '@/lib/utils';
-import { NewPayableDialog, PayDialog, PixCodeDialog, PixInFlightBadge, serviceSpending } from '@/pages/PayablesPage';
+import { NewPayableDialog, PayDialog, PixDialog, PixInFlightBadge, serviceSpending } from '@/pages/PayablesPage';
 import { formatDocument } from '@/pages/SuppliersPage';
 
 function BillBadge({ bill }: { bill: Payable }) {
@@ -175,8 +175,8 @@ export function ServiceDetailPage() {
                 <div className="flex flex-wrap gap-2">
                   {service.status !== 'FINALIZADO' && (
                     <Button size="sm" variant="ghost" onClick={() => setDialog('code')}>
-                      <QrCode aria-hidden className="size-4" />
-                      Pix copia e cola
+                      <Send aria-hidden className="size-4" />
+                      Fazer um Pix
                     </Button>
                   )}
                   <Button size="sm" variant="secondary" onClick={() => setDialog('pay')}>
@@ -309,7 +309,7 @@ export function ServiceDetailPage() {
       {dialog === 'finish' && <FinishServiceDialog service={service} onClose={() => setDialog(null)} />}
       {dialog === 'attach' && <AttachServiceFileDialog serviceId={service.id} onClose={() => setDialog(null)} />}
       {dialog === 'pay' && <NewPayableDialog service={service} onClose={() => setDialog(null)} />}
-      {dialog === 'code' && <PixCodeDialog service={service} onClose={() => setDialog(null)} />}
+      {dialog === 'code' && <PixDialog service={service} onClose={() => setDialog(null)} />}
       {paying && <PayDialog payable={paying} onClose={() => setPaying(null)} />}
 
       <Dialog

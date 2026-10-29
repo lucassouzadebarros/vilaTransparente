@@ -44,6 +44,12 @@ interface PixGatewayClient {
     /** Pays a "copia e cola" code from the condominium's account. Like a transfer, it is settled later (see getPixTransaction). */
     GatewayTransfer payPixCode(String payload, BigDecimal value, String description);
     GatewayTransfer getPixTransaction(String gatewayTransactionId);
+    /** Who holds a Pix key (name, masked CPF/CNPJ, bank), asked before sending, as a bank app shows it. Nothing is paid. */
+    PixKeyOwner lookupPixKey(String pixKey, String pixKeyType);
+}
+
+/** The holder of a Pix key as the Pix directory tells it: the document comes masked ("***.202.745-**"). */
+record PixKeyOwner(String name, String document, String bank) {
 }
 
 /**
@@ -683,6 +689,40 @@ class AsaasPixGatewayClient implements PixGatewayClient {
             throw ex;
         } catch (WebClientResponseException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
+        }
+    }
+
+    @Override
+    public PixKeyOwner lookupPixKey(String pixKey, String pixKeyType) {
+        requireVila();
+        requireApiKey();
+        try {
+            JsonNode response = webClient.get()
+                .uri(builder -> builder.path("/pix/addressKeys/external").queryParam("type", pixKeyType).queryParam("key", pixKey).build())
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .block(Duration.ofSeconds(15));
+            if (response == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: a consulta da chave veio vazia.");
+            }
+            JsonNode owner = response.path("owner");
+            String bank = GatewayTransfer.text(response.path("financialInstitution"), "name");
+            return new PixKeyOwner(
+                GatewayTransfer.text(owner, "name"),
+                GatewayTransfer.text(owner, "cpfCnpj"),
+                bank != null ? bank : GatewayTransfer.text(response, "ispbName")
+            );
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (WebClientResponseException ex) {
+            // A key that does not exist is the person's typing, not the gateway failing; too many lookups wait a little.
+            if (ex.getStatusCode().value() == 429) {
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "O Asaas pediu uma pausa nas consultas de chave. Tente de novo em alguns minutos.", ex);
+            }
+            HttpStatus status = ex.getStatusCode().is4xxClientError() ? HttpStatus.NOT_FOUND : HttpStatus.BAD_GATEWAY;
+            throw new ResponseStatusException(status, "Asaas: " + asaasError(ex), ex);
         } catch (RuntimeException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
         }

@@ -9,9 +9,10 @@ import java.time.LocalDateTime;
 import java.util.Set;
 
 /**
- * A bill paid by Pix from the condominium's Asaas account: to a supplier's key (KEY) or by a "copia e cola" code (CODE).
- * REQUESTED is kept before Asaas is called; then it follows Asaas: PENDING, BANK_PROCESSING, DONE (the bill is settled
- * with the receipt), FAILED or CANCELLED (a supplier's bill stays open; a code's bill is cancelled, the code is spent).
+ * A bill paid by Pix from the condominium's Asaas account: to a key (KEY: the supplier's, or one typed at the moment) or
+ * by a "copia e cola" code (CODE). REQUESTED is kept before Asaas is called; then it follows Asaas: PENDING,
+ * BANK_PROCESSING, DONE (the bill is settled with the receipt), FAILED or CANCELLED (a bill recorded beforehand stays
+ * open; one the payment recorded itself is cancelled).
  */
 @Entity
 @Table(name = "pix_transfers")
@@ -59,6 +60,10 @@ public class PixTransfer {
     /** Asaas holds it until someone authorizes it with the account's token (SMS or app). */
     @Column(nullable = false)
     public boolean awaitingAuthorization;
+
+    /** Its bill was recorded by the payment itself (a code, a key typed at the moment): if the Pix does not go, it is cancelled. */
+    @Column(nullable = false)
+    public boolean ownBill;
 
     public String gatewayTransferId;
 
