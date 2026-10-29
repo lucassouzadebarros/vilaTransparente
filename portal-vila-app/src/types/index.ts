@@ -184,7 +184,13 @@ export type Budget = {
   votingDeadline?: string | null;
   problemReportId?: number | null;
   competes?: boolean;
+  /** How the supplier will be paid, as the houses vote it. Empty on older budgets. */
+  paymentMode?: PaymentMode | null;
+  downPayment?: number | null;
+  paymentInstallments?: number | null;
 };
+
+export type PaymentMode = 'A_VISTA' | 'PARCELADO' | 'ENTRADA';
 
 export type BudgetVoteChoice = 'APROVAR' | 'RECUSAR';
 

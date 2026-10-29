@@ -253,8 +253,9 @@ class PayableService {
     }
 
     /**
-     * Records a bill: one, split in installments (one a month), or repeating every month. Above the condominium's
-     * approval value it waits for a second person; below, whoever records it has already approved it.
+     * Records a bill: one, split in installments (one a month), repeating every month, or a down payment and the rest
+     * (at once or in installments). Above the condominium's approval value it waits for a second person; below, whoever
+     * records it has already approved it.
      */
     @Transactional
     List<PayableView> create(PayableRequest request) {
@@ -264,38 +265,50 @@ class PayableService {
         if (installments < 1 || installments > MAX_INSTALLMENTS) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "De 1 a " + MAX_INSTALLMENTS + " parcelas.");
         }
-        if (monthly && installments > 1) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escolha parcelas ou repetir todo mês, não os dois.");
+        if (monthly && (installments > 1 || request.downPayment() != null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Uma conta que se repete todo mês não tem parcelas nem entrada.");
         }
         Payable template = new Payable();
         apply(template, request);
         if (template.dueDate == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe o vencimento.");
         }
+        BigDecimal down = request.downPayment() == null ? null : request.downPayment().setScale(2, RoundingMode.HALF_UP);
+        LocalDate restFrom = template.dueDate;
+        if (down != null) {
+            if (down.signum() <= 0 || down.compareTo(template.amount) >= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A entrada precisa ser maior que zero e menor que o valor total.");
+            }
+            restFrom = request.restDueDate() == null ? template.dueDate.plusMonths(1) : request.restDueDate();
+            if (restFrom.isBefore(template.dueDate)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O restante não pode vencer antes da entrada.");
+            }
+        }
         boolean waits = needsApproval(template.amount);
-        String groupKey = installments > 1 || monthly ? UUID.randomUUID().toString() : null;
-        BigDecimal part = template.amount.divide(BigDecimal.valueOf(installments), 2, RoundingMode.DOWN);
+        String groupKey = installments > 1 || monthly || down != null ? UUID.randomUUID().toString() : null;
         List<Payable> created = new ArrayList<>();
+        if (down != null) {
+            Payable entry = copy(template);
+            entry.description = withSuffix(template.description, " - entrada");
+            entry.amount = down;
+            created.add(payables.save(prepared(entry, me, waits, groupKey, false)));
+        }
+        BigDecimal rest = down == null ? template.amount : template.amount.subtract(down);
+        BigDecimal part = rest.divide(BigDecimal.valueOf(installments), 2, RoundingMode.DOWN);
         for (int number = 1; number <= installments; number++) {
             Payable payable = copy(template);
-            payable.amount = number < installments ? part : template.amount.subtract(part.multiply(BigDecimal.valueOf(installments - 1)));
-            payable.dueDate = template.dueDate.plusMonths(number - 1L);
+            if (down != null) {
+                payable.description = withSuffix(template.description, " - restante");
+            }
+            payable.amount = number < installments ? part : rest.subtract(part.multiply(BigDecimal.valueOf(installments - 1)));
+            payable.dueDate = restFrom.plusMonths(number - 1L);
             payable.installment = installments > 1 ? number : null;
             payable.installments = installments > 1 ? installments : null;
-            payable.groupKey = groupKey;
-            payable.recurrence = monthly ? Payable.MONTHLY : null;
-            payable.createdBy = me.email;
-            if (waits) {
-                payable.status = Payable.PENDING_APPROVAL;
-            } else {
-                payable.status = Payable.APPROVED;
-                payable.approvedBy = me.email;
-                payable.approvedAt = LocalDateTime.now();
-            }
-            created.add(payables.save(payable));
+            created.add(payables.save(prepared(payable, me, waits, groupKey, monthly)));
         }
         Payable first = created.get(0);
-        audit.record("PAYABLE_CREATED", "PAYABLE", first.id, first.description + " - " + AuditService.money(template.amount)
+        audit.record("PAYABLE_CREATED", "PAYABLE", first.id, template.description + " - " + AuditService.money(template.amount)
+            + (down != null ? " - entrada " + AuditService.money(down) + " e o restante" : "")
             + (installments > 1 ? " em " + installments + " parcelas" : "") + (monthly ? " todo mês" : "")
             + supplierSuffix(first.supplierId) + (waits ? " - aguarda aprovação" : ""));
         if (waits) {
@@ -392,7 +405,12 @@ class PayableService {
         expense.serviceOrderId = payable.serviceOrderId;
         expense.exceptionReason = payable.exceptionReason;
         rules.assertExpenseAllowed(expense);
+        if (expense.exceptionReason == null) {
+            // A small bill can be within the limit on its own and still need the justification the whole job took.
+            expense.exceptionReason = payable.exceptionReason;
+        }
         Expense savedExpense = expenses.save(expense);
+        startService(payable.serviceOrderId);
         audit.record("EXPENSE_CREATED", "EXPENSE", savedExpense.id, savedExpense.description + " - " + AuditService.money(savedExpense.amount)
             + (savedExpense.exceptionReason == null ? "" : " - SEM VOTAÇÃO: " + savedExpense.exceptionReason));
 
@@ -463,31 +481,35 @@ class PayableService {
         if (request.supplierId() != null && suppliers.findById(request.supplierId()).filter(found -> found.active).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Fornecedor não encontrado.");
         }
-        if (request.budgetId() != null) {
-            Budget budget = budgets.findById(request.budgetId())
+        // The job the bill pays for: a service (with the budget the houses approved for it), or a budget on its own.
+        ServiceOrder service = null;
+        if (request.serviceOrderId() != null) {
+            service = services.findById(request.serviceOrderId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Serviço não encontrado."));
+            if ("CANCELADO".equals(service.status)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Este serviço foi cancelado.");
+            }
+        }
+        Long budgetId = request.budgetId() != null ? request.budgetId() : service == null ? null : service.approvedBudgetId;
+        Budget budget = null;
+        if (budgetId != null) {
+            budget = budgets.findById(budgetId)
                 .filter(found -> "APROVADO".equals(found.status))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escolha um orçamento aprovado pelas unidades."));
-            BigDecimal cap = budget.amount.multiply(BigDecimal.ONE.add(SpendingRules.TOLERANCE));
-            if (request.amount().compareTo(cap) > 0) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "O valor passa de 10% acima do orçamento aprovado ("
-                    + AuditService.money(budget.amount) + "). Gere e vote um novo orçamento para a diferença.");
+            if (service == null && budget.serviceId != null) {
+                // An approved budget became a service: the bill belongs to that service.
+                service = services.findById(budget.serviceId).filter(found -> !"CANCELADO".equals(found.status)).orElse(null);
             }
         }
-        if (request.serviceOrderId() != null) {
-            if (services.findById(request.serviceOrderId()).isEmpty()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Serviço não encontrado.");
-            }
-            if (!expenses.findByServiceOrderId(request.serviceOrderId()).isEmpty()) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Este serviço já tem despesa lançada: foi pago ao ser finalizado.");
-            }
-        }
+        String reason = trimmed(request.exceptionReason());
+        boolean beyond = beyondApproved(payable.id, service, budget, request.amount(), reason);
         Expense check = new Expense();
         check.description = description;
         check.category = trimmed(request.category());
         check.amount = request.amount();
-        check.budgetId = request.budgetId();
-        check.serviceOrderId = request.serviceOrderId();
-        check.exceptionReason = request.exceptionReason();
+        check.budgetId = budgetId;
+        check.serviceOrderId = service == null ? null : service.id;
+        check.exceptionReason = reason;
         rules.assertExpenseAllowed(check);
 
         payable.description = description;
@@ -495,11 +517,85 @@ class PayableService {
         payable.amount = request.amount().setScale(2, RoundingMode.HALF_UP);
         payable.dueDate = request.dueDate();
         payable.supplierId = request.supplierId();
-        payable.budgetId = request.budgetId();
-        payable.serviceOrderId = request.serviceOrderId();
+        payable.budgetId = budgetId;
+        payable.serviceOrderId = check.serviceOrderId;
         payable.documentId = request.documentId();
-        payable.exceptionReason = check.exceptionReason;
+        payable.exceptionReason = beyond ? reason : check.exceptionReason;
         payable.notes = trimmed(request.notes());
+    }
+
+    /**
+     * Everything paid or still to pay for the same job, with this bill, stays within what the houses approved (with 10%
+     * of room) or, for a small service with no budget, within the limit. Beyond that it takes an emergency
+     * justification, which everybody reads; with one, it returns true.
+     */
+    private boolean beyondApproved(Long billId, ServiceOrder service, Budget budget, BigDecimal amount, String reason) {
+        BigDecimal cap = budget != null ? budget.amount.multiply(BigDecimal.ONE.add(SpendingRules.TOLERANCE)) : service == null ? null : rules.limit().orElse(null);
+        if (cap == null) {
+            return false;
+        }
+        Map<Long, BigDecimal> spent = new java.util.HashMap<>();
+        Map<Long, BigDecimal> pending = new java.util.HashMap<>();
+        List<Expense> paid = new ArrayList<>(service == null ? List.of() : expenses.findByServiceOrderId(service.id));
+        List<Payable> bills = new ArrayList<>(service == null ? List.of() : payables.findByServiceOrderId(service.id));
+        if (budget != null) {
+            paid.addAll(expenses.findByBudgetId(budget.id));
+            bills.addAll(payables.findByBudgetId(budget.id));
+        }
+        paid.forEach(expense -> spent.put(expense.id, expense.amount));
+        bills.stream()
+            .filter(bill -> !bill.id.equals(billId) && (Payable.PENDING_APPROVAL.equals(bill.status) || Payable.APPROVED.equals(bill.status)))
+            .forEach(bill -> pending.put(bill.id, bill.amount));
+        BigDecimal committed = spent.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add)
+            .add(pending.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add));
+        if (committed.add(amount).compareTo(cap) <= 0) {
+            return false;
+        }
+        if (SpendingRules.validReason(reason)) {
+            return true;
+        }
+        String where = budget != null
+            ? "passa de " + AuditService.money(cap) + " (o orçamento aprovado pelas unidades, " + AuditService.money(budget.amount) + ", mais 10%)"
+            : "passa de " + AuditService.money(cap) + ", o limite sem votação";
+        String what = committed.signum() == 0 ? "O valor " : "Somando com o que já foi lançado para " + (service != null ? "este serviço" : "este orçamento")
+            + " (" + AuditService.money(committed) + "), o total ";
+        throw new ResponseStatusException(HttpStatus.CONFLICT, what + where + ". Se for uma emergência, escreva a justificativa (pelo menos "
+            + SpendingRules.MIN_REASON + " letras): ela aparece para todas as unidades.");
+    }
+
+    /** Money went to the job (a down payment, an installment): a service still waiting to start is now under way. */
+    private void startService(Long serviceId) {
+        if (serviceId == null) {
+            return;
+        }
+        services.findById(serviceId)
+            .filter(service -> "PLANEJADO".equals(service.status) || "APROVADO".equals(service.status))
+            .ifPresent(service -> {
+                service.status = "EM_ANDAMENTO";
+                service.updatedAt = LocalDateTime.now();
+                services.save(service);
+            });
+    }
+
+    /** Who recorded it, the group it belongs to, and whether it still waits for a second person. */
+    private static Payable prepared(Payable payable, AppUser me, boolean waits, String groupKey, boolean monthly) {
+        payable.groupKey = groupKey;
+        payable.recurrence = monthly ? Payable.MONTHLY : null;
+        payable.createdBy = me.email;
+        if (waits) {
+            payable.status = Payable.PENDING_APPROVAL;
+        } else {
+            payable.status = Payable.APPROVED;
+            payable.approvedBy = me.email;
+            payable.approvedAt = LocalDateTime.now();
+        }
+        return payable;
+    }
+
+    /** "Pintura do portão - entrada": the description with what part it is, kept within the 200 letters. */
+    private static String withSuffix(String description, String suffix) {
+        int room = 200 - suffix.length();
+        return (description.length() > room ? description.substring(0, room).trim() : description) + suffix;
     }
 
     private static Payable copy(Payable source) {

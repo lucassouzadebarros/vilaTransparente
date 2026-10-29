@@ -44,6 +44,14 @@ public class Budget {
     public LocalDate validUntil;
     public LocalDate expectedDate;
 
+    /**
+     * How the supplier will be paid, as the houses voted it: A_VISTA (all at once), PARCELADO (paymentInstallments equal
+     * parts) or ENTRADA (downPayment first, the rest in paymentInstallments parts). Empty on budgets that did not say.
+     */
+    public String paymentMode;
+    public BigDecimal downPayment;
+    public Integer paymentInstallments;
+
     @Column(nullable = false)
     public String status = "EM_ANALISE";
 

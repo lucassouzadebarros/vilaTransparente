@@ -558,14 +558,14 @@ class ServiceOrderController {
     @DeleteMapping("/{id}")
     @PreAuthorize("@access.canManageBudgets()")
     Map<String, String> delete(@PathVariable Long id) {
-        workflow.cancelService(id);
+        workflow.cancelService(id, currentUser.current().email);
         return Map.of("status", "CANCELADO");
     }
 
     @PostMapping("/{id}/cancel")
     @PreAuthorize("@access.canManageBudgets()")
     Map<String, String> cancel(@PathVariable Long id) {
-        workflow.cancelService(id);
+        workflow.cancelService(id, currentUser.current().email);
         return Map.of("status", "CANCELADO");
     }
 

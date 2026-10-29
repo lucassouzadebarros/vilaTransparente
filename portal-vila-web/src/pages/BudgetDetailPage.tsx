@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/ui/page';
 import { useToast } from '@/components/ui/toast';
 import { api, type BudgetVoting } from '@/lib/api';
 import { useSession } from '@/lib/auth';
+import { paymentTermsText } from '@/lib/paymentTerms';
 import { formatDate, formatDateTime, formatMoney, plural, useDocumentTitle } from '@/lib/utils';
 import { formatDocument } from '@/pages/SuppliersPage';
 
@@ -40,10 +41,12 @@ export function BudgetDetailPage() {
   const [editing, setEditing] = useState(false);
   const [creatingService, setCreatingService] = useState(false);
 
+  // Closing a voting decides more than the budget: an approved one opens its service, and the problem moves on.
   const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['condo', 'demand-budgets'] });
+    for (const key of ['demand-budgets', 'votings', 'services', 'problems', 'problem-events']) {
+      queryClient.invalidateQueries({ queryKey: ['condo', key] });
+    }
     queryClient.invalidateQueries({ queryKey: ['condo', 'voting', id] });
-    queryClient.invalidateQueries({ queryKey: ['condo', 'votings'] });
   };
   const close = useMutation({
     mutationFn: () => api.closeVoting(id),
@@ -116,6 +119,7 @@ export function BudgetDetailPage() {
             </>
           ) : (
             budget.status === 'APROVADO' &&
+            budget.serviceId == null &&
             !service && (
               <Button onClick={() => setCreatingService(true)}>
                 <Hammer aria-hidden className="size-4" />
@@ -141,6 +145,9 @@ export function BudgetDetailPage() {
               <Fact label="Prazo para fazer">{formatDate(budget.expectedDate)}</Fact>
               <Fact label="Prazo da votação">{formatDate(budget.votingDeadline)}</Fact>
               <Fact label="Concorre com outros">{budget.competes ? 'Sim' : 'Não'}</Fact>
+              <div className="col-span-2 sm:col-span-3">
+                <Fact label="Forma de pagamento">{paymentTermsText(budget) ?? <span className="text-muted">Não informada</span>}</Fact>
+              </div>
             </dl>
             {budget.scope && (
               <div>

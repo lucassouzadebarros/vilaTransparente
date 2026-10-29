@@ -131,7 +131,7 @@ class FlowLinksTest {
         ServiceOrder created = workflow.saveService(incoming);
         Budget quote = quote(created.id, "900.00");
 
-        workflow.cancelService(created.id);
+        workflow.cancelService(created.id, "admin@test");
 
         ProblemReport reopened = reports.findById(report.id).orElseThrow();
         assertThat(reopened.status).isEqualTo("ABERTO");
@@ -195,7 +195,7 @@ class FlowLinksTest {
         assertStatus(() -> workflow.saveBudget(late), HttpStatus.CONFLICT);
 
         ServiceOrder cancelled = workflow.saveService(service("Poda"));
-        workflow.cancelService(cancelled.id);
+        workflow.cancelService(cancelled.id, "admin@test");
         Budget toCancelled = new Budget();
         toCancelled.title = "Poda";
         toCancelled.supplier = "Jardineiro";
@@ -230,15 +230,14 @@ class FlowLinksTest {
         small.expectedValue = new BigDecimal("400.00");
         assertThat(workflow.saveService(small).status).isEqualTo("PLANEJADO");
 
-        // With the budget approved by the houses it can be created, taking the value from the budget.
+        // A budget approved by the houses becomes the service by itself, above the limit, with the budget's value.
         Budget budget = quote(null, "800.00");
         voting.vote(budget.id, "APROVAR", voters.get(2));
         voting.vote(budget.id, "APROVAR", voters.get(3));
         voting.vote(budget.id, "APROVAR", voters.get(5));
         voting.vote(budget.id, "APROVAR", voters.get(7));
-        ServiceOrder fromBudget = service("Reforma do telhado");
-        fromBudget.approvedBudgetId = budget.id;
-        ServiceOrder created = workflow.saveService(fromBudget);
+        ServiceOrder created = services.findById(budgets.findById(budget.id).orElseThrow().serviceId).orElseThrow();
+        assertThat(created.approvedBudgetId).isEqualTo(budget.id);
         assertThat(created.expectedValue).isEqualByComparingTo("800.00");
         assertThat(created.status).isEqualTo("APROVADO");
 

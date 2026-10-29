@@ -9,6 +9,7 @@ import { colors, spacing } from '../theme';
 import { Budget, BudgetVoteChoice, BudgetVoting, PortalDocument, ProblemReport } from '../types';
 import { Alert } from '../utils/alert';
 import { formatDateBR } from '../utils/format';
+import { paymentTermsText } from '../utils/paymentTerms';
 import { budgetBadgeStatus, closingResult, deadlineLabel, formatVotingDate, lowestQuoteId, settledNote, voteLabel, votingScore } from '../utils/budgetVoting';
 
 export function BudgetDetailsScreen() {
@@ -142,6 +143,7 @@ export function BudgetDetailsScreen() {
                 )
               }
             : null,
+          { label: 'Pagamento', value: paymentTermsText(budget) ?? 'Forma de pagamento não informada' },
           {
             label: 'Serviço',
             value: budget.serviceId ? (

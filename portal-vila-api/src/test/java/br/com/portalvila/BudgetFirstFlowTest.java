@@ -111,12 +111,11 @@ class BudgetFirstFlowTest {
         }
     }
 
+    /** The service the approval opened by itself, with what the houses voted. */
     private ServiceOrder serviceFrom(Budget budget) {
-        ServiceOrder service = new ServiceOrder();
-        service.title = "Serviço: " + budget.title;
-        service.description = "Executar o orçamento aprovado";
-        service.approvedBudgetId = budget.id;
-        return workflow.saveService(service);
+        Long serviceId = budgets.findById(budget.id).orElseThrow().serviceId;
+        assertThat(serviceId).as("an approved budget becomes a service").isNotNull();
+        return services.findById(serviceId).orElseThrow();
     }
 
     private FinishServiceRequest finish(String value, String reason) {
@@ -230,7 +229,7 @@ class BudgetFirstFlowTest {
         assertStatus(() -> workflow.cancelBudget(budget.id), HttpStatus.CONFLICT);
         assertThat(budgets.findById(budget.id).orElseThrow().status).isEqualTo("APROVADO");
 
-        workflow.cancelService(service.id);
+        workflow.cancelService(service.id, "admin@test");
         workflow.cancelBudget(budget.id);
         assertThat(budgets.findById(budget.id).orElseThrow().status).isEqualTo("CANCELADO");
     }

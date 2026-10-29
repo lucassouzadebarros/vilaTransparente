@@ -2,14 +2,15 @@ import { ReactNode, useCallback, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../utils/alert';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { ArrowLeft, CalendarDays, CheckCircle2, ExternalLink, FileText, Flag, Info, Save, Trash2, Upload, UserRound, X } from 'lucide-react-native';
+import { ArrowLeft, CalendarDays, CheckCircle2, ExternalLink, FileText, Flag, Info, Save, Trash2, Upload, UserRound, Wallet, X } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { Card, Label } from '../components/ui';
 import { FormField } from '../components/FormField';
 import { SoftBackdrop } from '../components/SoftBackdrop';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing } from '../theme';
-import { Budget, PortalDocument, ProblemReport, ServiceOrder } from '../types';
+import { Budget, PaymentMode, PortalDocument, ProblemReport, ServiceOrder } from '../types';
+import { paymentTermsText } from '../utils/paymentTerms';
 import {
   currencyFromNumber,
   dateBRToISO,
@@ -50,7 +51,18 @@ function allowedStatuses(savedStatus: Budget['status'] | null): Array<Budget['st
   );
 }
 
-type FieldErrors = Partial<Record<'votingDeadline' | 'title' | 'scope' | 'supplier' | 'amount' | 'supplierDocument' | 'phone' | 'budgetDate' | 'validUntil' | 'expectedDate', string>>;
+type FieldErrors = Partial<
+  Record<
+    'votingDeadline' | 'title' | 'scope' | 'supplier' | 'amount' | 'supplierDocument' | 'phone' | 'budgetDate' | 'validUntil' | 'expectedDate' | 'downPayment' | 'paymentInstallments',
+    string
+  >
+>;
+
+const paymentModes: Array<{ value: PaymentMode; label: string }> = [
+  { value: 'A_VISTA', label: 'À vista' },
+  { value: 'PARCELADO', label: 'Parcelado' },
+  { value: 'ENTRADA', label: 'Entrada + restante' }
+];
 
 /** A new voting stays open for a week unless the person chooses another last day. */
 function defaultDeadline() {
@@ -102,6 +114,9 @@ export function BudgetFormScreen() {
   const [status, setStatus] = useState<Budget['status']>('EM_ANALISE');
   const [savedStatus, setSavedStatus] = useState<Budget['status'] | null>(null);
   const [notes, setNotes] = useState('');
+  const [paymentMode, setPaymentMode] = useState<PaymentMode | ''>('A_VISTA');
+  const [downPayment, setDownPayment] = useState('');
+  const [paymentInstallments, setPaymentInstallments] = useState('');
   const [documentName, setDocumentName] = useState('Orçamento');
   const [documentUrl, setDocumentUrl] = useState('');
   const [documentFile, setDocumentFile] = useState<PickedFile | null>(null);
@@ -135,6 +150,9 @@ export function BudgetFormScreen() {
     setStatus('EM_ANALISE');
     setSavedStatus(null);
     setNotes('');
+    setPaymentMode('A_VISTA');
+    setDownPayment('');
+    setPaymentInstallments('');
     setDocumentName('Orçamento');
     setDocumentUrl('');
     setDocumentFile(null);
@@ -163,6 +181,9 @@ export function BudgetFormScreen() {
     setStatus(budget.status ?? 'EM_ANALISE');
     setSavedStatus(budget.status ?? 'EM_ANALISE');
     setNotes(budget.notes ?? '');
+    setPaymentMode(budget.paymentMode ?? '');
+    setDownPayment(budget.downPayment ? currencyFromNumber(budget.downPayment) : '');
+    setPaymentInstallments(budget.paymentInstallments ? String(budget.paymentInstallments) : '');
     setDocumentName(document?.name ?? 'Orçamento');
     setDocumentUrl(document?.url ?? '');
     setDocumentFile(null);
@@ -292,6 +313,19 @@ export function BudgetFormScreen() {
     if (issued && valid && valid < issued) {
       next.validUntil = 'A validade não pode ser antes da data do orçamento.';
     }
+    const parts = Number(paymentInstallments || (paymentMode === 'ENTRADA' ? '1' : '0'));
+    if (paymentMode === 'PARCELADO' && (parts < 2 || parts > 60)) {
+      next.paymentInstallments = 'De 2 a 60 parcelas.';
+    }
+    if (paymentMode === 'ENTRADA') {
+      const down = parseCurrency(downPayment);
+      if (down === undefined || down <= 0 || (amountValue !== undefined && down >= amountValue)) {
+        next.downPayment = 'A entrada precisa ser maior que zero e menor que o valor do orçamento.';
+      }
+      if (parts < 1 || parts > 60) {
+        next.paymentInstallments = 'O restante vai de 1 a 60 parcelas.';
+      }
+    }
     setFieldErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -325,7 +359,10 @@ export function BudgetFormScreen() {
         votingDeadline: dateBRToISO(votingDeadline),
         status,
         documentId: existingDocument?.id,
-        notes: notes.trim() || undefined
+        notes: notes.trim() || undefined,
+        paymentMode: paymentMode || null,
+        downPayment: paymentMode === 'ENTRADA' ? (parseCurrency(downPayment) ?? null) : null,
+        paymentInstallments: paymentMode === 'PARCELADO' || paymentMode === 'ENTRADA' ? Number(paymentInstallments || '1') : null
       };
 
       let saved = budgetId
@@ -430,7 +467,7 @@ export function BudgetFormScreen() {
             </View>
             <Text style={styles.sectionHelp}>
               {savedStatus === 'EM_ANALISE'
-                ? 'Aprovar ou recusar é decidido pela votação das casas. Mudar título, fornecedor ou valor zera os votos já dados.'
+                ? 'Aprovar ou recusar é decidido pela votação das casas. Mudar título, fornecedor, valor ou forma de pagamento zera os votos já dados.'
                 : 'Aprovar ou recusar é decidido pela votação das casas.'}
             </Text>
           </FormSection>
@@ -439,7 +476,7 @@ export function BudgetFormScreen() {
             <Info color={colors.blue} size={18} />
             <Text style={styles.infoText}>
               {forReport
-                ? `Orçamento para o problema "${forReport.title}". Ele vai para a votação das casas; se for aprovado, pode virar serviço.`
+                ? `Orçamento para o problema "${forReport.title}". Ele vai para a votação das casas; se for aprovado, vira serviço sozinho.`
                 : forService
                   ? `Cotação para o serviço "${forService.title}". Cada casa aprova só uma cotação do serviço: vence a que tiver a maioria quando a votação encerrar, e as outras são encerradas.`
                   : 'Todo orçamento novo vai para a votação das casas. Ele é aprovado quando a maioria das casas votar "Aprovar". Mesmo com a maioria, a votação segue aberta até todas as casas votarem ou até o prazo.'}
@@ -536,6 +573,65 @@ export function BudgetFormScreen() {
             placeholder="R$ 0,00"
             error={fieldErrors.amount}
           />
+        </FormSection>
+
+        <FormSection icon={Wallet} title="Forma de pagamento">
+          <Text style={styles.sectionHelp}>As casas veem como o fornecedor vai ser pago antes de votar.</Text>
+          <View style={styles.statusGrid}>
+            {paymentModes.map((option) => (
+              <StatusChoice
+                key={option.value}
+                label={option.label}
+                selected={paymentMode === option.value}
+                onPress={() => {
+                  setPaymentMode(option.value);
+                  setFieldErrors((current) => ({ ...current, downPayment: undefined, paymentInstallments: undefined }));
+                }}
+              />
+            ))}
+          </View>
+          {paymentMode === 'ENTRADA' ? (
+            <FormField
+              label="Valor da entrada"
+              required
+              value={downPayment}
+              onChangeText={(value) => {
+                setDownPayment(maskCurrency(value));
+                clearFieldError('downPayment');
+              }}
+              onBlur={() => setDownPayment((value) => finishCurrency(value))}
+              keyboardType="decimal-pad"
+              placeholder="R$ 0,00"
+              error={fieldErrors.downPayment}
+            />
+          ) : null}
+          {paymentMode === 'PARCELADO' || paymentMode === 'ENTRADA' ? (
+            <FormField
+              label={paymentMode === 'ENTRADA' ? 'Restante em quantas vezes' : 'Número de parcelas'}
+              required
+              value={paymentInstallments}
+              onChangeText={(value) => {
+                setPaymentInstallments(value.replace(/\D/g, '').slice(0, 2));
+                clearFieldError('paymentInstallments');
+              }}
+              keyboardType="number-pad"
+              maxLength={2}
+              placeholder={paymentMode === 'ENTRADA' ? '1' : '2'}
+              error={fieldErrors.paymentInstallments}
+            />
+          ) : null}
+          {!paymentMode ? (
+            <Text style={styles.sectionHelp}>Este orçamento foi cadastrado sem a forma de pagamento.</Text>
+          ) : (parseCurrency(amount) ?? 0) > 0 && (paymentMode !== 'ENTRADA' || (parseCurrency(downPayment) ?? 0) > 0) ? (
+            <Text style={styles.sectionHelp}>
+              {paymentTermsText({
+                amount: parseCurrency(amount) ?? 0,
+                paymentMode,
+                downPayment: parseCurrency(downPayment) ?? 0,
+                paymentInstallments: Number(paymentInstallments || (paymentMode === 'ENTRADA' ? '1' : '2'))
+              })}
+            </Text>
+          ) : null}
         </FormSection>
 
         <FormSection icon={CalendarDays} title="Datas e observações">

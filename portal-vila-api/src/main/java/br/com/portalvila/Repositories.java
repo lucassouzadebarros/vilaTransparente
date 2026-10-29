@@ -22,6 +22,8 @@ interface SupplierRepository extends JpaRepository<Supplier, Long> {
 interface PayableRepository extends JpaRepository<Payable, Long> {
     List<Payable> findAllByOrderByDueDateAscIdAsc();
     List<Payable> findByGroupKeyAndStatus(String groupKey, String status);
+    List<Payable> findByServiceOrderId(Long serviceOrderId);
+    List<Payable> findByBudgetId(Long budgetId);
 }
 
 interface MeterReadingRepository extends JpaRepository<MeterReading, Long> {
@@ -103,6 +105,7 @@ interface WebhookEventRepository extends JpaRepository<WebhookEvent, Long> {
 
 interface ExpenseRepository extends JpaRepository<Expense, Long> {
     List<Expense> findByServiceOrderId(Long serviceOrderId);
+    List<Expense> findByBudgetId(Long budgetId);
 }
 
 interface DirectReceiptRepository extends JpaRepository<DirectReceipt, Long> {

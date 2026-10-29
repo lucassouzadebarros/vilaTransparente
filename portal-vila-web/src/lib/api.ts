@@ -89,6 +89,10 @@ export type Payable = {
   canApprove: boolean;
 };
 
+/**
+ * A new bill: amount is the whole of it. With downPayment, that part falls due on dueDate and the rest, in installments
+ * parts, from restDueDate. A bill for a service counts, with the others of the service, against what was approved.
+ */
 export type PayableInput = {
   supplierId: number | null;
   description: string;
@@ -98,6 +102,9 @@ export type PayableInput = {
   installments: number;
   monthly: boolean;
   budgetId: number | null;
+  serviceOrderId: number | null;
+  downPayment: number | null;
+  restDueDate: string | null;
   documentId: number | null;
   exceptionReason: string | null;
   notes: string | null;
@@ -169,7 +176,14 @@ export type Budget = {
   votingClosedAt: string | null;
   votingDeadline: string | null;
   createdAt: string;
-};
+} & PaymentTerms;
+
+/**
+ * How the supplier will be paid, as the units vote it: A_VISTA, PARCELADO (paymentInstallments equal parts) or ENTRADA
+ * (downPayment, then the rest in paymentInstallments parts). Empty on budgets that did not say.
+ */
+export type PaymentMode = 'A_VISTA' | 'PARCELADO' | 'ENTRADA';
+export type PaymentTerms = { paymentMode: PaymentMode | null; downPayment: number | null; paymentInstallments: number | null };
 
 export type BudgetVoting = {
   budgetId: number;
@@ -203,7 +217,7 @@ export type BudgetInput = {
   documentId: number | null;
   problemReportId?: number | null;
   competes?: boolean;
-};
+} & PaymentTerms;
 
 /** A service as the forms send it. Finishing and cancelling have their own actions, so the status here is only an open one. */
 export type ServiceInput = {
