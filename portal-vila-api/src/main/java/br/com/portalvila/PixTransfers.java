@@ -64,6 +64,20 @@ class PixPaymentController {
     PayableView pay(@PathVariable Long id, @RequestBody PayByPixRequest request) {
         return pix.pay(id, request == null ? null : request.password());
     }
+
+    /** Reads a "copia e cola" code with Asaas: who receives it and how much. Nothing is paid. */
+    @PostMapping("/pix-code/read")
+    @PreAuthorize("@access.canPay()")
+    PixCodeView readCode(@RequestBody ReadPixCodeRequest request) {
+        return pix.readCode(request == null ? null : request.code());
+    }
+
+    /** Pays a "copia e cola" code: the bill is recorded, approved and paid at once, with the person's password. */
+    @PostMapping("/pix-code")
+    @PreAuthorize("@access.canPay()")
+    PayableView payCode(@RequestBody PayPixCodeRequest request) {
+        return pix.payCode(request);
+    }
 }
 
 @RestController
@@ -99,10 +113,11 @@ class PixValidationController {
 }
 
 /**
- * Paying a bill by Pix from the condominium's Asaas account. The request is kept before Asaas is called, so Asaas can
- * check it here before the money leaves; the bill is settled (expense, receipt) only when Asaas confirms the transfer,
- * by its notice or by asking it every few minutes. Guards: the person's password, the daily limit, one Pix at a time
- * per bill, and only bills already approved, to a supplier with a Pix key.
+ * Paying a bill by Pix from the condominium's Asaas account: to the supplier's key, or by a "copia e cola" code (which
+ * records its own bill). The request is kept before Asaas is called, so Asaas can check it here before the money
+ * leaves; the bill is settled (expense, receipt) only when Asaas confirms it, by its notice or by asking it every few
+ * minutes. Guards: the person's password, the daily limit, one Pix at a time per bill, and only bills already approved,
+ * to a supplier with a Pix key or to the receiver the code names.
  */
 @Service
 class PixTransferService {
@@ -194,12 +209,18 @@ class PixTransferService {
             .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    PayableView pay(Long payableId, String password) {
+    /** Paying by Pix asks for the person's own password again: a stolen session alone cannot move money. */
+    private AppUser checkPassword(String password, Long payableId) {
         AppUser me = currentUser.current();
         if (password == null || password.isBlank() || me.passwordHash == null || !passwordEncoder.matches(password, me.passwordHash)) {
             audit.record("PIX_PASSWORD_REFUSED", "PAYABLE", payableId, "Senha errada ao pagar por Pix (" + me.email + ")");
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Senha incorreta. Para mandar um Pix, confirme com a senha da sua conta.");
         }
+        return me;
+    }
+
+    PayableView pay(Long payableId, String password) {
+        AppUser me = checkPassword(password, payableId);
         // 1. The request is kept (and committed) before Asaas is called: Asaas checks it here about five seconds later.
         PixTransfer requested = transaction.execute(status -> request(payableId, me));
         Payable bill = payables.findById(payableId).orElseThrow();
@@ -208,38 +229,66 @@ class PixTransferService {
             answer = gateway.createPixTransfer(requested.amount, requested.pixKey, requested.pixKeyType,
                 trimTo("Pagamento: " + bill.description, 140), "PIX-" + requested.id);
         } catch (RuntimeException refused) {
-            String why = explain(refused instanceof ResponseStatusException status && status.getReason() != null ? status.getReason() : "o Asaas não respondeu.");
-            transaction.executeWithoutResult(status -> transfers.findById(requested.id).ifPresent(transfer -> {
+            throw notSent(requested, bill, refused);
+        }
+        accepted(requested, bill, answer);
+        return payableService.viewOf(payables.findById(payableId).orElseThrow());
+    }
+
+    /** Asaas refused it at once: the request failed (a code's bill is cancelled: the code is spent) and the error says why. */
+    private ResponseStatusException notSent(PixTransfer requested, Payable bill, RuntimeException refused) {
+        String why = explain(refused instanceof ResponseStatusException status && status.getReason() != null ? status.getReason() : "o Asaas não respondeu.");
+        transaction.executeWithoutResult(status -> {
+            transfers.findById(requested.id).ifPresent(transfer -> {
                 transfer.status = PixTransfer.FAILED;
                 transfer.failReason = why;
                 transfer.updatedAt = LocalDateTime.now();
                 transfers.save(transfer);
-                audit.record("PIX_FAILED", "PAYABLE", payableId, bill.description + " - " + AuditService.money(transfer.amount) + " - " + why);
-            }));
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "O Pix não saiu. " + why, refused);
-        }
-        // 2. Asaas took it: from here it follows Asaas (notices, or asking every few minutes).
+                audit.record("PIX_FAILED", "PAYABLE", bill.id, bill.description + " - " + AuditService.money(transfer.amount) + " - " + why);
+            });
+            if (PixTransfer.CODE.equals(requested.kind)) {
+                payables.findById(bill.id).ifPresent(found -> payableService.cancelUnpaid(found, "O Pix copia e cola não saiu: " + why, requested.requestedBy));
+            }
+        });
+        return new ResponseStatusException(HttpStatus.BAD_GATEWAY, "O Pix não saiu. " + why, refused);
+    }
+
+    /** 2. Asaas took it: from here it follows Asaas (notices, or asking every few minutes). */
+    private void accepted(PixTransfer requested, Payable bill, GatewayTransfer answer) {
         transaction.executeWithoutResult(status -> transfers.findById(requested.id).ifPresent(transfer -> {
             if (transfer.gatewayTransferId == null) {
                 transfer.gatewayTransferId = answer.id();
             }
-            audit.record("PIX_SENT", "PAYABLE", payableId, bill.description + " - " + AuditService.money(transfer.amount) + " - Asaas " + answer.id());
+            audit.record("PIX_SENT", "PAYABLE", bill.id, bill.description + " - " + AuditService.money(transfer.amount) + " - Asaas " + answer.id());
             apply(transfer, answer);
         }));
-        return payableService.viewOf(payables.findById(payableId).orElseThrow());
     }
 
-    private PixTransfer request(Long payableId, AppUser me) {
+    /** The settings row, locked: two Pix at the same time are counted against the day's limit one after the other. */
+    private Settings lockedSettings() {
         Settings row = settings.findAllForUpdate().stream().findFirst()
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Configure o condomínio antes de pagar por Pix."));
-        Payable bill = payables.findByIdForUpdate(payableId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Conta não encontrada."));
         if (!credentials.connectedHere()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "O condomínio ainda não tem a conta Asaas conectada.");
         }
         if (row.pixDailyLimit == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "O Pix pelo Asaas está desligado: defina o limite por dia em Configurações.");
         }
+        return row;
+    }
+
+    private void checkDailyLimit(Settings row, BigDecimal amount) {
+        BigDecimal used = usedToday();
+        if (used.add(amount).compareTo(row.pixDailyLimit) > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Passa do limite de Pix por dia (" + AuditService.money(row.pixDailyLimit)
+                + "): hoje já saiu " + AuditService.money(used) + ". Pague amanhã, aumente o limite em Configurações ou pague por fora.");
+        }
+    }
+
+    private PixTransfer request(Long payableId, AppUser me) {
+        Settings row = lockedSettings();
+        Payable bill = payables.findByIdForUpdate(payableId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Conta não encontrada."));
         switch (bill.status) {
             case Payable.PENDING_APPROVAL -> throw new ResponseStatusException(HttpStatus.CONFLICT, "Esta conta ainda espera a aprovação de outra pessoa.");
             case Payable.PAID -> throw new ResponseStatusException(HttpStatus.CONFLICT, "Esta conta já foi paga.");
@@ -254,11 +303,7 @@ class PixTransferService {
         if (supplier == null || supplier.pixKey == null || supplier.pixKeyType == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cadastre a chave Pix do fornecedor desta conta para pagar por Pix.");
         }
-        BigDecimal used = usedToday();
-        if (used.add(bill.amount).compareTo(row.pixDailyLimit) > 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Passa do limite de Pix por dia (" + AuditService.money(row.pixDailyLimit)
-                + "): hoje já saiu " + AuditService.money(used) + ". Pague amanhã, aumente o limite em Configurações ou pague por fora.");
-        }
+        checkDailyLimit(row, bill.amount);
         PixTransfer transfer = new PixTransfer();
         transfer.payableId = bill.id;
         transfer.amount = bill.amount;
@@ -270,6 +315,91 @@ class PixTransferService {
         PixTransfer saved = transfers.save(transfer);
         audit.record("PIX_REQUESTED", "PAYABLE", bill.id, bill.description + " - " + AuditService.money(bill.amount) + " para " + supplier.name);
         return saved;
+    }
+
+    // ---- Paying a "copia e cola" code
+
+    PixCodeView readCode(String code) {
+        PixCode read = gateway.decodePixCode(cleanCode(code));
+        return new PixCodeView(read.receiverName(), read.receiverDocument(), read.bank(), read.value(), read.valueFixed(), read.expiresAt(),
+            read.description(), read.canBePaid(), read.canBePaid() ? null : cannotPay(read));
+    }
+
+    /**
+     * The code is read again by Asaas (what it says now, not what the screen showed), its bill is recorded and approved
+     * with the request kept, and only then Asaas pays it. A code already paid here, or on its way, is not paid again.
+     */
+    PayableView payCode(PayPixCodeRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cole o código Pix copia e cola.");
+        }
+        AppUser me = checkPassword(request.password(), null);
+        String payload = cleanCode(request.code());
+        PixCode read = gateway.decodePixCode(payload);
+        if (!read.canBePaid()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, cannotPay(read));
+        }
+        BigDecimal chosen = read.valueFixed() ? read.value() : request.amount() != null ? request.amount() : read.value();
+        if (chosen == null || chosen.signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Este código não traz o valor: informe quanto pagar.");
+        }
+        BigDecimal amount = chosen.setScale(2, java.math.RoundingMode.HALF_UP);
+        PixTransfer requested = transaction.execute(status -> requestCode(request, read, payload, amount, me));
+        Payable bill = payables.findById(requested.payableId).orElseThrow();
+        GatewayTransfer answer;
+        try {
+            answer = gateway.payPixCode(payload, amount, trimTo("Pagamento: " + bill.description, 140));
+        } catch (RuntimeException refused) {
+            throw notSent(requested, bill, refused);
+        }
+        accepted(requested, bill, answer);
+        return payableService.viewOf(payables.findById(bill.id).orElseThrow());
+    }
+
+    private PixTransfer requestCode(PayPixCodeRequest request, PixCode read, String payload, BigDecimal amount, AppUser me) {
+        Settings row = lockedSettings();
+        transfers.findByRequestedAtGreaterThanEqual(LocalDateTime.now(ZONE).minusDays(90)).stream()
+            .filter(earlier -> PixTransfer.CODE.equals(earlier.kind) && payload.equals(earlier.qrPayload))
+            .filter(earlier -> PixTransfer.DONE.equals(earlier.status) || PixTransfer.IN_FLIGHT.contains(earlier.status))
+            .findFirst()
+            .ifPresent(earlier -> {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, PixTransfer.DONE.equals(earlier.status)
+                    ? "Este código já foi pago pelo Portal em " + earlier.requestedAt.toLocalDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) + "."
+                    : "Este código já está sendo pago pelo Portal.");
+            });
+        checkDailyLimit(row, amount);
+        String receiver = read.receiverName() == null ? "o recebedor do código" : read.receiverName();
+        Payable bill = payableService.recordForPixCode(new PayableRequest(null, request.description(), request.category(), amount,
+            BudgetVotingService.today(), null, null, null, request.serviceOrderId(), null, request.exceptionReason(), request.notes(), null, null), me, receiver);
+        PixTransfer transfer = new PixTransfer();
+        transfer.kind = PixTransfer.CODE;
+        transfer.payableId = bill.id;
+        transfer.amount = amount;
+        transfer.pixKey = read.pixKey();
+        transfer.qrPayload = payload;
+        transfer.receiverName = read.receiverName() == null ? null : trimTo(read.receiverName(), 160);
+        transfer.requestedBy = me.email;
+        transfer.requestedAt = LocalDateTime.now(ZONE);
+        transfer.updatedAt = LocalDateTime.now();
+        PixTransfer saved = transfers.save(transfer);
+        audit.record("PIX_REQUESTED", "PAYABLE", bill.id, bill.description + " - " + AuditService.money(amount) + " - Pix copia e cola para " + receiver);
+        return saved;
+    }
+
+    /** The code as pasted, without the line breaks a copy may bring. */
+    private static String cleanCode(String code) {
+        String payload = code == null ? "" : code.replaceAll("[\\r\\n\\t]", "").trim();
+        if (payload.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cole o código Pix copia e cola.");
+        }
+        if (payload.length() > 2000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Isso não parece um código Pix copia e cola.");
+        }
+        return payload;
+    }
+
+    private static String cannotPay(PixCode read) {
+        return "O Asaas não aceita pagar este código" + (read.cannotBePaidReason() == null ? "." : ": " + read.cannotBePaidReason());
     }
 
     /**
@@ -307,7 +437,9 @@ class PixTransferService {
                 continue; // the call to Asaas is still going, or never reached it: nothing to ask yet
             }
             try {
-                GatewayTransfer answer = gateway.getTransfer(pending.gatewayTransferId);
+                GatewayTransfer answer = PixTransfer.CODE.equals(pending.kind)
+                    ? gateway.getPixTransaction(pending.gatewayTransferId)
+                    : gateway.getTransfer(pending.gatewayTransferId);
                 Boolean moved = transaction.execute(status -> transfers.findById(pending.id).map(found -> apply(found, answer)).orElse(false));
                 if (Boolean.TRUE.equals(moved)) {
                     changed++;
@@ -319,7 +451,10 @@ class PixTransferService {
         return changed;
     }
 
-    /** Follows what Asaas says. Done: the bill is paid, with the receipt. Failed or cancelled: the bill stays open. */
+    /**
+     * Follows what Asaas says. Done: the bill is paid, with the receipt. Failed or cancelled: a supplier's bill stays open;
+     * a code's bill is cancelled (the code is spent: it is paid again with a new one, or another way).
+     */
     private boolean apply(PixTransfer transfer, GatewayTransfer answer) {
         String status = answer.status() == null ? "" : answer.status().toUpperCase(Locale.ROOT);
         if (!Set.of(PixTransfer.PENDING, PixTransfer.BANK_PROCESSING, PixTransfer.DONE, PixTransfer.FAILED, PixTransfer.CANCELLED).contains(status)) {
@@ -333,8 +468,10 @@ class PixTransferService {
             }
             return false;
         }
-        boolean moved = !status.equals(transfer.status);
+        boolean awaiting = answer.awaitingAuthorization() && PixTransfer.IN_FLIGHT.contains(status);
+        boolean moved = !status.equals(transfer.status) || awaiting != transfer.awaitingAuthorization;
         transfer.status = status;
+        transfer.awaitingAuthorization = awaiting;
         transfer.fee = answer.fee() != null ? answer.fee() : transfer.fee;
         transfer.receiptUrl = answer.receiptUrl() != null ? answer.receiptUrl() : transfer.receiptUrl;
         transfer.endToEndId = answer.endToEndId() != null ? answer.endToEndId() : transfer.endToEndId;
@@ -354,7 +491,12 @@ class PixTransferService {
             String why = transfer.failReason == null ? (PixTransfer.CANCELLED.equals(status) ? "cancelado no Asaas" : "o Asaas não informou o motivo") : transfer.failReason;
             audit.record(PixTransfer.CANCELLED.equals(status) ? "PIX_CANCELLED" : "PIX_FAILED", "PAYABLE", bill.id,
                 bill.description + " - " + AuditService.money(transfer.amount) + " - " + why);
-            notify(transfer, "O Pix não saiu", bill.description + ": " + why + ". A conta continua a pagar.");
+            if (PixTransfer.CODE.equals(transfer.kind)) {
+                payableService.cancelUnpaid(bill, "O Pix copia e cola não saiu: " + why, transfer.requestedBy);
+                notify(transfer, "O Pix não saiu", bill.description + ": " + why + ". A conta foi cancelada: pague com um código novo ou por fora.");
+            } else {
+                notify(transfer, "O Pix não saiu", bill.description + ": " + why + ". A conta continua a pagar.");
+            }
         }
         return moved;
     }
@@ -379,7 +521,7 @@ class PixTransferService {
         }
         LocalDate paidAt = effectiveDate == null || effectiveDate.isAfter(today()) ? today() : effectiveDate;
         try {
-            payableService.settle(bill, paidAt, "PIX", receipt, null, transfer.requestedBy);
+            payableService.settle(bill, paidAt, "PIX", receipt, null, transfer.requestedBy, transfer.receiverName);
             audit.record("PIX_DONE", "PAYABLE", bill.id, bill.description + " - " + AuditService.money(transfer.amount) + " - baixa automática");
         } catch (RuntimeException refused) {
             // The money already left: the transfer stays DONE and the bill is left for a person to register.
@@ -422,8 +564,9 @@ class PixTransferService {
     }
 
     /**
-     * Approves only a transfer this server requested and is still waiting for, of the same value (and, before Asaas's id
-     * is known here, to the same key). Anything else is refused, so a leaked API key alone cannot take money out.
+     * Approves only a Pix this server requested and is still waiting for (a transfer to a key, or a paid code), of the
+     * same value (and, before Asaas's id is known here, to the same key). Anything else is refused, so a leaked API key
+     * alone cannot take money out.
      */
     Map<String, String> validate(String routeKey, String token, JsonNode payload) {
         PixValidation validation = validations.findByRouteKey(routeKey)
@@ -436,22 +579,29 @@ class PixTransferService {
 
     private Map<String, String> decide(JsonNode payload) {
         String type = payload.path("type").asText("");
-        JsonNode transfer = payload.path("transfer");
-        if (!"TRANSFER".equals(type) || transfer.isMissingNode()) {
-            audit.record("PIX_VALIDATION_REFUSED", "GATEWAY", null, "Operação " + type + " recusada: o Portal da Vila só pede transferências");
-            return refuse("O Portal da Vila só libera as transferências que ele mesmo pediu.");
+        // A transfer to a key, or a paid "copia e cola" code: the two kinds of Pix this server asks for.
+        String kind = "TRANSFER".equals(type) ? PixTransfer.KEY : "PIX_QR_CODE".equals(type) ? PixTransfer.CODE : null;
+        JsonNode operation = payload.path(PixTransfer.CODE.equals(kind) ? "pixQrCode" : "transfer");
+        if (kind == null || operation.isMissingNode()) {
+            audit.record("PIX_VALIDATION_REFUSED", "GATEWAY", null, "Operação " + type + " recusada: o Portal da Vila só pede Pix");
+            return refuse("O Portal da Vila só libera os Pix que ele mesmo pediu.");
         }
-        String id = transfer.path("id").asText(null);
-        BigDecimal value = transfer.hasNonNull("value") ? transfer.get("value").decimalValue() : null;
-        String key = transfer.path("bankAccount").path("pixAddressKey").asText(null);
-        PixTransfer ours = id == null ? null : transfers.findByGatewayTransferId(id).orElse(null);
+        String what = PixTransfer.CODE.equals(kind) ? "Pagamento de código" : "Transferência";
+        String id = operation.path("id").asText(null);
+        BigDecimal value = operation.hasNonNull("value") ? operation.get("value").decimalValue() : null;
+        String key = PixTransfer.CODE.equals(kind)
+            ? operation.path("externalAccount").path("addressKey").asText(null)
+            : operation.path("bankAccount").path("pixAddressKey").asText(null);
+        PixTransfer ours = id == null ? null : transfers.findByGatewayTransferId(id).filter(found -> kind.equals(found.kind)).orElse(null);
         if (ours == null) {
-            // Asaas may ask before its answer to the request got back here: the request waiting, same value, same key.
+            // Asaas may ask before its answer to the request got back here: the request waiting, same value, same key
+            // (a code may not tell its key: then the same value, asked within minutes, is the request waiting).
             LocalDateTime recent = LocalDateTime.now(ZONE).minusMinutes(15);
             ours = transfers.findByStatusIn(Set.of(PixTransfer.REQUESTED)).stream()
-                .filter(candidate -> candidate.gatewayTransferId == null && !candidate.requestedAt.isBefore(recent))
+                .filter(candidate -> kind.equals(candidate.kind) && candidate.gatewayTransferId == null && !candidate.requestedAt.isBefore(recent))
                 .filter(candidate -> value != null && candidate.amount.compareTo(value) == 0)
-                .filter(candidate -> key != null && sameKey(candidate.pixKey, key))
+                .filter(candidate -> PixTransfer.CODE.equals(kind) && (candidate.pixKey == null || key == null)
+                    || key != null && candidate.pixKey != null && sameKey(candidate.pixKey, key))
                 .findFirst().orElse(null);
             if (ours != null) {
                 ours.gatewayTransferId = id;
@@ -459,10 +609,10 @@ class PixTransferService {
             }
         }
         if (ours == null || !PixTransfer.IN_FLIGHT.contains(ours.status) || value == null || ours.amount.compareTo(value) != 0) {
-            audit.record("PIX_VALIDATION_REFUSED", "GATEWAY", null, "Transferência " + id + " de " + AuditService.money(value) + " recusada: não foi pedida pelo Portal da Vila");
-            return refuse("Esta transferência não foi pedida pelo Portal da Vila.");
+            audit.record("PIX_VALIDATION_REFUSED", "GATEWAY", null, what + " " + id + " de " + AuditService.money(value) + " recusado: não foi pedido pelo Portal da Vila");
+            return refuse("Este Pix não foi pedido pelo Portal da Vila.");
         }
-        audit.record("PIX_VALIDATION_APPROVED", "PAYABLE", ours.payableId, "Asaas conferiu a transferência " + id + " de " + AuditService.money(value));
+        audit.record("PIX_VALIDATION_APPROVED", "PAYABLE", ours.payableId, "Asaas conferiu: " + what.toLowerCase(Locale.ROOT) + " " + id + " de " + AuditService.money(value));
         return Map.of("status", "APPROVED");
     }
 

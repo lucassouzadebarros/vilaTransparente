@@ -39,26 +39,94 @@ interface PixGatewayClient {
     /** Sends a Pix from the condominium's account to a key. Asaas answers at once; it is settled later (see getTransfer). */
     GatewayTransfer createPixTransfer(BigDecimal value, String pixKey, String pixKeyType, String description, String externalReference);
     GatewayTransfer getTransfer(String gatewayTransferId);
+    /** What a Pix "copia e cola" code is: who receives it, the value, until when it can be paid. Nothing is paid. */
+    PixCode decodePixCode(String payload);
+    /** Pays a "copia e cola" code from the condominium's account. Like a transfer, it is settled later (see getPixTransaction). */
+    GatewayTransfer payPixCode(String payload, BigDecimal value, String description);
+    GatewayTransfer getPixTransaction(String gatewayTransactionId);
 }
 
-/** A transfer as Asaas sees it: status PENDING, BANK_PROCESSING, DONE, FAILED or CANCELLED; the receipt once it is done. */
-record GatewayTransfer(String id, String status, BigDecimal value, BigDecimal fee, String failReason, String receiptUrl, String endToEndId, LocalDate effectiveDate) {
+/**
+ * A Pix leaving the account as Asaas sees it, in the statuses of a transfer: PENDING, BANK_PROCESSING, DONE, FAILED or
+ * CANCELLED; the receipt once it is done. awaitingAuthorization: Asaas holds it until someone types the account's token.
+ */
+record GatewayTransfer(String id, String status, BigDecimal value, BigDecimal fee, String failReason, String receiptUrl, String endToEndId,
+                       LocalDate effectiveDate, boolean awaitingAuthorization) {
     static GatewayTransfer from(JsonNode node) {
+        String status = text(node, "status");
         return new GatewayTransfer(
             text(node, "id"),
-            text(node, "status"),
+            status,
             node.hasNonNull("value") ? node.get("value").decimalValue() : null,
             node.hasNonNull("transferFee") ? node.get("transferFee").decimalValue() : null,
             text(node, "failReason"),
             text(node, "transactionReceiptUrl"),
             text(node, "endToEndIdentifier"),
-            node.hasNonNull("effectiveDate") ? LocalDate.parse(node.get("effectiveDate").asText().substring(0, 10)) : null
+            date(node, "effectiveDate"),
+            "PENDING".equals(status) && node.hasNonNull("authorized") && !node.get("authorized").asBoolean()
         );
     }
 
-    private static String text(JsonNode node, String field) {
+    /** A paid code (a Pix transaction of Asaas), told in the statuses of a transfer. */
+    static GatewayTransfer fromPixTransaction(JsonNode node) {
+        String status = text(node, "status");
+        String asTransfer = switch (status == null ? "" : status) {
+            case "DONE" -> "DONE";
+            case "REQUESTED" -> "BANK_PROCESSING";
+            case "REFUSED" -> "FAILED";
+            case "CANCELLED" -> "CANCELLED";
+            case "" -> null;
+            default -> "PENDING"; // waiting for the balance, a risk check, the schedule, the token or to be sent
+        };
+        return new GatewayTransfer(
+            text(node, "id"),
+            asTransfer,
+            node.hasNonNull("value") ? node.get("value").decimalValue() : null,
+            node.hasNonNull("chargedFeeValue") ? node.get("chargedFeeValue").decimalValue() : null,
+            text(node, "refusalReason"),
+            text(node, "transactionReceiptUrl"),
+            text(node, "endToEndIdentifier"),
+            date(node, "effectiveDate"),
+            "AWAITING_CRITICAL_ACTION_AUTHORIZATION".equals(status)
+        );
+    }
+
+    private static LocalDate date(JsonNode node, String field) {
+        String value = text(node, field);
+        return value == null || value.length() < 10 ? null : LocalDate.parse(value.substring(0, 10));
+    }
+
+    static String text(JsonNode node, String field) {
         JsonNode value = node.get(field);
         return value == null || value.isNull() || value.asText().isBlank() ? null : value.asText();
+    }
+}
+
+/**
+ * A "copia e cola" code read by Asaas. value is what is due now (with any fine, interest or discount of a code with a due
+ * date); valueFixed: it can be paid only with that value. expiresAt as Asaas writes it ("2026-10-30 11:00:00").
+ */
+record PixCode(String payload, String pixKey, String receiverName, String receiverDocument, String bank, BigDecimal value, boolean valueFixed,
+               String expiresAt, String description, boolean canBePaid, String cannotBePaidReason) {
+    static PixCode from(JsonNode node) {
+        JsonNode receiver = node.path("receiver");
+        String trading = GatewayTransfer.text(receiver, "tradingName");
+        BigDecimal total = node.hasNonNull("totalValue") ? node.get("totalValue").decimalValue() : null;
+        BigDecimal value = total != null && total.signum() > 0 ? total : node.hasNonNull("value") ? node.get("value").decimalValue() : null;
+        boolean differentValue = node.path("canBePaidWithDifferentValue").asBoolean(false);
+        return new PixCode(
+            GatewayTransfer.text(node, "payload"),
+            GatewayTransfer.text(node, "pixKey"),
+            trading != null ? trading : GatewayTransfer.text(receiver, "name"),
+            GatewayTransfer.text(receiver, "cpfCnpj"),
+            GatewayTransfer.text(receiver, "ispbName"),
+            value != null && value.signum() > 0 ? value : null,
+            value != null && value.signum() > 0 && !differentValue,
+            GatewayTransfer.text(node, "expirationDate"),
+            GatewayTransfer.text(node, "description"),
+            node.path("canBePaid").asBoolean(true),
+            GatewayTransfer.text(node, "cannotBePaidReason")
+        );
     }
 }
 
@@ -557,6 +625,83 @@ class AsaasPixGatewayClient implements PixGatewayClient {
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: a consulta da transferência veio vazia.");
             }
             return GatewayTransfer.from(response);
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (WebClientResponseException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
+        }
+    }
+
+    @Override
+    public PixCode decodePixCode(String payload) {
+        requireVila();
+        requireApiKey();
+        try {
+            JsonNode response = webClient.post()
+                .uri("/pix/qrCodes/decode")
+                .bodyValue(Map.of("payload", payload))
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .block(Duration.ofSeconds(15));
+            if (response == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: a leitura do código veio vazia.");
+            }
+            return PixCode.from(response);
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (WebClientResponseException ex) {
+            // A code Asaas cannot read is the person's mistake (a piece missing in the copy), not the gateway's.
+            HttpStatus status = ex.getStatusCode().is4xxClientError() ? HttpStatus.BAD_REQUEST : HttpStatus.BAD_GATEWAY;
+            throw new ResponseStatusException(status, "Asaas: " + asaasError(ex), ex);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
+        }
+    }
+
+    @Override
+    public GatewayTransfer payPixCode(String payload, BigDecimal value, String description) {
+        requireVila();
+        requireApiKey();
+        Map<String, Object> body = new HashMap<>();
+        body.put("qrCode", Map.of("payload", payload));
+        body.put("value", value);
+        body.put("description", description);
+        try {
+            JsonNode response = webClient.post()
+                .uri("/pix/qrCodes/pay")
+                .bodyValue(body)
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .block(Duration.ofSeconds(20));
+            if (response == null || !response.hasNonNull("id")) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o pagamento do código não voltou com um identificador.");
+            }
+            return GatewayTransfer.fromPixTransaction(response);
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (WebClientResponseException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: " + asaasError(ex), ex);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
+        }
+    }
+
+    @Override
+    public GatewayTransfer getPixTransaction(String gatewayTransactionId) {
+        requireVila();
+        requireApiKey();
+        try {
+            JsonNode response = webClient.get()
+                .uri("/pix/transactions/{id}", gatewayTransactionId)
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .block(Duration.ofSeconds(15));
+            if (response == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: a consulta do pagamento do código veio vazia.");
+            }
+            return GatewayTransfer.fromPixTransaction(response);
         } catch (ResponseStatusException ex) {
             throw ex;
         } catch (WebClientResponseException ex) {

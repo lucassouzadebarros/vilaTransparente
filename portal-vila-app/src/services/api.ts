@@ -20,8 +20,10 @@ import {
   PasswordResetResponse,
   Payable,
   PayableInput,
+  PayPixCodeInput,
   Supplier,
   PixCharge,
+  PixCode,
   PixPaymentStatus,
   PortalDocument,
   ProblemReport,
@@ -308,6 +310,10 @@ export const api = {
   pixStatus: () => requestData<PixPaymentStatus>(apiClient.get('/payables/pix')),
   /** Sends the bill's Pix from the condominium's Asaas account, confirmed with the person's own password. */
   payByPix: (id: number, password: string) => requestData<Payable>(apiClient.post(`/payables/${id}/pix`, { password })),
+  /** Asks Asaas what a "copia e cola" code is (who receives it, how much). Nothing is paid. */
+  readPixCode: (code: string) => requestData<PixCode>(apiClient.post('/payables/pix-code/read', { code })),
+  /** Records the code's bill and pays it from the condominium's Asaas account, confirmed with the person's own password. */
+  payPixCode: (input: PayPixCodeInput) => requestData<Payable>(apiClient.post('/payables/pix-code', input)),
   setBudgetRule: (budgetRequiredAbove: number | null) => requestData(apiClient.put('/settings/budget-rule', { budgetRequiredAbove })),
   registerPushToken: (token: string, platform: string) => requestData<{ status: string }>(apiClient.post('/push-tokens', { token, platform })),
   dashboardEventsUrl: () => `${baseURL.replace(/\/$/, '')}/events/dashboard`

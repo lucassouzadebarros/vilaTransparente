@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Ban, Camera, CheckCircle2, Eye, FileText, Info, Plus, RefreshCw, Repeat, Send, ShieldCheck, Upload } from 'lucide-react-native';
+import { Ban, Camera, CheckCircle2, Eye, FileText, Info, Plus, QrCode, RefreshCw, Repeat, Send, ShieldCheck, Upload } from 'lucide-react-native';
 import { EmptyFilter, FilterBar, FilterOption } from '../components/FilterBar';
 import { Badge, Button, Card, Facts, Field, Label, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing, TOUCH_TARGET } from '../theme';
-import { Payable, PIX_IN_FLIGHT, PixPaymentStatus, Supplier } from '../types';
+import { Payable, PIX_IN_FLIGHT, PixCode, PixPaymentStatus, Supplier } from '../types';
 import { Alert } from '../utils/alert';
 import { PickedFile, choosePhoto, pickPdf, pickerErrorMessage } from '../utils/filePicker';
 import { formatDateBR, formatMoneyBR } from '../utils/format';
-import { dateBRToISO, finishCurrency, isoToDateBR, maskCurrency, maskDateBR, parseCurrency } from '../utils/inputMasks';
+import { currencyFromNumber, dateBRToISO, finishCurrency, isoToDateBR, maskCurrency, maskDateBR, parseCurrency } from '../utils/inputMasks';
 
 type Filter = 'OPEN' | 'APPROVE' | 'PAID' | 'ALL';
 
@@ -323,6 +323,166 @@ function PayForm({ payable, supplier, onDone, onClose }: { payable: Payable; sup
   );
 }
 
+/** "2030-10-30 11:00:00" (as Asaas writes it) -> "30/10/2030 às 11:00". */
+function codeMoment(value: string | null) {
+  if (!value) return null;
+  const [day, time] = value.split(' ');
+  return `${formatDateBR(day)}${time ? ` às ${time.slice(0, 5)}` : ''}`;
+}
+
+/**
+ * Paying a Pix "copia e cola" (a purchase online, a code a supplier sent): Asaas reads the code and says who receives
+ * it and how much; then the bill is recorded, approved and paid at once, with the person's own password.
+ */
+function PixCodeForm({ onDone, onClose }: { onDone: () => void; onClose: () => void }) {
+  const [code, setCode] = useState('');
+  const [read, setRead] = useState<PixCode | null>(null);
+  const [pix, setPix] = useState<PixPaymentStatus | null>(null);
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('Manutenção');
+  const [reason, setReason] = useState('');
+  const [askReason, setAskReason] = useState(false);
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.pixStatus()
+      .then(setPix)
+      .catch(() => setPix({ available: false, reason: 'Não consegui consultar o Pix agora.', dailyLimit: null, usedToday: 0, balance: null }));
+  }, []);
+
+  const value = read?.valueFixed ? Number(read.value) : parseCurrency(amount) ?? 0;
+  const left = pix?.dailyLimit != null ? Number(pix.dailyLimit) - Number(pix.usedToday) : null;
+  // Nothing to do here (Pix off, a code Asaas will not pay) hides the form; a value over today's limit only stops paying.
+  const blocked = !pix ? null : !pix.available ? pix.reason : read && !read.canBePaid ? read.reason : null;
+  const overLimit = left != null && value > left ? `Passa do limite de Pix de hoje: ainda dá para mandar ${formatMoneyBR(Math.max(0, left))}.` : undefined;
+
+  async function readCode() {
+    setBusy(true);
+    try {
+      const result = await api.readPixCode(code);
+      setRead(result);
+      setAmount(currencyFromNumber(result.value));
+      setDescription((current) => current || (result.description ?? ''));
+    } catch (error) {
+      Alert.alert('Pix copia e cola', apiErrorMessage(error, 'Não consegui ler o código.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function pay() {
+    setBusy(true);
+    try {
+      const bill = await api.payPixCode({
+        code,
+        amount: read?.valueFixed ? null : value,
+        description: description.trim(),
+        category,
+        serviceOrderId: null,
+        exceptionReason: reason.trim() || null,
+        notes: null,
+        password
+      });
+      Alert.alert(
+        'Pix copia e cola',
+        bill.pixStatus === 'AWAITING_AUTHORIZATION'
+          ? 'Pix pedido. O Asaas espera a autorização com o token da conta; depois a baixa e o comprovante entram sozinhos.'
+          : 'Pix enviado. A baixa e o comprovante entram sozinhos quando o Asaas confirmar.'
+      );
+      onDone();
+    } catch (error) {
+      const message = apiErrorMessage(error, 'O Pix não saiu.');
+      if (/justificativa/i.test(message)) setAskReason(true);
+      Alert.alert('Pix copia e cola', message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!read) {
+    return (
+      <Card>
+        <Value>Pagar Pix copia e cola</Value>
+        <Label>Uma compra pela internet ou um código que o fornecedor mandou: o Pix sai da conta Asaas do condomínio.</Label>
+        <Field
+          label="Código Pix copia e cola"
+          value={code}
+          onChangeText={setCode}
+          multiline
+          autoCapitalize="none"
+          placeholder="00020126..."
+          helpText="Copie o código no site ou no app da compra e cole aqui. Nada é pago só de ler."
+        />
+        <Button title={busy ? 'Lendo...' : 'Ler código'} icon={QrCode} onPress={readCode} disabled={busy || !code.trim()} />
+        <Button title="Fechar" variant="ghost" onPress={onClose} />
+      </Card>
+    );
+  }
+
+  const ready = !blocked && !overLimit && value > 0 && description.trim().length >= 3 && Boolean(password);
+  return (
+    <Card>
+      <Value>Pagar Pix copia e cola</Value>
+      <Facts
+        items={[
+          { label: 'Para', value: read.receiverName ?? 'Recebedor não informado' },
+          { label: 'Valor', value: read.valueFixed ? formatMoneyBR(read.value ?? 0) : read.value != null ? `${formatMoneyBR(read.value)} (pode mudar)` : 'Não informado' },
+          ...(read.expiresAt ? [{ label: 'Vale até', value: codeMoment(read.expiresAt) ?? '—' }] : []),
+          { label: 'Hoje pelo Asaas', value: pix?.dailyLimit != null ? `${formatMoneyBR(pix.usedToday)} de ${formatMoneyBR(pix.dailyLimit)}` : '—' }
+        ]}
+      />
+      {read.receiverDocument || read.bank ? <Text style={styles.small}>{[read.receiverDocument, read.bank].filter(Boolean).join(' · ')}</Text> : null}
+      {blocked ? (
+        <Text style={styles.warn}>{blocked}</Text>
+      ) : (
+        <>
+          {read.valueFixed && overLimit ? <Text style={styles.warn}>{overLimit}</Text> : null}
+          {!read.valueFixed ? (
+            <Field
+              label="Quanto pagar"
+              value={amount}
+              onChangeText={(text) => setAmount(maskCurrency(text))}
+              keyboardType="numeric"
+              placeholder="0,00"
+              errorText={overLimit}
+            />
+          ) : null}
+          <Field label="O que é" value={description} onChangeText={setDescription} placeholder="Ex.: Roldanas do portão (Mercado Livre)" />
+          <Choices label="Categoria">
+            {CATEGORIES.map((name) => (
+              <Choice key={name} label={name} selected={category === name} onPress={() => setCategory(name)} />
+            ))}
+          </Choices>
+          {askReason ? (
+            <Field label="Justificativa (aparece para todos)" value={reason} onChangeText={setReason} multiline helpText="Pelo menos 20 letras." />
+          ) : null}
+          <Field
+            label="Sua senha"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            helpText="A senha da sua conta confirma que é você mandando o dinheiro."
+          />
+          <Label>A conta é lançada já aprovada, em seu nome. Quando o Asaas confirmar, ela é dada como paga e o comprovante entra sozinho.</Label>
+          <Button title={busy ? 'Enviando...' : value > 0 ? `Pagar ${formatMoneyBR(value)}` : 'Pagar'} icon={Send} onPress={pay} disabled={busy || !ready} />
+        </>
+      )}
+      <Button
+        title="Outro código"
+        variant="ghost"
+        onPress={() => {
+          setRead(null);
+          setCode('');
+        }}
+      />
+      <Button title="Fechar" variant="ghost" onPress={onClose} />
+    </Card>
+  );
+}
+
 function CancelForm({ payable, onDone, onClose }: { payable: Payable; onDone: () => void; onClose: () => void }) {
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
@@ -367,6 +527,7 @@ export function PayablesScreen() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('OPEN');
   const [creating, setCreating] = useState(false);
+  const [payingCode, setPayingCode] = useState(false);
   const [paying, setPaying] = useState<number | null>(null);
   const [cancelling, setCancelling] = useState<number | null>(null);
   const [approving, setApproving] = useState<number | null>(null);
@@ -426,6 +587,7 @@ export function PayablesScreen() {
 
   function done() {
     setCreating(false);
+    setPayingCode(false);
     setPaying(null);
     setCancelling(null);
     load();
@@ -455,8 +617,14 @@ export function PayablesScreen() {
         />
       </Card>
 
-      {canPay && !creating ? <Button title="Nova conta" icon={Plus} onPress={() => setCreating(true)} /> : null}
+      {canPay && !creating && !payingCode ? (
+        <View style={styles.actions}>
+          <Button title="Nova conta" icon={Plus} onPress={() => setCreating(true)} />
+          <Button title="Pix copia e cola" icon={QrCode} variant="ghost" onPress={() => setPayingCode(true)} />
+        </View>
+      ) : null}
       {creating ? <NewPayableForm suppliers={suppliers} onDone={done} onClose={() => setCreating(false)} /> : null}
+      {payingCode ? <PixCodeForm onDone={done} onClose={() => setPayingCode(false)} /> : null}
 
       <FilterBar label="Quais contas mostrar" options={options} value={filter} onChange={setFilter} />
       {!loading && visible.length === 0 ? (
@@ -468,7 +636,7 @@ export function PayablesScreen() {
           <View style={styles.cardTop}>
             <View style={styles.cardCopy}>
               <Value>{payable.description}</Value>
-              <Label>{[payable.supplierName, payable.category].filter(Boolean).join(' · ') || 'Sem fornecedor'}</Label>
+              <Label>{[payable.supplierName, payable.category, payable.pixKind === 'CODE' && 'Pix copia e cola'].filter(Boolean).join(' · ') || 'Sem fornecedor'}</Label>
             </View>
             <Badge status={statusKey(payable)} />
           </View>
@@ -485,7 +653,9 @@ export function PayablesScreen() {
           {trail(payable) ? <Text style={styles.small}>{trail(payable)}</Text> : null}
           {payable.exceptionReason ? <Text style={styles.warn}>Sem votação: {payable.exceptionReason}</Text> : null}
 
-          {payable.pixStatus && PIX_IN_FLIGHT.includes(payable.pixStatus) ? (
+          {payable.pixStatus === 'AWAITING_AUTHORIZATION' ? (
+            <Text style={styles.warn}>Aguardando autorização no Asaas: autorize com o token da conta (SMS ou app do Asaas). Depois, a baixa e o comprovante entram sozinhos.</Text>
+          ) : payable.pixStatus && PIX_IN_FLIGHT.includes(payable.pixStatus) ? (
             <Text style={styles.small}>Pix a caminho pelo Asaas: a baixa e o comprovante entram sozinhos quando ele confirmar.</Text>
           ) : isOpen(payable) && (payable.pixStatus === 'FAILED' || payable.pixStatus === 'CANCELLED') ? (
             <Text style={styles.danger}>O último Pix não saiu{payable.pixFailReason ? `: ${payable.pixFailReason}` : ''}.</Text>

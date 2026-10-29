@@ -482,10 +482,36 @@ record PayableView(
     String cancelledBy,
     String cancelReason,
     boolean canApprove,
-    /** The last Pix sent for it through Asaas: REQUESTED, PENDING, BANK_PROCESSING, DONE, FAILED, CANCELLED; null if none. */
+    /**
+     * The last Pix sent for it through Asaas: REQUESTED, PENDING, AWAITING_AUTHORIZATION (Asaas holds it until someone
+     * types the account's token), BANK_PROCESSING, DONE, FAILED, CANCELLED; null if none.
+     */
     String pixStatus,
-    String pixFailReason
+    String pixFailReason,
+    /** KEY (to the supplier's key) or CODE (a "copia e cola" code); null if no Pix. */
+    String pixKind
 ) {
+    static final String AWAITING_AUTHORIZATION = "AWAITING_AUTHORIZATION";
+}
+
+/** A "copia e cola" code to read before paying it. */
+record ReadPixCodeRequest(String code) {
+}
+
+/**
+ * What a "copia e cola" code is, as Asaas read it: who receives it, the value (valueFixed: it cannot be paid with another),
+ * until when (expiresAt as Asaas writes it), and whether it can be paid now.
+ */
+record PixCodeView(String receiverName, String receiverDocument, String bank, BigDecimal value, boolean valueFixed, String expiresAt,
+                   String description, boolean canBePaid, String reason) {
+}
+
+/**
+ * Paying a "copia e cola" code: the bill it becomes (what it is, the category, the service it pays for, the justification
+ * when beyond what was approved) and the person's own password. amount only when the code lets the value be chosen.
+ */
+record PayPixCodeRequest(String code, BigDecimal amount, String description, String category, Long serviceOrderId, String exceptionReason,
+                         String notes, String password) {
 }
 
 record BudgetRuleRequest(BigDecimal budgetRequiredAbove) {

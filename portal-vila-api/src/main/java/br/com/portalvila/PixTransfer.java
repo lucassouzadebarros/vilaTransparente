@@ -9,12 +9,16 @@ import java.time.LocalDateTime;
 import java.util.Set;
 
 /**
- * A bill paid by Pix from the condominium's Asaas account. REQUESTED is kept before Asaas is called; then it follows
- * Asaas: PENDING, BANK_PROCESSING, DONE (the bill is settled with the receipt), FAILED or CANCELLED (the bill stays open).
+ * A bill paid by Pix from the condominium's Asaas account: to a supplier's key (KEY) or by a "copia e cola" code (CODE).
+ * REQUESTED is kept before Asaas is called; then it follows Asaas: PENDING, BANK_PROCESSING, DONE (the bill is settled
+ * with the receipt), FAILED or CANCELLED (a supplier's bill stays open; a code's bill is cancelled, the code is spent).
  */
 @Entity
 @Table(name = "pix_transfers")
 public class PixTransfer {
+    public static final String KEY = "KEY";
+    public static final String CODE = "CODE";
+
     public static final String REQUESTED = "REQUESTED";
     public static final String PENDING = "PENDING";
     public static final String BANK_PROCESSING = "BANK_PROCESSING";
@@ -37,13 +41,24 @@ public class PixTransfer {
     public Long payableId;
 
     @Column(nullable = false)
+    public String kind = KEY;
+
+    @Column(nullable = false)
     public BigDecimal amount;
 
-    @Column(nullable = false)
+    /** The supplier's key; for a code, the key it carries when Asaas tells it. */
     public String pixKey;
-
-    @Column(nullable = false)
     public String pixKeyType;
+
+    @Column(columnDefinition = "text")
+    public String qrPayload;
+
+    /** Who receives a code's Pix, as Asaas read it from the code. */
+    public String receiverName;
+
+    /** Asaas holds it until someone authorizes it with the account's token (SMS or app). */
+    @Column(nullable = false)
+    public boolean awaitingAuthorization;
 
     public String gatewayTransferId;
 
