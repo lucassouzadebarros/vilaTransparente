@@ -121,8 +121,21 @@ export function SupplierDialog({ supplier, onClose, onSaved }: { supplier: Suppl
               ))}
             </select>
           </Field>
-          <Field label="Chave Pix" htmlFor="fornecedor-chave" hint="Opcional. Confira com o fornecedor: é para onde o dinheiro vai.">
-            <Input id="fornecedor-chave" value={form.pixKey ?? ''} onChange={(e) => set('pixKey')(e.target.value)} />
+          <Field
+            label="Chave Pix"
+            htmlFor="fornecedor-chave"
+            hint={
+              form.pixKeyType === 'PHONE'
+                ? 'Opcional. O celular com DDD, como (21) 98765-4321. Confira com o fornecedor: é para onde o dinheiro vai.'
+                : 'Opcional. Confira com o fornecedor: é para onde o dinheiro vai.'
+            }
+          >
+            <Input
+              id="fornecedor-chave"
+              inputMode={form.pixKeyType === 'PHONE' ? 'tel' : form.pixKeyType === 'CPF' || form.pixKeyType === 'CNPJ' ? 'numeric' : undefined}
+              value={form.pixKey ?? ''}
+              onChange={(e) => set('pixKey')(e.target.value)}
+            />
           </Field>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
