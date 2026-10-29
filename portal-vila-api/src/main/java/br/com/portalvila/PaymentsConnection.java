@@ -73,9 +73,10 @@ class GatewayCredentials {
  */
 @Component
 class AsaasAccountClient {
-    /** The payment events the webhook handler understands. */
+    /** The events the webhook handler understands: payments, and the transfers of bills paid by Pix. */
     static final List<String> EVENTS = List.of(
-        "PAYMENT_CREATED", "PAYMENT_UPDATED", "PAYMENT_CONFIRMED", "PAYMENT_RECEIVED", "PAYMENT_OVERDUE", "PAYMENT_DELETED", "PAYMENT_REFUNDED");
+        "PAYMENT_CREATED", "PAYMENT_UPDATED", "PAYMENT_CONFIRMED", "PAYMENT_RECEIVED", "PAYMENT_OVERDUE", "PAYMENT_DELETED", "PAYMENT_REFUNDED",
+        "TRANSFER_PENDING", "TRANSFER_IN_BANK_PROCESSING", "TRANSFER_DONE", "TRANSFER_FAILED", "TRANSFER_CANCELLED");
 
     private final WebClient webClient;
 

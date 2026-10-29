@@ -356,6 +356,8 @@ export type Payable = {
   overdue: boolean;
   supplierId?: number | null;
   supplierName?: string | null;
+  /** The supplier has a Pix key, so the bill can be paid by Pix through Asaas. */
+  supplierHasPix?: boolean;
   installment?: number | null;
   installments?: number | null;
   recurrence?: 'MONTHLY' | null;
@@ -371,7 +373,16 @@ export type Payable = {
   cancelReason?: string | null;
   /** The signed-in person may approve it: may pay bills and did not record it. */
   canApprove: boolean;
+  /** The last Pix sent for it through Asaas; absent when none was. */
+  pixStatus?: PixStatus | null;
+  pixFailReason?: string | null;
 };
+
+export type PixStatus = 'REQUESTED' | 'PENDING' | 'BANK_PROCESSING' | 'DONE' | 'FAILED' | 'CANCELLED';
+/** Still on its way: the bill is settled by itself when Asaas confirms it. */
+export const PIX_IN_FLIGHT: PixStatus[] = ['REQUESTED', 'PENDING', 'BANK_PROCESSING'];
+
+export type PixPaymentStatus = { available: boolean; reason: string | null; dailyLimit: number | null; usedToday: number; balance: number | null };
 
 export type PayableInput = {
   supplierId: number | null;

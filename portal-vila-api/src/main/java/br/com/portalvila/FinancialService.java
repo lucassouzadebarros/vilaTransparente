@@ -297,10 +297,10 @@ class FinancialService {
         return saved;
     }
 
-    /** Whether the síndico pays bills too, and above which value a second person approves them. */
+    /** Whether the síndico pays bills too, above which value a second person approves them, and the Pix limit per day. */
     public Settings updatePaymentRules(PaymentRulesRequest request) {
         Settings settings = settings();
-        if (request.approvalAbove() != null && request.approvalAbove().signum() < 0) {
+        if ((request.approvalAbove() != null && request.approvalAbove().signum() < 0) || (request.pixDailyLimit() != null && request.pixDailyLimit().signum() < 0)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O valor não pode ser negativo.");
         }
         if (request.sindicoCanPay() != null) {
@@ -309,11 +309,15 @@ class FinancialService {
         settings.approvalAbove = request.approvalAbove() == null || request.approvalAbove().signum() == 0
             ? null
             : request.approvalAbove().setScale(2, RoundingMode.HALF_UP);
+        settings.pixDailyLimit = request.pixDailyLimit() == null || request.pixDailyLimit().signum() == 0
+            ? null
+            : request.pixDailyLimit().setScale(2, RoundingMode.HALF_UP);
         settings.updatedAt = LocalDateTime.now();
         Settings saved = settingsRepository.save(settings);
         audit.record("PAYMENT_RULES_CHANGED", "SETTINGS", saved.id,
             (saved.sindicoCanPay ? "Síndico também paga" : "Só a administração paga") + ", "
-                + (saved.approvalAbove == null ? "sem segunda aprovação" : "segunda aprovação acima de " + AuditService.money(saved.approvalAbove)));
+                + (saved.approvalAbove == null ? "sem segunda aprovação" : "segunda aprovação acima de " + AuditService.money(saved.approvalAbove)) + ", "
+                + (saved.pixDailyLimit == null ? "Pix pelo Asaas desligado" : "Pix até " + AuditService.money(saved.pixDailyLimit) + " por dia"));
         return saved;
     }
 

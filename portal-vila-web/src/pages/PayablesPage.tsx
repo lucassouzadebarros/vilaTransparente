@@ -12,6 +12,7 @@ import {
   Receipt,
   Repeat,
   Search,
+  Send,
   ShieldCheck,
   Wallet
 } from 'lucide-react';
@@ -24,11 +25,11 @@ import { Badge, Button, Card, Input, Skeleton, Spinner } from '@/components/ui';
 import { Dialog } from '@/components/ui/dialog';
 import { Field, PageHeader, Segmented } from '@/components/ui/page';
 import { useToast } from '@/components/ui/toast';
-import { api, type Budget, type ExpenseRecord, type Payable, type PaymentMethod, type ServiceOrder } from '@/lib/api';
+import { api, PIX_IN_FLIGHT, type Budget, type ExpenseRecord, type Payable, type PaymentMethod, type ServiceOrder } from '@/lib/api';
 import { useSession } from '@/lib/auth';
 import { paymentTermsText } from '@/lib/paymentTerms';
 import { cn, formatDate, formatMoney, moneyText, parseMoney, plural, useDocumentTitle } from '@/lib/utils';
-import { SupplierDialog } from '@/pages/SuppliersPage';
+import { pixKeyText, SupplierDialog } from '@/pages/SuppliersPage';
 
 type Filter = 'open' | 'approval' | 'paid' | 'cancelled' | 'all';
 
@@ -400,16 +401,40 @@ export function NewPayableDialog({ onClose, service: forService }: { onClose: ()
   );
 }
 
-/** A payment made outside the system: when, how, and the receipt. The bill becomes an expense of the cash box. */
+type PayMode = 'pix' | 'outside';
+
+/**
+ * Paying a bill: by Pix straight from the condominium's Asaas account (confirmed with the person's password; the bill is
+ * settled with the receipt when Asaas confirms it), or registering what was already paid elsewhere, with its receipt.
+ */
 export function PayDialog({ payable, onClose }: { payable: Payable; onClose: () => void }) {
   const queryClient = useQueryClient();
   const notify = useToast();
+  const pixStatus = useQuery({ queryKey: ['condo', 'pix-status'], queryFn: api.pixStatus });
+  const suppliers = useQuery({ queryKey: ['condo', 'suppliers'], queryFn: api.suppliers });
+  const supplier = (suppliers.data ?? []).find((item) => item.id === payable.supplierId) ?? null;
   const today = isoToday();
+  const [mode, setMode] = useState<PayMode | null>(null);
   const [paidAt, setPaidAt] = useState(today);
   const [method, setMethod] = useState<PaymentMethod>('PIX');
   const [file, setFile] = useState<File | null>(null);
   const [notes, setNotes] = useState('');
+  const [password, setPassword] = useState('');
   const dateError = !paidAt || paidAt > today ? 'Escolha hoje ou um dia que já passou.' : null;
+
+  const status = pixStatus.data;
+  const left = status?.dailyLimit != null ? Number(status.dailyLimit) - Number(status.usedToday) : null;
+  const pixBlocked = !status
+    ? null
+    : !status.available
+      ? status.reason
+      : !payable.supplierHasPix
+        ? 'O fornecedor desta conta não tem chave Pix cadastrada. Cadastre em Fornecedores.'
+        : left != null && Number(payable.amount) > left
+          ? `Passa do limite de Pix de hoje: ainda dá para mandar ${formatMoney(Math.max(0, left))}.`
+          : null;
+  // Pix first whenever it can go; otherwise the payment made elsewhere.
+  const chosen: PayMode = mode ?? (status && !pixBlocked ? 'pix' : 'outside');
 
   const pay = useMutation({
     mutationFn: async () => {
@@ -422,52 +447,125 @@ export function PayDialog({ payable, onClose }: { payable: Payable; onClose: () 
       onClose();
     }
   });
+  const sendPix = useMutation({
+    mutationFn: () => api.payByPix(payable.id, password),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['condo'] });
+      notify('ok', `Pix de ${formatMoney(payable.amount)} enviado para ${payable.supplierName ?? 'o fornecedor'}. A baixa e o comprovante entram sozinhos quando o Asaas confirmar.`);
+      onClose();
+    }
+  });
+  const busy = pay.isPending || sendPix.isPending;
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!dateError) pay.mutate();
+    if (chosen === 'pix') {
+      if (!pixBlocked && password) sendPix.mutate();
+    } else if (!dateError) {
+      pay.mutate();
+    }
   }
 
   return (
     <Dialog
       open
-      onClose={() => !pay.isPending && onClose()}
+      onClose={() => !busy && onClose()}
       tone="ok"
       icon={<CheckCircle2 aria-hidden className="size-5" />}
-      title="Registrar pagamento"
-      description={`${payable.description}${payable.supplierName ? ` · ${payable.supplierName}` : ''} · ${formatMoney(payable.amount)}. Para o que já foi pago no banco ou em dinheiro: vira despesa no caixa, com o comprovante.`}
+      title="Pagar conta"
+      description={`${payable.description}${payable.supplierName ? ` · ${payable.supplierName}` : ''} · ${formatMoney(payable.amount)}`}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={pay.isPending}>
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
             Cancelar
           </Button>
-          <Button type="submit" form="registrar-pagamento" disabled={pay.isPending || !!dateError}>
-            {pay.isPending && <Spinner />}
-            Registrar pagamento
-          </Button>
+          {chosen === 'pix' ? (
+            <Button type="submit" form="registrar-pagamento" disabled={busy || !!pixBlocked || !password}>
+              {sendPix.isPending ? <Spinner /> : <Send aria-hidden className="size-4" />}
+              Enviar Pix
+            </Button>
+          ) : (
+            <Button type="submit" form="registrar-pagamento" disabled={busy || !!dateError}>
+              {pay.isPending && <Spinner />}
+              Registrar pagamento
+            </Button>
+          )}
         </>
       }
     >
       <form id="registrar-pagamento" onSubmit={submit} noValidate className="space-y-4">
-        {pay.isError && <FormAlert>{pay.error.message}</FormAlert>}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Pago em" htmlFor="pago-em" error={dateError}>
-            <Input id="pago-em" data-autofocus type="date" max={today} value={paidAt} onChange={(e) => setPaidAt(e.target.value)} />
-          </Field>
-          <Field label="Como foi pago" htmlFor="pago-como">
-            <select id="pago-como" value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)} className={selectClass}>
-              {methods.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
-        <FileField id="pago-comprovante" label="Comprovante" hint="Foto ou PDF. Fica na prestação de contas, para as unidades verem." file={file} onChange={setFile} />
-        <Field label="Observação" htmlFor="pago-obs">
-          <Input id="pago-obs" maxLength={500} value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </Field>
+        <Segmented
+          label="Como pagar"
+          value={chosen}
+          onChange={setMode}
+          options={[
+            { value: 'pix', label: 'Pix pelo Asaas' },
+            { value: 'outside', label: 'Já foi pago por fora' }
+          ]}
+        />
+        {chosen === 'pix' ? (
+          pixStatus.isPending ? (
+            <Skeleton className="h-28 rounded-lg" />
+          ) : (
+            <>
+              <dl className="grid gap-3 rounded-lg border border-line p-4 text-sm sm:grid-cols-2">
+                <div className="min-w-0">
+                  <dt className="text-xs text-muted">Para</dt>
+                  <dd className="truncate font-medium">{payable.supplierName ?? 'Sem fornecedor'}</dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-xs text-muted">Chave Pix</dt>
+                  <dd className="truncate">{supplier ? (pixKeyText(supplier) ?? '—') : '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">Valor</dt>
+                  <dd className="font-semibold tabular-nums">{formatMoney(payable.amount)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">Hoje pelo Asaas</dt>
+                  <dd className="tabular-nums">
+                    {status?.dailyLimit != null ? `${formatMoney(status.usedToday)} de ${formatMoney(status.dailyLimit)}` : '—'}
+                    {status?.balance != null && <span className="block text-xs text-muted">Saldo na conta: {formatMoney(status.balance)}</span>}
+                  </dd>
+                </div>
+              </dl>
+              {pixBlocked ? (
+                <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{pixBlocked}</p>
+              ) : (
+                <>
+                  {sendPix.isError && <FormAlert>{sendPix.error.message}</FormAlert>}
+                  <Field label="Sua senha" htmlFor="pix-senha" hint="A senha da sua conta no Portal confirma que é você mandando o dinheiro.">
+                    <Input id="pix-senha" data-autofocus type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                  </Field>
+                  <p className="text-xs text-muted">O Pix sai da conta Asaas do condomínio. Quando o Asaas confirmar, a conta é dada como paga e o comprovante entra sozinho.</p>
+                </>
+              )}
+            </>
+          )
+        ) : (
+          <>
+            <p className="text-xs text-muted">Para o que já foi pago no banco ou em dinheiro: vira despesa no caixa, com o comprovante.</p>
+            {pay.isError && <FormAlert>{pay.error.message}</FormAlert>}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Pago em" htmlFor="pago-em" error={dateError}>
+                <Input id="pago-em" type="date" max={today} value={paidAt} onChange={(e) => setPaidAt(e.target.value)} />
+              </Field>
+              <Field label="Como foi pago" htmlFor="pago-como">
+                <select id="pago-como" value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)} className={selectClass}>
+                  {methods.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <FileField id="pago-comprovante" label="Comprovante" hint="Foto ou PDF. Fica na prestação de contas, para as unidades verem." file={file} onChange={setFile} />
+            <Field label="Observação" htmlFor="pago-obs">
+              <Input id="pago-obs" maxLength={500} value={notes} onChange={(e) => setNotes(e.target.value)} />
+            </Field>
+          </>
+        )}
       </form>
     </Dialog>
   );
@@ -688,6 +786,9 @@ export function PayablesPage() {
                           </p>
                           <Trail payable={payable} />
                           {payable.exceptionReason && <p className="text-xs text-warn">Emergência: {payable.exceptionReason}</p>}
+                          {isOpen && (payable.pixStatus === 'FAILED' || payable.pixStatus === 'CANCELLED') && (
+                            <p className="text-xs text-danger">O último Pix não saiu{payable.pixFailReason ? `: ${payable.pixFailReason}` : ''}.</p>
+                          )}
                         </td>
                         <td className="px-4 py-3.5 text-right font-medium tabular-nums">{formatMoney(payable.amount)}</td>
                         <td className="px-4 py-3.5">
@@ -712,13 +813,20 @@ export function PayablesPage() {
                                 Aprovar
                               </Button>
                             )}
-                            {me.canPay && payable.status === 'APPROVED' && (
-                              <Button size="sm" variant="secondary" onClick={() => setPaying(payable)}>
-                                <CheckCircle2 aria-hidden className="size-4" />
-                                Registrar pagamento
-                              </Button>
+                            {payable.pixStatus && PIX_IN_FLIGHT.includes(payable.pixStatus) ? (
+                              <Badge tone="brand">
+                                <Send aria-hidden className="size-3" /> Pix a caminho
+                              </Badge>
+                            ) : (
+                              me.canPay &&
+                              payable.status === 'APPROVED' && (
+                                <Button size="sm" variant="secondary" onClick={() => setPaying(payable)}>
+                                  <CheckCircle2 aria-hidden className="size-4" />
+                                  Pagar
+                                </Button>
+                              )
                             )}
-                            {me.canPay && isOpen && (
+                            {me.canPay && isOpen && !(payable.pixStatus && PIX_IN_FLIGHT.includes(payable.pixStatus)) && (
                               <Button
                                 variant="ghost"
                                 size="sm"

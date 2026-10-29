@@ -87,7 +87,19 @@ export type Payable = {
   cancelledBy: string | null;
   cancelReason: string | null;
   canApprove: boolean;
+  /** The last Pix sent for it through Asaas; null when none was. */
+  pixStatus: PixStatus | null;
+  pixFailReason: string | null;
 };
+
+export type PixStatus = 'REQUESTED' | 'PENDING' | 'BANK_PROCESSING' | 'DONE' | 'FAILED' | 'CANCELLED';
+/** Still on its way: the bill is settled by itself when Asaas confirms it. */
+export const PIX_IN_FLIGHT: PixStatus[] = ['REQUESTED', 'PENDING', 'BANK_PROCESSING'];
+
+export type PixPaymentStatus = { available: boolean; reason: string | null; dailyLimit: number | null; usedToday: number; balance: number | null };
+
+/** What the administration types in Asaas (Integrações > Mecanismos de segurança) so each withdrawal is checked here. */
+export type PixValidation = { configured: boolean; url: string | null; token: string | null; lastCheckAt: string | null };
 
 /**
  * A new bill: amount is the whole of it. With downPayment, that part falls due on dueDate and the rest, in installments
@@ -314,6 +326,8 @@ export type CondominiumSettings = {
   gasPrice: number | null;
   sindicoCanPay: boolean;
   approvalAbove: number | null;
+  /** Most that may leave by Pix in a day; null turns paying bills by Pix off. */
+  pixDailyLimit: number | null;
 };
 
 export type ChargeMode = 'FIXED' | 'FRACTION';
@@ -556,6 +570,15 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+/**
+ * Where a kept file can be opened: a short-lived signed address of this server, or the link itself when the file is
+ * kept elsewhere (the receipt of a Pix sent through Asaas).
+ */
+async function documentAddress(id: number) {
+  const access = await request<{ path?: string; url?: string }>(`/documents/${id}/access`);
+  return access.url ?? `${BASE_URL.replace(/\/api$/, '')}${access.path}`;
+}
+
 export const api = {
   login: (email: string, password: string) =>
     request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
@@ -577,8 +600,13 @@ export const api = {
   billing: (month: string) => request<BillingMonth>(`/admin/billing?month=${month}`),
   generateCharges: (input: { month: string; amount?: number; total?: number; dueDate: string }) =>
     request<GenerateResult>('/admin/billing/generate', { method: 'POST', body: JSON.stringify(input) }),
-  updatePaymentRules: (rules: { sindicoCanPay: boolean; approvalAbove: number | null }) =>
+  updatePaymentRules: (rules: { sindicoCanPay: boolean; approvalAbove: number | null; pixDailyLimit: number | null }) =>
     request<CondominiumSettings>('/settings/payments', { method: 'PUT', body: JSON.stringify(rules) }),
+  pixStatus: () => request<PixPaymentStatus>('/payables/pix'),
+  /** Sends the bill's Pix from the condominium's Asaas account; the person's own password confirms it. */
+  payByPix: (id: number, password: string) => request<Payable>(`/payables/${id}/pix`, { method: 'POST', body: JSON.stringify({ password }) }),
+  pixValidation: () => request<PixValidation>('/payments/pix-validation'),
+  createPixValidation: () => request<PixValidation>('/payments/pix-validation', { method: 'POST' }),
   suppliers: () => request<Supplier[]>('/suppliers'),
   saveSupplier: (id: number | null, input: SupplierInput) =>
     request<Supplier>(id == null ? '/suppliers' : `/suppliers/${id}`, { method: id == null ? 'POST' : 'PUT', body: JSON.stringify(input) }),
@@ -617,10 +645,7 @@ export const api = {
   expenses: () => request<ExpenseRecord[]>('/expenses'),
   documents: (relatedType: string, relatedId: number) => request<PortalDocument[]>(`/documents?relatedType=${relatedType}&relatedId=${relatedId}`),
   /** A short-lived address a photo can be shown from: an <img> cannot send the login header. */
-  documentImageUrl: async (id: number) => {
-    const { path } = await request<{ path: string }>(`/documents/${id}/access`);
-    return `${BASE_URL.replace(/\/api$/, '')}${path}`;
-  },
+  documentImageUrl: async (id: number) => documentAddress(id),
   /**
    * A file kept with a bill (only who pays the bills may send it), a budget or a service (the administration and the
    * síndico). The name is what the lists show; it defaults to the file's own name.
@@ -639,8 +664,7 @@ export const api = {
     // The tab opens on the click itself (a tab opened after waiting for the API would be blocked as a pop-up).
     const tab = window.open('', '_blank');
     try {
-      const { path } = await request<{ path: string }>(`/documents/${id}/access`);
-      const url = `${BASE_URL.replace(/\/api$/, '')}${path}`;
+      const url = await documentAddress(id);
       if (tab) {
         tab.opener = null;
         tab.location.href = url;

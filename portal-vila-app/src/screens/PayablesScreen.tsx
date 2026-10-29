@@ -1,13 +1,13 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Ban, Camera, CheckCircle2, Eye, FileText, Info, Plus, RefreshCw, Repeat, ShieldCheck, Upload } from 'lucide-react-native';
+import { Ban, Camera, CheckCircle2, Eye, FileText, Info, Plus, RefreshCw, Repeat, Send, ShieldCheck, Upload } from 'lucide-react-native';
 import { EmptyFilter, FilterBar, FilterOption } from '../components/FilterBar';
 import { Badge, Button, Card, Facts, Field, Label, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api, apiErrorMessage } from '../services/api';
 import { colors, spacing, TOUCH_TARGET } from '../theme';
-import { Payable, Supplier } from '../types';
+import { Payable, PIX_IN_FLIGHT, PixPaymentStatus, Supplier } from '../types';
 import { Alert } from '../utils/alert';
 import { PickedFile, choosePhoto, pickPdf, pickerErrorMessage } from '../utils/filePicker';
 import { formatDateBR, formatMoneyBR } from '../utils/format';
@@ -190,14 +190,51 @@ function NewPayableForm({ suppliers, onDone, onClose }: { suppliers: Supplier[];
   );
 }
 
-/** A payment made at the bank or in cash: when, how, and the receipt. The bill becomes an expense of the cash box. */
-function PayForm({ payable, onDone, onClose }: { payable: Payable; onDone: () => void; onClose: () => void }) {
+/**
+ * Paying a bill: by Pix straight from the condominium's Asaas account, confirmed with the person's own password (the bill
+ * is settled with the receipt when Asaas confirms it), or registering what was already paid at the bank or in cash.
+ */
+function PayForm({ payable, supplier, onDone, onClose }: { payable: Payable; supplier: Supplier | null; onDone: () => void; onClose: () => void }) {
   const [paidAt, setPaidAt] = useState(today());
   const [method, setMethod] = useState('PIX');
   const [file, setFile] = useState<PickedFile | null>(null);
   const [saving, setSaving] = useState(false);
+  const [pix, setPix] = useState<PixPaymentStatus | null>(null);
+  const [mode, setMode] = useState<'PIX' | 'OUTSIDE' | null>(null);
+  const [password, setPassword] = useState('');
   const iso = dateBRToISO(paidAt);
   const future = Boolean(iso) && (iso as string) > (dateBRToISO(today()) as string);
+
+  useEffect(() => {
+    api.pixStatus()
+      .then(setPix)
+      .catch(() => setPix({ available: false, reason: 'Não consegui consultar o Pix agora.', dailyLimit: null, usedToday: 0, balance: null }));
+  }, []);
+  const left = pix?.dailyLimit != null ? Number(pix.dailyLimit) - Number(pix.usedToday) : null;
+  const blocked = !pix
+    ? null
+    : !pix.available
+      ? pix.reason
+      : !payable.supplierHasPix
+        ? 'O fornecedor desta conta não tem chave Pix cadastrada.'
+        : left != null && Number(payable.amount) > left
+          ? `Passa do limite de Pix de hoje: ainda dá para mandar ${formatMoneyBR(Math.max(0, left))}.`
+          : null;
+  // Pix first whenever it can go; otherwise the payment made elsewhere.
+  const chosen = mode ?? (pix && !blocked ? 'PIX' : 'OUTSIDE');
+
+  async function sendPix() {
+    setSaving(true);
+    try {
+      await api.payByPix(payable.id, password);
+      Alert.alert('Contas a pagar', 'Pix enviado. A baixa e o comprovante entram sozinhos quando o Asaas confirmar.');
+      onDone();
+    } catch (error) {
+      Alert.alert('Contas a pagar', apiErrorMessage(error, 'O Pix não saiu.'));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -215,8 +252,55 @@ function PayForm({ payable, onDone, onClose }: { payable: Payable; onDone: () =>
     }
   }
 
+  const choice = (
+    <Choices label="Como pagar">
+      <Choice label="Pix pelo Asaas" selected={chosen === 'PIX'} onPress={() => setMode('PIX')} />
+      <Choice label="Já foi pago por fora" selected={chosen === 'OUTSIDE'} onPress={() => setMode('OUTSIDE')} />
+    </Choices>
+  );
+
+  if (chosen === 'PIX') {
+    return (
+      <View style={styles.inlineForm}>
+        {choice}
+        {!pix ? (
+          <Label>Consultando o Pix...</Label>
+        ) : (
+          <>
+            <Facts
+              items={[
+                { label: 'Para', value: payable.supplierName ?? 'Sem fornecedor' },
+                { label: 'Chave Pix', value: supplier?.pixKey ?? '—' },
+                { label: 'Valor', value: formatMoneyBR(payable.amount) },
+                { label: 'Hoje pelo Asaas', value: pix.dailyLimit != null ? `${formatMoneyBR(pix.usedToday)} de ${formatMoneyBR(pix.dailyLimit)}` : '—' }
+              ]}
+            />
+            {blocked ? (
+              <Text style={styles.warn}>{blocked}</Text>
+            ) : (
+              <>
+                <Field
+                  label="Sua senha"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  helpText="A senha da sua conta confirma que é você mandando o dinheiro."
+                />
+                <Label>O Pix sai da conta Asaas do condomínio. Quando o Asaas confirmar, a conta é dada como paga e o comprovante entra sozinho.</Label>
+                <Button title={saving ? 'Enviando...' : 'Enviar Pix'} icon={Send} onPress={sendPix} disabled={saving || !password} />
+              </>
+            )}
+          </>
+        )}
+        <Button title="Voltar" variant="ghost" onPress={onClose} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.inlineForm}>
+      {choice}
       <Label>Para o que já foi pago no banco ou em dinheiro: vira despesa no caixa, com o comprovante.</Label>
       <Field
         label="Pago em"
@@ -401,8 +485,14 @@ export function PayablesScreen() {
           {trail(payable) ? <Text style={styles.small}>{trail(payable)}</Text> : null}
           {payable.exceptionReason ? <Text style={styles.warn}>Sem votação: {payable.exceptionReason}</Text> : null}
 
-          {paying === payable.id ? (
-            <PayForm payable={payable} onDone={done} onClose={() => setPaying(null)} />
+          {payable.pixStatus && PIX_IN_FLIGHT.includes(payable.pixStatus) ? (
+            <Text style={styles.small}>Pix a caminho pelo Asaas: a baixa e o comprovante entram sozinhos quando ele confirmar.</Text>
+          ) : isOpen(payable) && (payable.pixStatus === 'FAILED' || payable.pixStatus === 'CANCELLED') ? (
+            <Text style={styles.danger}>O último Pix não saiu{payable.pixFailReason ? `: ${payable.pixFailReason}` : ''}.</Text>
+          ) : null}
+
+          {payable.pixStatus && PIX_IN_FLIGHT.includes(payable.pixStatus) ? null : paying === payable.id ? (
+            <PayForm payable={payable} supplier={suppliers.find((item) => item.id === payable.supplierId) ?? null} onDone={done} onClose={() => setPaying(null)} />
           ) : cancelling === payable.id ? (
             <CancelForm payable={payable} onDone={done} onClose={() => setCancelling(null)} />
           ) : (
@@ -410,7 +500,7 @@ export function PayablesScreen() {
               {payable.canApprove ? (
                 <Button title={approving === payable.id ? 'Aprovando...' : 'Aprovar'} icon={ShieldCheck} onPress={() => approve(payable)} disabled={approving != null} />
               ) : null}
-              {canPay && payable.status === 'APPROVED' ? <Button title="Registrar pagamento" icon={CheckCircle2} variant="ghost" onPress={() => setPaying(payable.id)} /> : null}
+              {canPay && payable.status === 'APPROVED' ? <Button title="Pagar" icon={CheckCircle2} variant="ghost" onPress={() => setPaying(payable.id)} /> : null}
               {payable.documentId ? <Button title="Nota / boleto" icon={FileText} variant="ghost" onPress={() => openDocument(payable.documentId as number)} /> : null}
               {payable.receiptDocumentId ? <Button title="Comprovante" icon={Eye} variant="ghost" onPress={() => openDocument(payable.receiptDocumentId as number)} /> : null}
               {canPay && isOpen(payable) ? <Button title="Cancelar" icon={Ban} variant="danger" onPress={() => setCancelling(payable.id)} /> : null}

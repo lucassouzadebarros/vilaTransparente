@@ -703,11 +703,16 @@ class DocumentController {
         return documents.save(document);
     }
 
-    /** A signed, short-lived path the browser can open in a new tab, since a tab cannot send the login header. */
+    /**
+     * A signed, short-lived path the browser can open in a new tab, since a tab cannot send the login header. A document
+     * that is only a link kept elsewhere (the receipt of a Pix sent through Asaas) answers that link instead.
+     */
     @GetMapping("/{id}/access")
     Map<String, String> access(@PathVariable Long id) {
-        if (!documents.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Documento não encontrado.");
+        PortalDocument document = documents.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Documento não encontrado."));
+        if ((document.storagePath == null || document.storagePath.isBlank()) && document.url != null && document.url.startsWith("https://")) {
+            return Map.of("url", document.url);
         }
         return Map.of("path", "/api/documents/" + id + "/file?t=" + jwtService.issueDocumentToken(id));
     }

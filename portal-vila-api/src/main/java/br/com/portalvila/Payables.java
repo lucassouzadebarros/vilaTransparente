@@ -131,6 +131,7 @@ class PayableService {
     private final AuditService audit;
     private final PushService push;
     private final DashboardEventService dashboardEvents;
+    private final PixTransferRepository pixTransfers;
 
     PayableService(
         PayableRepository payables,
@@ -144,8 +145,10 @@ class PayableService {
         CurrentUserService currentUser,
         AuditService audit,
         PushService push,
-        DashboardEventService dashboardEvents
+        DashboardEventService dashboardEvents,
+        PixTransferRepository pixTransfers
     ) {
+        this.pixTransfers = pixTransfers;
         this.payables = payables;
         this.suppliers = suppliers;
         this.settingsRepository = settingsRepository;
@@ -383,6 +386,7 @@ class PayableService {
             default -> {
             }
         }
+        refuseWhilePixInFlight(payable.id);
         LocalDate paidAt = request.paidAt() == null ? BudgetVotingService.today() : request.paidAt();
         if (paidAt.isAfter(BudgetVotingService.today())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A data do pagamento não pode ser no futuro.");
@@ -391,7 +395,16 @@ class PayableService {
         if (!METHODS.contains(method)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Diga como foi pago: Pix, TED, boleto, dinheiro, cartão ou outro.");
         }
+        Payable saved = settle(payable, paidAt, method, request.receiptDocumentId(), trimmed(request.notes()), me.email);
+        return view(saved, me, true, Map.of(), new java.util.HashMap<>());
+    }
 
+    /**
+     * The bill is paid: it becomes an expense of the cash box, with the receipt, under the same spending rules as any
+     * expense. A monthly bill creates next month's, already approved. Paying by Pix through Asaas ends here too, once
+     * Asaas confirms it.
+     */
+    Payable settle(Payable payable, LocalDate paidAt, String method, Long receiptDocumentId, String notes, String paidBy) {
         Expense expense = new Expense();
         expense.description = payable.description + (payable.installments == null ? "" : " (parcela " + payable.installment + "/" + payable.installments + ")");
         expense.category = payable.category;
@@ -399,8 +412,8 @@ class PayableService {
         expense.expenseDate = paidAt;
         expense.supplier = payable.supplierId == null ? null : suppliers.findById(payable.supplierId).map(found -> found.name).orElse(null);
         expense.paymentMethod = method;
-        expense.notes = trimmed(request.notes()) == null ? payable.notes : trimmed(request.notes());
-        expense.documentId = request.receiptDocumentId() != null ? request.receiptDocumentId() : payable.documentId;
+        expense.notes = notes == null ? payable.notes : notes;
+        expense.documentId = receiptDocumentId != null ? receiptDocumentId : payable.documentId;
         expense.budgetId = payable.budgetId;
         expense.serviceOrderId = payable.serviceOrderId;
         expense.exceptionReason = payable.exceptionReason;
@@ -415,10 +428,10 @@ class PayableService {
             + (savedExpense.exceptionReason == null ? "" : " - SEM VOTAÇÃO: " + savedExpense.exceptionReason));
 
         payable.status = Payable.PAID;
-        payable.paidBy = me.email;
+        payable.paidBy = paidBy;
         payable.paidAt = paidAt;
         payable.paymentMethod = method;
-        payable.receiptDocumentId = request.receiptDocumentId();
+        payable.receiptDocumentId = receiptDocumentId;
         payable.expenseId = savedExpense.id;
         payable.updatedAt = LocalDateTime.now();
         Payable saved = payables.save(payable);
@@ -437,7 +450,19 @@ class PayableService {
             payables.save(next);
         }
         dashboardEvents.publishDashboardChanged();
-        return view(saved, me, true, Map.of(), new java.util.HashMap<>());
+        return saved;
+    }
+
+    /** How the person asking sees one bill. */
+    PayableView viewOf(Payable payable) {
+        return view(payable, currentUser.current(), currentUser.canPay(), Map.of(), new java.util.HashMap<>());
+    }
+
+    /** A Pix on its way through Asaas settles the bill when it is confirmed: meanwhile nobody pays or changes it another way. */
+    private void refuseWhilePixInFlight(Long payableId) {
+        if (pixTransfers.existsByPayableIdAndStatusIn(payableId, PixTransfer.IN_FLIGHT)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Um Pix desta conta está a caminho pelo Asaas. A baixa entra sozinha quando ele for confirmado.");
+        }
     }
 
     /** A bill not yet paid leaves the list, with the reason. A monthly one stops repeating. */
@@ -466,6 +491,7 @@ class PayableService {
         if (Payable.PAID.equals(payable.status) || Payable.CANCELLED.equals(payable.status)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Esta conta já foi " + (Payable.PAID.equals(payable.status) ? "paga." : "cancelada."));
         }
+        refuseWhilePixInFlight(payable.id);
         return payable;
     }
 
@@ -640,6 +666,7 @@ class PayableService {
         Supplier supplier = payable.supplierId == null ? null
             : supplierById.containsKey(payable.supplierId) ? supplierById.get(payable.supplierId) : suppliers.findById(payable.supplierId).orElse(null);
         boolean open = Payable.PENDING_APPROVAL.equals(payable.status) || Payable.APPROVED.equals(payable.status);
+        PixTransfer pix = pixTransfers.findFirstByPayableIdOrderByIdDesc(payable.id).orElse(null);
         return new PayableView(
             payable.id,
             payable.description,
@@ -670,7 +697,9 @@ class PayableService {
             payable.expenseId,
             nameOf(payable.cancelledBy, names),
             payable.cancelReason,
-            canPay && Payable.PENDING_APPROVAL.equals(payable.status) && !me.email.equalsIgnoreCase(payable.createdBy)
+            canPay && Payable.PENDING_APPROVAL.equals(payable.status) && !me.email.equalsIgnoreCase(payable.createdBy),
+            pix == null ? null : pix.status,
+            pix == null ? null : pix.failReason
         );
     }
 
