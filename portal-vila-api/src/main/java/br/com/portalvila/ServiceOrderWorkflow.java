@@ -23,6 +23,8 @@ import java.util.Set;
 class ServiceOrderWorkflow {
     private static final Set<String> VALID_STATUSES = Set.of("PLANEJADO", "APROVADO", "EM_ANDAMENTO", "FINALIZADO", "CANCELADO");
     private static final Set<String> CLOSED_STATUSES = Set.of("FINALIZADO", "CANCELADO");
+    private static final Set<String> PAYMENT_MODES = Set.of("A_VISTA", "PARCELADO", "ENTRADA");
+    static final int MAX_PAYMENT_INSTALLMENTS = 60;
 
     private final ServiceOrderRepository services;
     private final BudgetRepository budgets;
@@ -34,6 +36,7 @@ class ServiceOrderWorkflow {
     private final PushService push;
     private final SpendingRules rules;
     private final ReportLifecycle lifecycle;
+    private final PayableRepository payables;
 
     ServiceOrderWorkflow(
         ServiceOrderRepository services,
@@ -45,8 +48,10 @@ class ServiceOrderWorkflow {
         ProblemReportRepository reports,
         PushService push,
         SpendingRules rules,
-        ReportLifecycle lifecycle
+        ReportLifecycle lifecycle,
+        PayableRepository payables
     ) {
+        this.payables = payables;
         this.lifecycle = lifecycle;
         this.rules = rules;
         this.push = push;
@@ -148,7 +153,7 @@ class ServiceOrderWorkflow {
     }
 
     @Transactional
-    public void cancelService(Long id) {
+    public void cancelService(Long id, String cancelledBy) {
         ServiceOrder service = services.findById(id).orElseThrow();
         if ("FINALIZADO".equals(service.status)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Este serviço já foi finalizado e tem pagamento registrado. Corrija os dados pelo serviço em vez de cancelar.");
@@ -156,6 +161,25 @@ class ServiceOrderWorkflow {
         service.status = "CANCELADO";
         service.updatedAt = LocalDateTime.now();
         services.save(service);
+        // Bills not yet paid have nothing left to pay. What was already paid (a down payment) stays in the cash box.
+        BigDecimal alreadyPaid = BigDecimal.ZERO;
+        for (Payable bill : payables.findByServiceOrderId(service.id)) {
+            if (Payable.PAID.equals(bill.status)) {
+                alreadyPaid = alreadyPaid.add(bill.amount);
+            } else if (!Payable.CANCELLED.equals(bill.status)) {
+                bill.status = Payable.CANCELLED;
+                bill.cancelledBy = cancelledBy;
+                bill.cancelledAt = LocalDateTime.now();
+                bill.cancelReason = "Serviço #" + service.id + " cancelado.";
+                bill.updatedAt = LocalDateTime.now();
+                payables.save(bill);
+                audit.record("PAYABLE_CANCELLED", "PAYABLE", bill.id, bill.description + " - " + AuditService.money(bill.amount) + " - serviço #" + service.id + " cancelado");
+            }
+        }
+        if (alreadyPaid.signum() > 0) {
+            audit.record("SERVICE_CANCELLED_AFTER_PAYMENT", "SERVICE", service.id, service.title + " - já pago " + AuditService.money(alreadyPaid)
+                + ": combinar a devolução com o fornecedor");
+        }
         // Quotes still being voted for a cancelled service have nothing left to decide.
         for (Budget quote : budgets.findByServiceIdAndStatus(service.id, "EM_ANALISE")) {
             quote.status = "CANCELADO";
@@ -255,19 +279,20 @@ class ServiceOrderWorkflow {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Orçamento aprovado não volta para votação. Cancele e cadastre um novo.");
             }
         }
-        // People voted on this title, supplier and amount: changing them restarts the voting.
+        // People voted on this title, supplier, amount and way of paying: changing them restarts the voting.
         String incomingScope = blankToNull(incoming.scope);
         boolean termsChanged = !budget.title.equals(incoming.title)
             || !budget.supplier.equals(incoming.supplier)
             || budget.amount.compareTo(incoming.amount) != 0
-            || !Objects.equals(blankToNull(budget.scope), incomingScope);
+            || !Objects.equals(blankToNull(budget.scope), incomingScope)
+            || !samePayment(budget, incoming);
         if (reopening) {
             voting.resetVotes(budget);
         } else if (termsChanged && voting.hasVotes(budget.id)) {
             if ("EM_ANALISE".equals(previousStatus)) {
                 voting.resetVotes(budget);
             } else if (!"CANCELADO".equals(previousStatus)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Este orçamento já foi votado. Para mudar título, fornecedor ou valor, cadastre um novo orçamento.");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Este orçamento já foi votado. Para mudar título, fornecedor, valor ou forma de pagamento, cadastre um novo orçamento.");
             }
         }
         budget.title = incoming.title;
@@ -278,6 +303,9 @@ class ServiceOrderWorkflow {
         budget.budgetDate = incoming.budgetDate;
         budget.validUntil = incoming.validUntil;
         budget.expectedDate = incoming.expectedDate;
+        budget.paymentMode = incoming.paymentMode;
+        budget.downPayment = incoming.downPayment;
+        budget.paymentInstallments = incoming.paymentInstallments;
         budget.documentId = incoming.documentId;
         budget.status = nextStatus;
         if ("EM_ANALISE".equals(nextStatus)) {
@@ -338,6 +366,11 @@ class ServiceOrderWorkflow {
         // Finishing again may fix the note or the supplier, but must not book the same payment twice.
         if (request.generateExpense() && !expenses.findByServiceOrderId(service.id).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "A despesa deste serviço já foi lançada. Finalize sem gerar despesa para só atualizar os dados.");
+        }
+        // Paid through bills (a down payment, installments): each bill books its own expense when it is paid.
+        if (request.generateExpense() && payables.findByServiceOrderId(service.id).stream().anyMatch(bill -> !Payable.CANCELLED.equals(bill.status))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Este serviço é pago pelas contas a pagar: cada conta entra no caixa quando é paga. Finalize sem lançar despesa.");
         }
         // What is paid has to stay close to what the houses approved, in any state the service is in.
         boolean emergency = rules.assertPaymentAllowed(service, request.finalValue(), request.emergencyReason());
@@ -445,6 +478,52 @@ class ServiceOrderWorkflow {
         if (budget.amount == null || budget.amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor do orçamento deve ser maior que zero.");
         }
+        normalizePayment(budget);
+    }
+
+    /** How the supplier will be paid, checked to add up. Left empty it stays empty: "não informada". */
+    private static void normalizePayment(Budget budget) {
+        String mode = budget.paymentMode == null ? "" : budget.paymentMode.trim().toUpperCase(Locale.ROOT);
+        if (mode.isEmpty()) {
+            budget.paymentMode = null;
+            budget.downPayment = null;
+            budget.paymentInstallments = null;
+            return;
+        }
+        if (!PAYMENT_MODES.contains(mode)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Forma de pagamento inválida: à vista, parcelado ou entrada e restante.");
+        }
+        budget.paymentMode = mode;
+        int parts = budget.paymentInstallments == null ? 0 : budget.paymentInstallments;
+        switch (mode) {
+            case "A_VISTA" -> {
+                budget.downPayment = null;
+                budget.paymentInstallments = null;
+            }
+            case "PARCELADO" -> {
+                if (parts < 2 || parts > MAX_PAYMENT_INSTALLMENTS) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Parcelado: de 2 a " + MAX_PAYMENT_INSTALLMENTS + " parcelas.");
+                }
+                budget.downPayment = null;
+            }
+            default -> {
+                if (budget.downPayment == null || budget.downPayment.signum() <= 0 || budget.downPayment.compareTo(budget.amount) >= 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A entrada precisa ser maior que zero e menor que o valor do orçamento.");
+                }
+                budget.downPayment = budget.downPayment.setScale(2, java.math.RoundingMode.HALF_UP);
+                parts = parts == 0 ? 1 : parts;
+                if (parts > MAX_PAYMENT_INSTALLMENTS) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O restante vai de 1 a " + MAX_PAYMENT_INSTALLMENTS + " parcelas.");
+                }
+                budget.paymentInstallments = parts;
+            }
+        }
+    }
+
+    private static boolean samePayment(Budget a, Budget b) {
+        return Objects.equals(a.paymentMode, b.paymentMode)
+            && Objects.equals(a.paymentInstallments, b.paymentInstallments)
+            && (a.downPayment == null ? b.downPayment == null : b.downPayment != null && a.downPayment.compareTo(b.downPayment) == 0);
     }
 
     private void reconcileServiceBudget(ServiceOrder service, Long previousBudgetId) {

@@ -31,14 +31,18 @@ const emptyMessages: Record<BudgetFilter, string> = {
   CANCELADO: 'Nenhum orçamento cancelado.'
 };
 
-/** Where the budget came from: the problem it answers, or the service it quotes (older records). */
+/**
+ * Where the budget came from: the problem it answers, or the service it quotes (older records). An approved budget
+ * became its own service, which is what it leads to.
+ */
 function originLabel(item: Budget, problemTitles: Record<number, string>, serviceTitles: Record<number, string>) {
   if (item.problemReportId) {
     const title = problemTitles[item.problemReportId] ?? `#${item.problemReportId}`;
     return `Para o problema: ${title}${item.competes === false ? ' (outro trabalho)' : ''}`;
   }
   if (item.serviceId) {
-    return `Cotação do serviço: ${serviceTitles[item.serviceId] ?? `#${item.serviceId}`}`;
+    const title = serviceTitles[item.serviceId] ?? `#${item.serviceId}`;
+    return item.status === 'APROVADO' ? `Virou o serviço: ${title}` : `Cotação do serviço: ${title}`;
   }
   return 'Orçamento sem problema ligado';
 }

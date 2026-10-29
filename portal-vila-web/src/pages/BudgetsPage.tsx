@@ -8,6 +8,7 @@ import { Button, Card, Input, Skeleton } from '@/components/ui';
 import { PageHeader, Segmented } from '@/components/ui/page';
 import { api, type Budget } from '@/lib/api';
 import { useSession } from '@/lib/auth';
+import { paymentTermsShort } from '@/lib/paymentTerms';
 import { formatDate, formatMoney, plural, useDocumentTitle } from '@/lib/utils';
 import { Kpi } from '@/pages/ProblemsPage';
 
@@ -123,7 +124,10 @@ export function BudgetsPage() {
                           </Link>
                           <p className="truncate text-xs text-muted">{budget.supplier}</p>
                         </td>
-                        <td className="px-4 py-3.5 text-right font-medium tabular-nums">{formatMoney(budget.amount)}</td>
+                        <td className="px-4 py-3.5 text-right tabular-nums">
+                          <span className="font-medium">{formatMoney(budget.amount)}</span>
+                          {paymentTermsShort(budget) && <span className="block text-xs text-muted">{paymentTermsShort(budget)}</span>}
+                        </td>
                         <td className="min-w-48 px-4 py-3.5">
                           {summary && budget.status === 'EM_ANALISE' ? (
                             <VotingBar approve={summary.approveVotes} reject={summary.rejectVotes} pending={summary.pendingVotes} />

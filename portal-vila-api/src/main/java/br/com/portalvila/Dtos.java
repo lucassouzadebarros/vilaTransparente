@@ -420,7 +420,8 @@ record SupplierRequest(String name, String document, String pixKey, String pixKe
 
 /**
  * A new bill. amount is the whole bill; with installments above 1 it is split in that many, one a month from dueDate.
- * monthly: it repeats every month (paying one creates the next).
+ * monthly: it repeats every month (paying one creates the next). downPayment: a first part due on dueDate, and the
+ * rest of amount in installments parts, one a month from restDueDate.
  */
 record PayableRequest(
     Long supplierId,
@@ -434,7 +435,9 @@ record PayableRequest(
     Long serviceOrderId,
     Long documentId,
     String exceptionReason,
-    String notes
+    String notes,
+    BigDecimal downPayment,
+    LocalDate restDueDate
 ) {
 }
 

@@ -42,6 +42,7 @@ class BudgetVotingService {
     private final PushService push;
     private final AppUserRepository users;
     private final ReportLifecycle lifecycle;
+    private final ProblemReportRepository reports;
 
     private static final ZoneId VILLAGE_ZONE = ZoneId.of("America/Sao_Paulo");
 
@@ -55,8 +56,10 @@ class BudgetVotingService {
         ServiceOrderRepository services,
         PushService push,
         AppUserRepository users,
-        ReportLifecycle lifecycle
+        ReportLifecycle lifecycle,
+        ProblemReportRepository reports
     ) {
+        this.reports = reports;
         this.lifecycle = lifecycle;
         this.users = users;
         this.push = push;
@@ -258,7 +261,45 @@ class BudgetVotingService {
         if (budget.problemReportId != null) {
             followProblem(budget, status);
         }
+        if ("APROVADO".equals(status) && budget.serviceId == null) {
+            openService(budget);
+        }
         dashboardEvents.publishDashboardChanged();
+    }
+
+    /**
+     * An approved budget is a job to carry out: it becomes a service right away, with what the houses voted (supplier,
+     * value, what will be done), so nobody has to type it again. A quote of an existing service goes to that service.
+     */
+    private void openService(Budget budget) {
+        ProblemReport origin = budget.problemReportId == null ? null : reports.findById(budget.problemReportId).orElse(null);
+        LocalDateTime now = LocalDateTime.now();
+        ServiceOrder service = new ServiceOrder();
+        service.title = budget.title;
+        service.description = budget.scope == null || budget.scope.isBlank() ? budget.title : budget.scope;
+        service.category = origin == null ? null : origin.category;
+        service.priority = origin == null ? "MEDIA" : origin.priority;
+        service.status = "APROVADO";
+        service.expectedValue = budget.amount;
+        service.supplier = budget.supplier;
+        service.supplierDocument = budget.supplierDocument;
+        service.plannedDate = budget.expectedDate;
+        service.approvedBudgetId = budget.id;
+        service.problemReportId = budget.problemReportId;
+        service.createdAt = now;
+        service.updatedAt = now;
+        ServiceOrder saved = services.save(service);
+        budget.serviceId = saved.id;
+        budgets.save(budget);
+        if (origin != null) {
+            if (origin.serviceId == null) {
+                origin.serviceId = saved.id;
+                reports.save(origin);
+            }
+            lifecycle.note(origin.id, ProblemReportEvent.SERVICE, "Virou o serviço #" + saved.id + ": " + saved.title);
+        }
+        audit.record("SERVICE_CREATED", "SERVICE", saved.id, saved.title + " - do orçamento aprovado #" + budget.id + " - previsto "
+            + AuditService.money(saved.expectedValue));
     }
 
     /**
@@ -268,7 +309,7 @@ class BudgetVotingService {
     private void followProblem(Budget budget, String status) {
         String money = budget.title + " - " + AuditService.money(budget.amount);
         if ("APROVADO".equals(status)) {
-            lifecycle.note(budget.problemReportId, ProblemReportEvent.BUDGET, "Orçamento aprovado pelas casas: " + money + ". Já pode virar serviço.");
+            lifecycle.note(budget.problemReportId, ProblemReportEvent.BUDGET, "Orçamento aprovado pelas casas: " + money + ".");
             if (budget.competes) {
                 for (Budget rival : budgets.findByProblemReportId(budget.problemReportId)) {
                     if (!rival.id.equals(budget.id) && rival.competes && OPEN_STATUS.equals(rival.status)) {

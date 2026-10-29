@@ -15,17 +15,19 @@ import {
   ShieldCheck,
   Wallet
 } from 'lucide-react';
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { isoToday } from '@/components/ChargeResultDialog';
-import { FileField, selectClass } from '@/components/forms';
+import { FileField, MoneyInput, selectClass, Textarea } from '@/components/forms';
 import { FormAlert } from '@/components/PublicLayout';
 import { Badge, Button, Card, Input, Skeleton, Spinner } from '@/components/ui';
 import { Dialog } from '@/components/ui/dialog';
 import { Field, PageHeader, Segmented } from '@/components/ui/page';
 import { useToast } from '@/components/ui/toast';
-import { api, type Payable, type PaymentMethod } from '@/lib/api';
+import { api, type Budget, type ExpenseRecord, type Payable, type PaymentMethod, type ServiceOrder } from '@/lib/api';
 import { useSession } from '@/lib/auth';
-import { cn, formatDate, formatMoney, parseMoney, plural, useDocumentTitle } from '@/lib/utils';
+import { paymentTermsText } from '@/lib/paymentTerms';
+import { cn, formatDate, formatMoney, moneyText, parseMoney, plural, useDocumentTitle } from '@/lib/utils';
 import { SupplierDialog } from '@/pages/SuppliersPage';
 
 type Filter = 'open' | 'approval' | 'paid' | 'cancelled' | 'all';
@@ -80,14 +82,47 @@ function Kpi({ icon: Icon, label, value, detail, tone }: { icon: typeof Wallet; 
   );
 }
 
-type Repetition = 'once' | 'installments' | 'monthly';
+type Repetition = 'once' | 'installments' | 'down' | 'monthly';
 
-/** A new bill: what, to whom, how much, when; split in installments or every month; with the invoice or boleto. */
-function NewPayableDialog({ onClose }: { onClose: () => void }) {
+function addMonths(iso: string, months: number) {
+  const [year, month, day] = iso.split('-').map(Number);
+  const date = new Date(year, month - 1 + months, day);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * What a service has already taken: its bills not cancelled, and expenses booked without a bill (finishing it). The
+ * cap is what the units approved plus 10%; with no budget, the limit without a vote.
+ */
+export function serviceSpending(service: ServiceOrder, bills: Payable[], spent: ExpenseRecord[], budget: Budget | null, limit: number | null) {
+  const own = bills.filter((bill) => bill.serviceOrderId === service.id && bill.status !== 'CANCELLED');
+  const billed = new Set(own.map((bill) => bill.expenseId).filter(Boolean));
+  const loose = spent.filter((expense) => expense.serviceOrderId === service.id && !billed.has(expense.id));
+  const paid = own.filter((bill) => bill.status === 'PAID').reduce((sum, bill) => sum + Number(bill.amount), 0) + loose.reduce((sum, expense) => sum + Number(expense.amount), 0);
+  const committed = own.reduce((sum, bill) => sum + Number(bill.amount), 0) + loose.reduce((sum, expense) => sum + Number(expense.amount), 0);
+  const cap = budget ? Math.round(Number(budget.amount) * 110) / 100 : limit;
+  return { bills: own, paid, committed, cap };
+}
+
+/** " (entrada de R$ 1.800,00 + restante em 2× ...)": how the units approved paying, inside a sentence. */
+function termsNote(budget: Budget) {
+  const text = paymentTermsText(budget);
+  return text ? ` (${text.charAt(0).toLocaleLowerCase('pt-BR')}${text.slice(1)})` : '';
+}
+
+/**
+ * A new bill: what, to whom, how much, when; at once, in installments, a down payment and the rest, or every month;
+ * with the invoice or boleto. For a service it starts from what the units approved and how the supplier is paid.
+ */
+export function NewPayableDialog({ onClose, service: forService }: { onClose: () => void; service?: ServiceOrder }) {
   const queryClient = useQueryClient();
   const notify = useToast();
   const suppliers = useQuery({ queryKey: ['condo', 'suppliers'], queryFn: api.suppliers });
-  const budgets = useQuery({ queryKey: ['condo', 'budgets'], queryFn: api.budgets });
+  const services = useQuery({ queryKey: ['condo', 'services'], queryFn: api.services });
+  const budgets = useQuery({ queryKey: ['condo', 'demand-budgets'], queryFn: api.fullBudgets });
+  const bills = useQuery({ queryKey: ['condo', 'payables'], queryFn: api.payables });
+  const spent = useQuery({ queryKey: ['condo', 'expenses'], queryFn: api.expenses });
+  const settings = useQuery({ queryKey: ['condo', 'settings'], queryFn: api.settings });
   const [description, setDescription] = useState('');
   const [supplierId, setSupplierId] = useState<string>('');
   const [category, setCategory] = useState('Manutenção');
@@ -95,21 +130,65 @@ function NewPayableDialog({ onClose }: { onClose: () => void }) {
   const [dueDate, setDueDate] = useState(isoToday());
   const [repetition, setRepetition] = useState<Repetition>('once');
   const [installments, setInstallments] = useState('2');
-  const [budgetId, setBudgetId] = useState('');
+  const [downPayment, setDownPayment] = useState('');
+  const [restDueDate, setRestDueDate] = useState(addMonths(isoToday(), 1));
+  const [serviceId, setServiceId] = useState(forService ? String(forService.id) : '');
   const [file, setFile] = useState<File | null>(null);
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [newSupplier, setNewSupplier] = useState(false);
+  const [prefilled, setPrefilled] = useState<string | null>(null);
+
+  const openServices = (services.data ?? []).filter((item) => item.status !== 'CANCELADO');
+  const service = openServices.find((item) => String(item.id) === serviceId) ?? null;
+  const budget = service?.approvedBudgetId ? ((budgets.data ?? []).find((item) => item.id === service.approvedBudgetId) ?? null) : null;
+  const spending = service ? serviceSpending(service, bills.data ?? [], spent.data ?? [], budget, settings.data?.budgetRequiredAbove ?? null) : null;
+
+  // Once the service and what it already took are known, start from what is left and how the units approved paying it.
+  const ready = service != null && bills.isSuccess && spent.isSuccess && budgets.isSuccess && suppliers.isSuccess;
+  useEffect(() => {
+    if (!ready || !service || !spending || prefilled === serviceId) return;
+    setPrefilled(serviceId);
+    const left = Math.max(0, Number(service.expectedValue ?? budget?.amount ?? 0) - spending.committed);
+    setDescription((current) => current || service.title);
+    if (left > 0) setAmount(moneyText(left));
+    const match = (suppliers.data ?? []).find(
+      (supplier) =>
+        supplier.active &&
+        ((service.supplierDocument && supplier.document === service.supplierDocument) || supplier.name.trim().toLocaleLowerCase('pt-BR') === service.supplier?.trim().toLocaleLowerCase('pt-BR'))
+    );
+    if (match) setSupplierId(String(match.id));
+    // The way of paying the units voted applies to the whole job, so only while nothing was billed yet.
+    if (spending.committed === 0 && budget?.paymentMode === 'ENTRADA') {
+      setRepetition('down');
+      setDownPayment(moneyText(budget.downPayment));
+      setInstallments(String(budget.paymentInstallments ?? 1));
+    } else if (spending.committed === 0 && budget?.paymentMode === 'PARCELADO') {
+      setRepetition('installments');
+      setInstallments(String(budget.paymentInstallments ?? 2));
+    } else {
+      setRepetition('once');
+    }
+  }, [ready, service, spending, budget, suppliers.data, prefilled, serviceId]);
+
   const value = parseMoney(amount);
-  const parts = repetition === 'installments' ? Number(installments) : 1;
+  const down = repetition === 'down' ? parseMoney(downPayment) : null;
+  const parts = repetition === 'installments' || repetition === 'down' ? Number(installments || (repetition === 'down' ? '1' : '0')) : 1;
   const errors = {
     description: description.trim().length < 3 ? 'Descreva a conta.' : null,
     amount: value == null || Number.isNaN(value) || value <= 0 ? 'Informe um valor maior que zero.' : null,
     dueDate: !dueDate ? 'Informe o vencimento.' : null,
-    installments: repetition === 'installments' && (!Number.isInteger(parts) || parts < 2 || parts > 60) ? 'De 2 a 60 parcelas.' : null
+    installments:
+      repetition === 'installments' && (!Number.isInteger(parts) || parts < 2 || parts > 60)
+        ? 'De 2 a 60 parcelas.'
+        : repetition === 'down' && (!Number.isInteger(parts) || parts < 1 || parts > 60)
+          ? 'De 1 a 60 parcelas.'
+          : null,
+    downPayment:
+      repetition === 'down' && (down == null || Number.isNaN(down) || down <= 0 || (value != null && down >= value)) ? 'A entrada precisa ser menor que o total.' : null,
+    restDueDate: repetition === 'down' && (!restDueDate || restDueDate < dueDate) ? 'O restante vence depois da entrada.' : null
   };
   const valid = Object.values(errors).every((error) => !error);
-  const approvedBudgets = (budgets.data ?? []).filter((budget) => budget.status === 'APROVADO');
 
   const create = useMutation({
     mutationFn: async () => {
@@ -122,7 +201,10 @@ function NewPayableDialog({ onClose }: { onClose: () => void }) {
         dueDate,
         installments: parts,
         monthly: repetition === 'monthly',
-        budgetId: budgetId ? Number(budgetId) : null,
+        budgetId: null,
+        serviceOrderId: service ? service.id : null,
+        downPayment: repetition === 'down' ? down : null,
+        restDueDate: repetition === 'down' ? restDueDate : null,
         documentId: document?.id ?? null,
         exceptionReason: reason.trim() || null,
         notes: notes.trim() || null
@@ -130,9 +212,18 @@ function NewPayableDialog({ onClose }: { onClose: () => void }) {
     },
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['condo', 'payables'] });
+      queryClient.invalidateQueries({ queryKey: ['condo', 'services'] });
       notify(
         'ok',
-        created[0]?.status === 'PENDING_APPROVAL' ? 'Conta lançada. Ela espera a aprovação de outra pessoa.' : created.length > 1 ? `${created.length} parcelas lançadas.` : 'Conta lançada.'
+        created[0]?.status === 'PENDING_APPROVAL'
+          ? created.length > 1
+            ? `${created.length} contas lançadas. Elas esperam a aprovação de outra pessoa.`
+            : 'Conta lançada. Ela espera a aprovação de outra pessoa.'
+          : repetition === 'down'
+            ? `Entrada e restante lançados (${created.length} contas).`
+            : created.length > 1
+              ? `${created.length} parcelas lançadas.`
+              : 'Conta lançada.'
       );
       onClose();
     }
@@ -178,6 +269,40 @@ function NewPayableDialog({ onClose }: { onClose: () => void }) {
     >
       <form id="nova-conta" onSubmit={submit} noValidate className="space-y-4">
         {create.isError && <FormAlert>{create.error.message}</FormAlert>}
+        <Field
+          label="Serviço"
+          htmlFor="conta-servico"
+          hint={
+            spending && service
+              ? [
+                  budget ? `Aprovado pelas unidades: ${formatMoney(budget.amount)}${termsNote(budget)}.` : null,
+                  spending.committed > 0 ? `Já lançado para ele: ${formatMoney(spending.committed)}, ${formatMoney(spending.paid)} pago.` : null,
+                  spending.cap != null ? `Sem justificativa, vai até ${formatMoney(spending.cap)} no total.` : null
+                ]
+                  .filter(Boolean)
+                  .join(' ')
+              : 'Se a conta é de um serviço, escolha-o: o que foi votado e o que já foi pago entram na conta.'
+          }
+        >
+          <select
+            id="conta-servico"
+            value={serviceId}
+            onChange={(e) => {
+              setServiceId(e.target.value);
+              setPrefilled(null);
+            }}
+            className={selectClass}
+          >
+            <option value="">Nenhum</option>
+            {openServices.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.title}
+                {item.supplier ? ` · ${item.supplier}` : ''}
+                {item.expectedValue != null ? ` · ${formatMoney(item.expectedValue)}` : ''}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label="O que é" htmlFor="conta-descricao" error={description && errors.description ? errors.description : null}>
           <Input id="conta-descricao" data-autofocus maxLength={200} placeholder="Limpeza da caixa d'água" value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
@@ -203,25 +328,27 @@ function NewPayableDialog({ onClose }: { onClose: () => void }) {
           </Field>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={repetition === 'installments' ? 'Valor total' : 'Valor'} htmlFor="conta-valor" error={amount && errors.amount ? errors.amount : null}>
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">R$</span>
-              <Input id="conta-valor" inputMode="decimal" className="pl-9 tabular-nums" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            </div>
+          <Field label={repetition === 'once' || repetition === 'monthly' ? 'Valor' : 'Valor total'} htmlFor="conta-valor" error={amount && errors.amount ? errors.amount : null}>
+            <MoneyInput id="conta-valor" value={amount} onChange={(e) => setAmount(e.target.value)} />
           </Field>
-          <Field label={repetition === 'installments' ? 'Vencimento da 1ª parcela' : 'Vencimento'} htmlFor="conta-vencimento" error={errors.dueDate}>
+          <Field
+            label={repetition === 'installments' ? 'Vencimento da 1ª parcela' : repetition === 'down' ? 'Vencimento da entrada' : 'Vencimento'}
+            htmlFor="conta-vencimento"
+            error={errors.dueDate}
+          >
             <Input id="conta-vencimento" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </Field>
         </div>
         <div className="space-y-1.5">
-          <p className="text-sm font-medium">Repetição</p>
+          <p className="text-sm font-medium">Como vai pagar</p>
           <Segmented
-            label="Repetição"
+            label="Como vai pagar"
             value={repetition}
             onChange={setRepetition}
             options={[
-              { value: 'once', label: 'Uma vez' },
-              { value: 'installments', label: 'Parcelada' },
+              { value: 'once', label: 'De uma vez' },
+              { value: 'installments', label: 'Parcelado' },
+              { value: 'down', label: 'Entrada + restante' },
               { value: 'monthly', label: 'Todo mês' }
             ]}
           />
@@ -237,22 +364,32 @@ function NewPayableDialog({ onClose }: { onClose: () => void }) {
             <Input id="conta-parcelas" type="number" min={2} max={60} className="max-w-28" value={installments} onChange={(e) => setInstallments(e.target.value)} />
           </Field>
         )}
-        {approvedBudgets.length > 0 && (
-          <Field label="Orçamento aprovado" htmlFor="conta-orcamento" hint="Se a conta vem de um orçamento votado pelas unidades: o valor pode passar dele em até 10%.">
-            <select id="conta-orcamento" value={budgetId} onChange={(e) => setBudgetId(e.target.value)} className={selectClass}>
-              <option value="">Nenhum</option>
-              {approvedBudgets.map((budget) => (
-                <option key={budget.id} value={budget.id}>
-                  {budget.title} · {budget.supplier} · {formatMoney(budget.amount)}
-                </option>
-              ))}
-            </select>
-          </Field>
+        {repetition === 'down' && (
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="Entrada" htmlFor="conta-entrada" error={downPayment ? errors.downPayment : null}>
+              <MoneyInput id="conta-entrada" value={downPayment} onChange={(e) => setDownPayment(e.target.value)} />
+            </Field>
+            <Field
+              label="Restante em"
+              htmlFor="conta-parcelas"
+              error={errors.installments}
+              hint={
+                value && down && !errors.downPayment && !errors.installments
+                  ? `${parts === 1 ? '' : `${parts} × `}${formatMoney(Math.floor(((value - down) / parts) * 100) / 100)}`
+                  : 'vezes'
+              }
+            >
+              <Input id="conta-parcelas" type="number" min={1} max={60} value={installments} onChange={(e) => setInstallments(e.target.value)} />
+            </Field>
+            <Field label="Restante vence em" htmlFor="conta-restante" error={errors.restDueDate}>
+              <Input id="conta-restante" type="date" min={dueDate} value={restDueDate} onChange={(e) => setRestDueDate(e.target.value)} />
+            </Field>
+          </div>
         )}
         <FileField id="conta-arquivo" label="Nota fiscal ou boleto" hint="Opcional. Foto ou PDF." file={file} onChange={setFile} />
         {askReason && (
-          <Field label="Justificativa" htmlFor="conta-justificativa" hint="Aparece para todas as unidades, como nas despesas.">
-            <Input id="conta-justificativa" value={reason} onChange={(e) => setReason(e.target.value)} />
+          <Field label="Justificativa de emergência" htmlFor="conta-justificativa" hint="Pelo menos 20 letras. Aparece para todas as unidades, como nas despesas.">
+            <Textarea id="conta-justificativa" maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} />
           </Field>
         )}
         <Field label="Observações" htmlFor="conta-obs">
@@ -264,7 +401,7 @@ function NewPayableDialog({ onClose }: { onClose: () => void }) {
 }
 
 /** A payment made outside the system: when, how, and the receipt. The bill becomes an expense of the cash box. */
-function PayDialog({ payable, onClose }: { payable: Payable; onClose: () => void }) {
+export function PayDialog({ payable, onClose }: { payable: Payable; onClose: () => void }) {
   const queryClient = useQueryClient();
   const notify = useToast();
   const today = isoToday();
@@ -538,9 +675,19 @@ export function PayablesPage() {
                               </Badge>
                             )}
                           </p>
-                          <p className="text-xs text-muted">{[payable.supplierName, payable.category].filter(Boolean).join(' · ') || 'Sem fornecedor'}</p>
+                          <p className="text-xs text-muted">
+                            {[payable.supplierName, payable.category].filter(Boolean).join(' · ') || 'Sem fornecedor'}
+                            {payable.serviceOrderId && (
+                              <>
+                                {' · '}
+                                <Link to={`/condominio/servicos/${payable.serviceOrderId}`} className="font-medium text-brand hover:underline">
+                                  serviço #{payable.serviceOrderId}
+                                </Link>
+                              </>
+                            )}
+                          </p>
                           <Trail payable={payable} />
-                          {payable.exceptionReason && <p className="text-xs text-warn">Sem votação: {payable.exceptionReason}</p>}
+                          {payable.exceptionReason && <p className="text-xs text-warn">Emergência: {payable.exceptionReason}</p>}
                         </td>
                         <td className="px-4 py-3.5 text-right font-medium tabular-nums">{formatMoney(payable.amount)}</td>
                         <td className="px-4 py-3.5">

@@ -1,18 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Ban, CheckCircle2, FileText, Paperclip, Pencil, Siren } from 'lucide-react';
+import { AlertTriangle, Ban, CheckCircle2, FileText, Paperclip, Pencil, Plus, Siren } from 'lucide-react';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { AttachServiceFileDialog, FinishServiceDialog, ServiceDialog } from '@/components/demandForms';
 import { budgetStatuses, Fact, LinkRow, PriorityBadge, problemStatuses, serviceStatuses, SideCard, StatusBadge } from '@/components/demands';
 import { FormAlert } from '@/components/PublicLayout';
-import { Button, Card, Skeleton, Spinner } from '@/components/ui';
+import { Badge, Button, Card, Skeleton, Spinner } from '@/components/ui';
 import { Dialog } from '@/components/ui/dialog';
 import { PageHeader } from '@/components/ui/page';
 import { useToast } from '@/components/ui/toast';
-import { api } from '@/lib/api';
+import { api, type Payable } from '@/lib/api';
 import { useSession } from '@/lib/auth';
+import { paymentTermsText } from '@/lib/paymentTerms';
 import { formatDate, formatMoney, useDocumentTitle } from '@/lib/utils';
+import { NewPayableDialog, PayDialog, serviceSpending } from '@/pages/PayablesPage';
 import { formatDocument } from '@/pages/SuppliersPage';
+
+function BillBadge({ bill }: { bill: Payable }) {
+  if (bill.status === 'PAID') return <Badge tone="ok">Pago</Badge>;
+  if (bill.status === 'PENDING_APPROVAL') return <Badge tone="warn">Aguardando aprovação</Badge>;
+  return bill.overdue ? <Badge tone="danger">Vencida</Badge> : <Badge tone="brand">A pagar</Badge>;
+}
 
 /** One service: what was done, by whom and for how much, the quotes behind it, its files and the payment. */
 export function ServiceDetailPage() {
@@ -24,11 +32,14 @@ export function ServiceDetailPage() {
   const budgets = useQuery({ queryKey: ['condo', 'demand-budgets'], queryFn: api.fullBudgets });
   const problems = useQuery({ queryKey: ['condo', 'problems'], queryFn: api.problems });
   const expenses = useQuery({ queryKey: ['condo', 'expenses'], queryFn: api.expenses });
+  const bills = useQuery({ queryKey: ['condo', 'payables'], queryFn: api.payables });
+  const settings = useQuery({ queryKey: ['condo', 'settings'], queryFn: api.settings });
   const documents = useQuery({ queryKey: ['condo', 'documents', 'SERVICE', id], queryFn: () => api.documents('SERVICE', id) });
   const service = services.data?.find((item) => item.id === id);
   useDocumentTitle(service?.title ?? 'Serviço');
   const [confirm, setConfirm] = useState(false);
-  const [dialog, setDialog] = useState<'edit' | 'finish' | 'attach' | null>(null);
+  const [dialog, setDialog] = useState<'edit' | 'finish' | 'attach' | 'pay' | null>(null);
+  const [paying, setPaying] = useState<Payable | null>(null);
 
   const cancel = useMutation({
     mutationFn: () => api.cancelService(id),
@@ -37,6 +48,7 @@ export function ServiceDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['condo', 'services'] });
       queryClient.invalidateQueries({ queryKey: ['condo', 'demand-budgets'] });
       queryClient.invalidateQueries({ queryKey: ['condo', 'problems'] });
+      queryClient.invalidateQueries({ queryKey: ['condo', 'payables'] });
       notify('ok', 'Serviço cancelado.');
     }
   });
@@ -53,9 +65,38 @@ export function ServiceDetailPage() {
 
   const problem = problems.data?.find((item) => item.id === service.problemReportId);
   const quotes = (budgets.data ?? []).filter((budget) => budget.serviceId === service.id || budget.id === service.approvedBudgetId);
-  const payments = (expenses.data ?? []).filter((expense) => expense.serviceOrderId === service.id);
+  const approved = (budgets.data ?? []).find((budget) => budget.id === service.approvedBudgetId) ?? null;
+  const spending = serviceSpending(service, bills.data ?? [], expenses.data ?? [], approved, settings.data?.budgetRequiredAbove ?? null);
+  const total = Number(service.finalValue ?? service.expectedValue ?? approved?.amount ?? 0);
+  // The bills of the service (its down payment, installments) and what was booked without a bill, when it was finished.
+  const billed = new Set(spending.bills.map((bill) => bill.expenseId).filter(Boolean));
+  const rows = [
+    ...[...spending.bills]
+      .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.id - b.id)
+      .map((bill) => ({
+        key: `conta-${bill.id}`,
+        title: bill.description + (bill.installments ? ` (${bill.installment}/${bill.installments})` : ''),
+        detail: bill.status === 'PAID' ? `Pago em ${formatDate(bill.paidAt)}${bill.paymentMethod ? ` · ${bill.paymentMethod}` : ''}` : `Vence em ${formatDate(bill.dueDate)}`,
+        amount: bill.amount,
+        documentId: bill.receiptDocumentId,
+        badge: <BillBadge bill={bill} />,
+        payable: me.canPay && bill.status === 'APPROVED' ? bill : null
+      })),
+    ...(expenses.data ?? [])
+      .filter((expense) => expense.serviceOrderId === service.id && !billed.has(expense.id))
+      .map((expense) => ({
+        key: `despesa-${expense.id}`,
+        title: expense.description,
+        detail: [formatDate(expense.expenseDate), expense.paymentMethod, expense.supplier].filter(Boolean).join(' · '),
+        amount: expense.amount,
+        documentId: expense.documentId,
+        badge: <Badge tone="ok">Pago</Badge>,
+        payable: null
+      }))
+  ];
   const files = documents.data ?? [];
   const cancellable = service.status !== 'FINALIZADO' && service.status !== 'CANCELADO';
+  const openBills = spending.bills.filter((bill) => bill.status !== 'PAID');
 
   return (
     <div className="space-y-6">
@@ -126,36 +167,72 @@ export function ServiceDetailPage() {
             )}
           </Card>
 
-          <Card className="p-5">
-            <h2 className="mb-3 text-sm font-semibold">Pagamento</h2>
-            {expenses.isPending ? (
+          <Card className="space-y-4 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold">Pagamento</h2>
+              {me.canPay && service.status !== 'CANCELADO' && (
+                <Button size="sm" variant="secondary" onClick={() => setDialog('pay')}>
+                  <Plus aria-hidden className="size-4" />
+                  Lançar pagamento
+                </Button>
+              )}
+            </div>
+            {approved && (
+              <p className="text-sm">
+                <span className="text-muted">Forma combinada na votação: </span>
+                {paymentTermsText(approved) ?? <span className="text-muted">não informada</span>}
+              </p>
+            )}
+            {expenses.isPending || bills.isPending ? (
               <Skeleton className="h-12 rounded-lg" />
-            ) : payments.length === 0 ? (
-              <p className="text-sm text-muted">{service.status === 'FINALIZADO' ? 'Nenhuma despesa ligada a este serviço.' : 'O pagamento entra aqui quando o serviço for finalizado.'}</p>
+            ) : rows.length === 0 ? (
+              <p className="text-sm text-muted">
+                {service.status === 'FINALIZADO'
+                  ? 'Nenhum pagamento ligado a este serviço.'
+                  : me.canPay
+                    ? 'Nenhum pagamento lançado ainda. Use “Lançar pagamento” para a entrada, as parcelas ou o valor todo.'
+                    : 'Nenhum pagamento lançado ainda.'}
+              </p>
             ) : (
-              <ul className="divide-y divide-line">
-                {payments.map((expense) => (
-                  <li key={expense.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{expense.description}</p>
-                      <p className="text-xs text-muted">
-                        {formatDate(expense.expenseDate)}
-                        {expense.paymentMethod && ` · ${expense.paymentMethod}`}
-                        {expense.supplier && ` · ${expense.supplier}`}
-                      </p>
+              <>
+                {total > 0 && (
+                  <div className="space-y-1">
+                    <div className="flex h-2 overflow-hidden rounded-full bg-surface-alt" aria-hidden>
+                      <span className="bg-ok" style={{ width: `${Math.min(100, (spending.paid / total) * 100)}%` }} />
+                      <span className="bg-brand/40" style={{ width: `${Math.min(100, (Math.max(0, spending.committed - spending.paid) / total) * 100)}%` }} />
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-semibold tabular-nums">{formatMoney(expense.amount)}</span>
-                      {expense.documentId && (
-                        <Button variant="ghost" size="sm" onClick={() => api.openDocument(expense.documentId!).catch((error: Error) => notify('danger', error.message))}>
-                          <FileText aria-hidden className="size-4" />
-                          Comprovante
-                        </Button>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                    <p className="text-xs text-muted tabular-nums">
+                      {formatMoney(spending.paid)} pago de {formatMoney(total)}
+                      {spending.committed > spending.paid && ` · ${formatMoney(spending.committed - spending.paid)} a pagar`}
+                    </p>
+                  </div>
+                )}
+                <ul className="divide-y divide-line">
+                  {rows.map((row) => (
+                    <li key={row.key} className="flex flex-wrap items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{row.title}</p>
+                        <p className="text-xs text-muted">{row.detail}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {row.badge}
+                        <span className="font-semibold tabular-nums">{formatMoney(row.amount)}</span>
+                        {row.documentId && (
+                          <Button variant="ghost" size="sm" onClick={() => api.openDocument(row.documentId!).catch((error: Error) => notify('danger', error.message))}>
+                            <FileText aria-hidden className="size-4" />
+                            Comprovante
+                          </Button>
+                        )}
+                        {row.payable && (
+                          <Button size="sm" variant="secondary" onClick={() => setPaying(row.payable)}>
+                            Pagar
+                          </Button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </Card>
         </div>
@@ -222,6 +299,8 @@ export function ServiceDetailPage() {
       {dialog === 'edit' && <ServiceDialog service={service} onClose={() => setDialog(null)} />}
       {dialog === 'finish' && <FinishServiceDialog service={service} onClose={() => setDialog(null)} />}
       {dialog === 'attach' && <AttachServiceFileDialog serviceId={service.id} onClose={() => setDialog(null)} />}
+      {dialog === 'pay' && <NewPayableDialog service={service} onClose={() => setDialog(null)} />}
+      {paying && <PayDialog payable={paying} onClose={() => setPaying(null)} />}
 
       <Dialog
         open={confirm}
@@ -230,7 +309,13 @@ export function ServiceDetailPage() {
         size="sm"
         icon={<Ban aria-hidden className="size-5" />}
         title="Cancelar este serviço?"
-        description="Os orçamentos dele que ainda estão em votação também são cancelados. Se veio de um problema e não sobrar nada ativo, o problema volta para os abertos."
+        description={
+          <>
+            Os orçamentos dele ainda em votação também são cancelados. Se veio de um problema e não sobrar nada ativo, o problema volta para os abertos.
+            {openBills.length > 0 && ` As ${openBills.length === 1 ? 'conta ainda não paga' : `${openBills.length} contas ainda não pagas`} dele também são canceladas.`}
+            {spending.paid > 0 && ` O que já foi pago (${formatMoney(spending.paid)}) continua no caixa: combine a devolução com o fornecedor.`}
+          </>
+        }
         footer={
           <>
             <Button variant="secondary" onClick={() => setConfirm(false)} disabled={cancel.isPending} data-autofocus>

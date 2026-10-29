@@ -262,12 +262,19 @@ class BudgetVotingServiceTest {
         voting.vote(budgetId, "APROVAR", voters.get(7));
         assertThat(services.findById(wall.id).orElseThrow().approvedBudgetId).isNull();
 
-        workflow.updateService(wall.id, service("Pintura do muro", budgetId));
-        assertThat(budgets.findById(budgetId).orElseThrow().serviceId).isEqualTo(wall.id);
-        assertThat(services.findById(wall.id).orElseThrow().approvedBudgetId).isEqualTo(budgetId);
+        // Approved, the budget became its own service, carrying what the houses voted.
+        Long ownService = budgets.findById(budgetId).orElseThrow().serviceId;
+        assertThat(ownService).isNotNull().isNotEqualTo(wall.id);
+        ServiceOrder opened = services.findById(ownService).orElseThrow();
+        assertThat(opened.approvedBudgetId).isEqualTo(budgetId);
+        assertThat(opened.status).isEqualTo("APROVADO");
+        assertThat(opened.expectedValue).isEqualByComparingTo("2500.00");
+        assertThat(opened.supplier).isEqualTo("Pinturas Silva");
 
         // Once linked, another service cannot take it.
+        assertBadRequest(() -> workflow.updateService(wall.id, service("Pintura do muro", budgetId)));
         assertBadRequest(() -> workflow.saveService(service("Outro serviço", budgetId)));
+        assertThat(services.findById(wall.id).orElseThrow().approvedBudgetId).isNull();
     }
 
     private ServiceOrder service(String title, Long approvedBudgetId) {

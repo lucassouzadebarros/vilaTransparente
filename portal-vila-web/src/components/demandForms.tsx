@@ -7,9 +7,23 @@ import { documentDigits, documentError, FileField, MoneyInput, selectClass, Text
 import { FormAlert } from '@/components/PublicLayout';
 import { Button, Input, Spinner } from '@/components/ui';
 import { Dialog } from '@/components/ui/dialog';
-import { Field } from '@/components/ui/page';
+import { Field, Segmented } from '@/components/ui/page';
 import { useToast } from '@/components/ui/toast';
-import { api, type Budget, type BudgetInput, type DocumentKind, type Priority, type ProblemReport, type ServiceInput, type ServiceOrder, type Supplier } from '@/lib/api';
+import {
+  api,
+  type Budget,
+  type BudgetInput,
+  type DocumentKind,
+  type Payable,
+  type PaymentMode,
+  type PaymentTerms,
+  type Priority,
+  type ProblemReport,
+  type ServiceInput,
+  type ServiceOrder,
+  type Supplier
+} from '@/lib/api';
+import { paymentTermsText } from '@/lib/paymentTerms';
 import { formatMoney, moneyText, parseMoney } from '@/lib/utils';
 import { formatDocument } from '@/pages/SuppliersPage';
 
@@ -237,7 +251,11 @@ export function BudgetDialog({ budget, problem, onClose }: { budget?: Budget; pr
     scope: budget?.scope ?? '',
     notes: budget?.notes ?? '',
     problemId: problem ? String(problem.id) : '',
-    competes: true
+    competes: true,
+    // New budgets say how the supplier is paid; older ones may have been saved without it.
+    paymentMode: (budget ? (budget.paymentMode ?? '') : 'A_VISTA') as PaymentMode | '',
+    downPayment: moneyText(budget?.downPayment),
+    paymentInstallments: budget?.paymentInstallments ? String(budget.paymentInstallments) : ''
   }));
   const [file, setFile] = useState<File | null>(null);
   const [tried, setTried] = useState(false);
@@ -245,19 +263,42 @@ export function BudgetDialog({ budget, problem, onClose }: { budget?: Budget; pr
 
   const amount = parseMoney(form.amount);
   const deadlineChanged = form.votingDeadline !== (budget?.votingDeadline ?? '');
+  const terms: PaymentTerms = {
+    paymentMode: form.paymentMode || null,
+    downPayment: form.paymentMode === 'ENTRADA' ? parseMoney(form.downPayment) : null,
+    paymentInstallments:
+      form.paymentMode === 'PARCELADO' ? Number(form.paymentInstallments || 0) : form.paymentMode === 'ENTRADA' ? Number(form.paymentInstallments || 1) : null
+  };
   const errors = {
     title: form.title.trim().length < 3 ? 'Diga qual é o trabalho.' : null,
     supplier: form.supplier.trim().length < 2 ? 'Informe o fornecedor.' : null,
     amount: amount == null || Number.isNaN(amount) || amount <= 0 ? 'Informe um valor maior que zero.' : null,
     supplierDocument: documentError(form.supplierDocument),
     validUntil: form.validUntil && form.budgetDate && form.validUntil < form.budgetDate ? 'A validade não pode ser antes da data do orçamento.' : null,
-    votingDeadline: form.votingDeadline && deadlineChanged && form.votingDeadline < isoToday() ? 'O fim da votação não pode estar no passado.' : null
+    votingDeadline: form.votingDeadline && deadlineChanged && form.votingDeadline < isoToday() ? 'O fim da votação não pode estar no passado.' : null,
+    downPayment:
+      form.paymentMode === 'ENTRADA' && (terms.downPayment == null || Number.isNaN(terms.downPayment) || terms.downPayment <= 0 || (amount != null && terms.downPayment >= amount))
+        ? 'A entrada precisa ser maior que zero e menor que o valor.'
+        : null,
+    paymentInstallments:
+      form.paymentMode === 'PARCELADO' && !(terms.paymentInstallments! >= 2 && terms.paymentInstallments! <= 60)
+        ? 'De 2 a 60 parcelas.'
+        : form.paymentMode === 'ENTRADA' && !(terms.paymentInstallments! >= 1 && terms.paymentInstallments! <= 60)
+          ? 'De 1 a 60 parcelas.'
+          : null
   };
   const valid = Object.values(errors).every((error) => !error);
+  const termsText = amount != null && !errors.amount && !errors.downPayment && !errors.paymentInstallments ? paymentTermsText({ amount, ...terms }) : null;
   const votes = voting.data ? voting.data.approveVotes + voting.data.rejectVotes : 0;
   const termsChanged =
     editing &&
-    (form.title.trim() !== budget.title || form.supplier.trim() !== budget.supplier || amount !== Number(budget.amount) || (form.scope.trim() || null) !== (budget.scope ?? null));
+    (form.title.trim() !== budget.title ||
+      form.supplier.trim() !== budget.supplier ||
+      amount !== Number(budget.amount) ||
+      (form.scope.trim() || null) !== (budget.scope ?? null) ||
+      terms.paymentMode !== budget.paymentMode ||
+      (terms.paymentMode === 'ENTRADA' && Number(terms.downPayment) !== Number(budget.downPayment)) ||
+      (terms.paymentMode !== 'A_VISTA' && terms.paymentMode != null && terms.paymentInstallments !== budget.paymentInstallments));
 
   const save = useMutation({
     mutationFn: async () => {
@@ -274,6 +315,7 @@ export function BudgetDialog({ budget, problem, onClose }: { budget?: Budget; pr
         scope: form.scope.trim() || null,
         notes: form.notes.trim() || null,
         documentId: budget?.documentId ?? null,
+        ...terms,
         ...(editing ? {} : { problemReportId: form.problemId ? Number(form.problemId) : null, competes: form.problemId ? form.competes : true })
       };
       const saved = editing ? await api.updateBudget(budget.id, input) : await api.createBudget(input);
@@ -317,7 +359,7 @@ export function BudgetDialog({ budget, problem, onClose }: { budget?: Budget; pr
         {save.isError && <FormAlert>{save.error.message}</FormAlert>}
         {termsChanged && votes > 0 && (
           <p role="status" className="rounded-lg border border-warn/40 bg-warn-soft px-3 py-2 text-sm">
-            {votes === 1 ? 'Uma unidade já votou' : `${votes} unidades já votaram`}. Mudando título, fornecedor, valor ou o que será feito, os votos são apagados e a votação começa de novo.
+            {votes === 1 ? 'Uma unidade já votou' : `${votes} unidades já votaram`}. Mudando título, fornecedor, valor, o que será feito ou a forma de pagamento, os votos são apagados e a votação começa de novo.
           </p>
         )}
         {!editing && (
@@ -373,6 +415,53 @@ export function BudgetDialog({ budget, problem, onClose }: { budget?: Budget; pr
         <Field label="O que será feito" htmlFor="orcamento-escopo" hint="O que as unidades vão ler antes de votar.">
           <Textarea id="orcamento-escopo" maxLength={2000} value={form.scope} onChange={(e) => set('scope', e.target.value)} />
         </Field>
+        <div className="space-y-3 rounded-lg border border-line p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium">Forma de pagamento</p>
+            <Segmented
+              label="Forma de pagamento"
+              value={form.paymentMode}
+              onChange={(mode) => set('paymentMode', mode)}
+              options={[
+                ...(editing && !budget.paymentMode ? [{ value: '' as const, label: 'Não informada' }] : []),
+                { value: 'A_VISTA' as const, label: 'À vista' },
+                { value: 'PARCELADO' as const, label: 'Parcelado' },
+                { value: 'ENTRADA' as const, label: 'Entrada + restante' }
+              ]}
+            />
+          </div>
+          {(form.paymentMode === 'PARCELADO' || form.paymentMode === 'ENTRADA') && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {form.paymentMode === 'ENTRADA' && (
+                <Field label="Entrada" htmlFor="orcamento-entrada" error={shown(tried, form.downPayment, errors.downPayment)}>
+                  <MoneyInput id="orcamento-entrada" value={form.downPayment} onChange={(e) => set('downPayment', e.target.value)} />
+                </Field>
+              )}
+              <Field
+                label={form.paymentMode === 'ENTRADA' ? 'Restante em quantas vezes' : 'Parcelas'}
+                htmlFor="orcamento-parcelas"
+                error={shown(tried, form.paymentInstallments, errors.paymentInstallments)}
+              >
+                <Input
+                  id="orcamento-parcelas"
+                  type="number"
+                  min={form.paymentMode === 'ENTRADA' ? 1 : 2}
+                  max={60}
+                  placeholder={form.paymentMode === 'ENTRADA' ? '1' : '2'}
+                  value={form.paymentInstallments}
+                  onChange={(e) => set('paymentInstallments', e.target.value)}
+                />
+              </Field>
+            </div>
+          )}
+          <p className="text-xs text-muted">
+            {!form.paymentMode
+              ? 'Este orçamento foi cadastrado sem a forma de pagamento.'
+              : termsText
+                ? `${termsText}. As unidades veem isso antes de votar.`
+                : 'As unidades veem a forma de pagamento antes de votar.'}
+          </p>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Data do orçamento" htmlFor="orcamento-data">
             <Input id="orcamento-data" type="date" value={form.budgetDate} onChange={(e) => set('budgetDate', e.target.value)} />
@@ -618,9 +707,17 @@ export function FinishServiceDialog({ service, onClose }: { service: ServiceOrde
   const budgets = useQuery({ queryKey: ['condo', 'demand-budgets'], queryFn: api.fullBudgets });
   const settings = useQuery({ queryKey: ['condo', 'settings'], queryFn: api.settings });
   const expenses = useQuery({ queryKey: ['condo', 'expenses'], queryFn: api.expenses });
-  const booked = (expenses.data ?? []).some((expense) => expense.serviceOrderId === service.id);
+  const bills = useQuery({ queryKey: ['condo', 'payables'], queryFn: api.payables });
+  const queryClient = useQueryClient();
+  // Paid through bills (a down payment, installments), each bill books itself when paid: finishing books nothing.
+  const billsOf = (list: Payable[] | undefined) => (list ?? []).filter((bill) => bill.serviceOrderId === service.id && bill.status !== 'CANCELLED');
+  const serviceBills = billsOf(bills.data);
+  const billed = serviceBills.reduce((sum, bill) => sum + Number(bill.amount), 0);
+  const booked = serviceBills.length > 0 || (expenses.data ?? []).some((expense) => expense.serviceOrderId === service.id);
   const [form, setForm] = useState(() => ({
-    finalValue: moneyText(service.finalValue ?? service.expectedValue),
+    finalValue: moneyText(
+      service.finalValue ?? (billsOf(queryClient.getQueryData<Payable[]>(['condo', 'payables'])).reduce((sum, bill) => sum + Number(bill.amount), 0) || service.expectedValue)
+    ),
     completedDate: isoToday(),
     supplier: service.supplier ?? '',
     supplierDocument: formatDocument(service.supplierDocument),
@@ -731,7 +828,13 @@ export function FinishServiceDialog({ service, onClose }: { service: ServiceOrde
           disabled={booked}
           onChange={(checked) => set('generateExpense', checked)}
           label="Lançar o pagamento no caixa"
-          hint={booked ? 'A despesa deste serviço já foi lançada.' : 'Vira uma despesa (Pix) e aparece na prestação de contas para todas as unidades.'}
+          hint={
+            serviceBills.length > 0
+              ? `Este serviço é pago pelas contas a pagar (${formatMoney(billed)} lançados): cada conta entra no caixa quando é paga.`
+              : booked
+                ? 'A despesa deste serviço já foi lançada.'
+                : 'Vira uma despesa (Pix) e aparece na prestação de contas para todas as unidades.'
+          }
         />
         <Field label="Observações" htmlFor="finalizar-obs">
           <Input id="finalizar-obs" maxLength={500} value={form.notes} onChange={(e) => set('notes', e.target.value)} />

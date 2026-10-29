@@ -259,6 +259,9 @@ class PayablesTest {
         // 800 is within 10% above the approved 700? No: the cap is 770.
         bill(admin, ",\"budgetId\":" + budget.id, 409);
         call(post("/api/payables"), admin, "{\"description\":\"Pintura\",\"amount\":760,\"dueDate\":\"" + due + "\",\"budgetId\":" + budget.id + "}", 200);
+        // The cap is for everything paid for the job, not bill by bill: 760 + 20 passes the 770.
+        JsonNode summed = call(post("/api/payables"), admin, "{\"description\":\"Pintura extra\",\"amount\":20,\"dueDate\":\"" + due + "\",\"budgetId\":" + budget.id + "}", 409);
+        assertThat(summed.get("error").asText()).contains("Somando").contains("R$ 760,00");
 
         ServiceOrder service = TenantContext.callAs(condo, () -> {
             ServiceOrder order = new ServiceOrder();
@@ -273,9 +276,10 @@ class PayablesTest {
             expenses.save(paid);
             return saved;
         });
+        // Another bill for a job already paid counts with what was paid: 200 + 200 passes the 300 limit without a vote.
         JsonNode twice = call(post("/api/payables"), admin,
             "{\"description\":\"Bomba\",\"amount\":200,\"dueDate\":\"" + due + "\",\"serviceOrderId\":" + service.id + "}", 409);
-        assertThat(twice.get("error").asText()).contains("já tem despesa");
+        assertThat(twice.get("error").asText()).contains("Somando").contains("justificativa");
     }
 
     @Test
