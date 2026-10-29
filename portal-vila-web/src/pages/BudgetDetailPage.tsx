@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Ban, CheckCircle2, Circle, FileText, Lock } from 'lucide-react';
+import { AlertTriangle, Ban, CheckCircle2, Circle, FileText, Hammer, Lock, Pencil } from 'lucide-react';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { BudgetDialog, ServiceDialog } from '@/components/demandForms';
 import { budgetStatuses, Fact, LinkRow, problemStatuses, serviceStatuses, SideCard, StatusBadge, VotingBar } from '@/components/demands';
 import { FormAlert } from '@/components/PublicLayout';
 import { Button, Card, Skeleton, Spinner } from '@/components/ui';
@@ -36,6 +37,8 @@ export function BudgetDetailPage() {
   const budget = budgets.data?.find((item) => item.id === id);
   useDocumentTitle(budget?.title ?? 'Orçamento');
   const [confirm, setConfirm] = useState<'close' | 'cancel' | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [creatingService, setCreatingService] = useState(false);
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['condo', 'demand-budgets'] });
@@ -96,8 +99,12 @@ export function BudgetDetailPage() {
           </span>
         }
         actions={
-          open && (
+          open ? (
             <>
+              <Button variant="secondary" onClick={() => setEditing(true)}>
+                <Pencil aria-hidden className="size-4" />
+                Editar
+              </Button>
               <Button variant="secondary" onClick={() => setConfirm('close')}>
                 <Lock aria-hidden className="size-4" />
                 Encerrar votação
@@ -107,6 +114,14 @@ export function BudgetDetailPage() {
                 Cancelar
               </Button>
             </>
+          ) : (
+            budget.status === 'APROVADO' &&
+            !service && (
+              <Button onClick={() => setCreatingService(true)}>
+                <Hammer aria-hidden className="size-4" />
+                Abrir serviço
+              </Button>
+            )
           )
         }
       />
@@ -223,6 +238,9 @@ export function BudgetDetailPage() {
           </SideCard>
         </div>
       </div>
+
+      {editing && <BudgetDialog budget={budget} onClose={() => setEditing(false)} />}
+      {creatingService && <ServiceDialog budget={budget} problem={problem} onClose={() => setCreatingService(false)} />}
 
       <Dialog
         open={confirm !== null}

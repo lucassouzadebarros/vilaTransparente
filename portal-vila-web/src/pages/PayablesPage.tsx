@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { isoToday } from '@/components/ChargeResultDialog';
+import { FileField, selectClass } from '@/components/forms';
 import { FormAlert } from '@/components/PublicLayout';
 import { Badge, Button, Card, Input, Skeleton, Spinner } from '@/components/ui';
 import { Dialog } from '@/components/ui/dialog';
@@ -56,9 +57,6 @@ export const methods: { value: PaymentMethod; label: string }[] = [
   { value: 'OUTRO', label: 'Outro' }
 ];
 
-const selectClass =
-  'h-10 w-full rounded-lg border border-line-strong/60 bg-surface px-3 text-sm text-ink focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25';
-
 function StatusBadge({ payable }: { payable: Payable }) {
   if (payable.status === 'PAID') return <Badge tone="ok">Paga</Badge>;
   if (payable.status === 'CANCELLED') return <Badge>Cancelada</Badge>;
@@ -79,20 +77,6 @@ function Kpi({ icon: Icon, label, value, detail, tone }: { icon: typeof Wallet; 
       <div className="mt-3 text-2xl font-semibold tabular-nums">{value}</div>
       <div className="mt-1 text-xs text-muted">{detail}</div>
     </Card>
-  );
-}
-
-function FileField({ id, label, hint, file, onChange }: { id: string; label: string; hint: string; file: File | null; onChange: (file: File | null) => void }) {
-  return (
-    <Field label={label} htmlFor={id} hint={file ? `${file.name} (${Math.ceil(file.size / 1024)} KB)` : hint}>
-      <Input
-        id={id}
-        type="file"
-        accept="image/*,application/pdf"
-        className="py-1.5 file:mr-3 file:rounded-md file:border-0 file:bg-surface-alt file:px-3 file:py-1 file:text-sm file:text-ink"
-        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-      />
-    </Field>
   );
 }
 
