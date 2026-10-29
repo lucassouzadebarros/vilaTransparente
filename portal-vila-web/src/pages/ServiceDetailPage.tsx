@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Ban, FileText, Siren } from 'lucide-react';
+import { AlertTriangle, Ban, CheckCircle2, FileText, Paperclip, Pencil, Siren } from 'lucide-react';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { AttachServiceFileDialog, FinishServiceDialog, ServiceDialog } from '@/components/demandForms';
 import { budgetStatuses, Fact, LinkRow, PriorityBadge, problemStatuses, serviceStatuses, SideCard, StatusBadge } from '@/components/demands';
 import { FormAlert } from '@/components/PublicLayout';
 import { Button, Card, Skeleton, Spinner } from '@/components/ui';
@@ -27,6 +28,7 @@ export function ServiceDetailPage() {
   const service = services.data?.find((item) => item.id === id);
   useDocumentTitle(service?.title ?? 'Serviço');
   const [confirm, setConfirm] = useState(false);
+  const [dialog, setDialog] = useState<'edit' | 'finish' | 'attach' | null>(null);
 
   const cancel = useMutation({
     mutationFn: () => api.cancelService(id),
@@ -69,10 +71,22 @@ export function ServiceDetailPage() {
         }
         actions={
           cancellable && (
-            <Button variant="danger-outline" onClick={() => setConfirm(true)}>
-              <Ban aria-hidden className="size-4" />
-              Cancelar serviço
-            </Button>
+            <>
+              {me.role === 'ADMIN' && (
+                <Button onClick={() => setDialog('finish')}>
+                  <CheckCircle2 aria-hidden className="size-4" />
+                  Finalizar
+                </Button>
+              )}
+              <Button variant="secondary" onClick={() => setDialog('edit')}>
+                <Pencil aria-hidden className="size-4" />
+                Editar
+              </Button>
+              <Button variant="danger-outline" onClick={() => setConfirm(true)}>
+                <Ban aria-hidden className="size-4" />
+                Cancelar serviço
+              </Button>
+            </>
           )
         }
       />
@@ -83,7 +97,7 @@ export function ServiceDetailPage() {
             <div className="flex gap-3 rounded-xl border border-warn/40 bg-warn-soft p-4 text-sm">
               <Siren aria-hidden className="mt-0.5 size-4 shrink-0 text-warn" />
               <div>
-                <p className="font-medium">Pago sem orçamento aprovado (emergência)</p>
+                <p className="font-medium">{service.approvedBudgetId ? 'Pago acima do orçamento aprovado (emergência)' : 'Pago sem orçamento aprovado (emergência)'}</p>
                 <p className="mt-0.5 whitespace-pre-line text-muted">{service.emergencyReason}</p>
               </div>
             </div>
@@ -169,7 +183,17 @@ export function ServiceDetailPage() {
               ))
             )}
           </SideCard>
-          <SideCard title="Arquivos">
+          <SideCard
+            title="Arquivos"
+            action={
+              service.status !== 'CANCELADO' && (
+                <Button size="sm" variant="secondary" onClick={() => setDialog('attach')}>
+                  <Paperclip aria-hidden className="size-4" />
+                  Anexar
+                </Button>
+              )
+            }
+          >
             {documents.isPending ? (
               <Skeleton className="h-10 rounded-lg" />
             ) : files.length === 0 ? (
@@ -194,6 +218,10 @@ export function ServiceDetailPage() {
           </SideCard>
         </div>
       </div>
+
+      {dialog === 'edit' && <ServiceDialog service={service} onClose={() => setDialog(null)} />}
+      {dialog === 'finish' && <FinishServiceDialog service={service} onClose={() => setDialog(null)} />}
+      {dialog === 'attach' && <AttachServiceFileDialog serviceId={service.id} onClose={() => setDialog(null)} />}
 
       <Dialog
         open={confirm}

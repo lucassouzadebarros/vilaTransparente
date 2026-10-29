@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Camera, CircleDot, Search, Siren, Timer, Wrench } from 'lucide-react';
+import { AlertTriangle, Camera, CircleDot, Plus, Search, Siren, Timer, Wrench } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { ProblemDialog } from '@/components/demandForms';
 import { PriorityBadge, problemStatuses, StatusBadge } from '@/components/demands';
 import { Button, Card, Input, Skeleton } from '@/components/ui';
 import { PageHeader, Segmented } from '@/components/ui/page';
@@ -61,6 +62,7 @@ export function ProblemsPage() {
   const houseLabels = useHouseLabels();
   const [filter, setFilter] = useState<Filter>('open');
   const [search, setSearch] = useState('');
+  const [creating, setCreating] = useState(false);
 
   const all = problems.data ?? [];
   const open = all.filter(matches.open);
@@ -99,7 +101,14 @@ export function ProblemsPage() {
         crumbs={[{ label: me.condominium!.name, to: me.role === 'ADMIN' ? '/condominio' : '/condominio/contas' }, { label: 'Problemas' }]}
         title="Problemas"
         description="O que as unidades relataram, com fotos e o que foi feito: orçamentos, serviços e conversa."
+        actions={
+          <Button onClick={() => setCreating(true)}>
+            <Plus aria-hidden className="size-4" />
+            Registrar problema
+          </Button>
+        }
       />
+      {creating && <ProblemDialog onClose={() => setCreating(false)} />}
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <Kpi icon={CircleDot} tone="warn" label="Em aberto" value={loading ? <Skeleton className="h-7 w-16" /> : open.length} detail={loading ? '…' : `${waiting.length} sem análise ainda`} />

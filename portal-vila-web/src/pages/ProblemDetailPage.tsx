@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Ban, CircleDot, MessageSquare, Send, Wrench } from 'lucide-react';
+import { AlertTriangle, Ban, CircleDot, MessageSquare, Plus, Send, Wrench } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
+import { BudgetDialog, ServiceDialog } from '@/components/demandForms';
 import { budgetStatuses, Fact, LinkRow, PriorityBadge, problemStatuses, serviceStatuses, SideCard, StatusBadge } from '@/components/demands';
 import { FormAlert } from '@/components/PublicLayout';
 import { Button, Card, Skeleton, Spinner } from '@/components/ui';
@@ -126,6 +127,7 @@ export function ProblemDetailPage() {
   useDocumentTitle(report?.title ?? 'Problema');
   const [status, setStatus] = useState<ProblemReport['status'] | ''>('');
   const [cancelling, setCancelling] = useState(false);
+  const [dialog, setDialog] = useState<'budget' | 'service' | null>(null);
   useEffect(() => {
     if (report) setStatus(report.status);
   }, [report]);
@@ -162,6 +164,9 @@ export function ProblemDetailPage() {
   const quotes = (budgets.data ?? []).filter((budget) => budget.problemReportId === id);
   const linkedServices = (services.data ?? []).filter((service) => service.problemReportId === id || service.id === report.serviceId);
   const finished = report.status === 'RESOLVIDO' || report.status === 'CANCELADO';
+  const activeService = linkedServices.some((service) => service.status !== 'CANCELADO');
+  // An approved quote of this problem that has no service yet is where the service comes from.
+  const readyQuote = quotes.find((budget) => budget.status === 'APROVADO' && budget.serviceId == null);
 
   return (
     <div className="space-y-6">
@@ -227,7 +232,17 @@ export function ProblemDetailPage() {
             </SideCard>
           )}
 
-          <SideCard title="Orçamentos">
+          <SideCard
+            title="Orçamentos"
+            action={
+              !finished && (
+                <Button size="sm" variant="secondary" onClick={() => setDialog('budget')}>
+                  <Plus aria-hidden className="size-4" />
+                  Gerar orçamento
+                </Button>
+              )
+            }
+          >
             {quotes.length === 0 ? (
               <p className="text-sm text-muted">Nenhum orçamento deste problema ainda.</p>
             ) : (
@@ -245,9 +260,22 @@ export function ProblemDetailPage() {
             )}
           </SideCard>
 
-          <SideCard title="Serviço">
+          <SideCard
+            title="Serviço"
+            action={
+              !finished &&
+              !activeService && (
+                <Button size="sm" variant={readyQuote ? 'primary' : 'secondary'} onClick={() => setDialog('service')}>
+                  <Plus aria-hidden className="size-4" />
+                  Abrir serviço
+                </Button>
+              )
+            }
+          >
             {linkedServices.length === 0 ? (
-              <p className="text-sm text-muted">Nenhum serviço ligado a este problema.</p>
+              <p className="text-sm text-muted">
+                {readyQuote ? `O orçamento de ${readyQuote.supplier} foi aprovado: já pode virar serviço.` : 'Nenhum serviço ligado a este problema.'}
+              </p>
             ) : (
               linkedServices.map((service) => (
                 <LinkRow
@@ -262,6 +290,9 @@ export function ProblemDetailPage() {
           </SideCard>
         </div>
       </div>
+
+      {dialog === 'budget' && <BudgetDialog problem={report} onClose={() => setDialog(null)} />}
+      {dialog === 'service' && <ServiceDialog problem={report} budget={readyQuote} onClose={() => setDialog(null)} />}
 
       <Dialog
         open={cancelling}

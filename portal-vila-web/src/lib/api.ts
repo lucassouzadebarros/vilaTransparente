@@ -185,6 +185,55 @@ export type BudgetVoting = {
   houses: { houseId: number; houseLabel: string; voted: boolean }[];
 };
 
+export type ProblemInput = { title: string; location: string; category: string; priority: Priority; description: string };
+
+/** A budget as the forms send it. The problem it is for and whether it competes are set once, when it is created. */
+export type BudgetInput = {
+  title: string;
+  supplier: string;
+  supplierDocument: string | null;
+  phone: string | null;
+  amount: number;
+  budgetDate: string | null;
+  validUntil: string | null;
+  expectedDate: string | null;
+  votingDeadline: string | null;
+  scope: string | null;
+  notes: string | null;
+  documentId: number | null;
+  problemReportId?: number | null;
+  competes?: boolean;
+};
+
+/** A service as the forms send it. Finishing and cancelling have their own actions, so the status here is only an open one. */
+export type ServiceInput = {
+  title: string;
+  description: string;
+  category: string | null;
+  priority: Priority;
+  status: 'PLANEJADO' | 'EM_ANDAMENTO';
+  expectedValue: number | null;
+  supplier: string | null;
+  supplierDocument: string | null;
+  plannedDate: string | null;
+  approvedBudgetId: number | null;
+  problemReportId?: number | null;
+  notes: string | null;
+};
+
+export type FinishServiceInput = {
+  finalValue: number;
+  completedDate: string;
+  supplier: string;
+  supplierDocument: string | null;
+  documentId: number | null;
+  generateExpense: boolean;
+  notes: string | null;
+  emergencyReason: string | null;
+};
+
+export type DocumentKind = 'NOTA_FISCAL' | 'RECIBO' | 'BOLETO' | 'ORCAMENTO' | 'CONTRATO' | 'COMPROVANTE';
+
 export type PortalDocument = { id: number; name: string; type: string; url: string; relatedType: string | null; relatedId: number | null; description: string | null; createdAt: string };
 
 export type ExpenseRecord = {
@@ -529,6 +578,12 @@ export const api = {
   budgets: () => request<BudgetOption[]>('/budgets'),
   // Demands: problems the units report, the budgets voted on and the services done.
   problems: () => request<ProblemReport[]>('/problem-reports'),
+  createProblem: (input: ProblemInput) => request<ProblemReport>('/problem-reports', { method: 'POST', body: JSON.stringify(input) }),
+  addProblemPhoto: (id: number, file: File) => {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return request<PortalDocument>(`/problem-reports/${id}/photos`, { method: 'POST', body: form });
+  },
   problemEvents: (id: number) => request<ProblemEvent[]>(`/problem-reports/${id}/events`),
   commentProblem: (id: number, message: string) => request<ProblemEvent>(`/problem-reports/${id}/comments`, { method: 'POST', body: JSON.stringify({ message }) }),
   updateProblem: (report: ProblemReport) => request<ProblemReport>(`/problem-reports/${report.id}`, { method: 'PUT', body: JSON.stringify(report) }),
@@ -538,7 +593,12 @@ export const api = {
   budgetVoting: (id: number) => request<BudgetVoting>(`/budgets/${id}/votes`),
   closeVoting: (id: number) => request<BudgetVoting>(`/budgets/${id}/close-voting`, { method: 'POST' }),
   cancelBudget: (id: number) => request<{ status: string }>(`/budgets/${id}`, { method: 'DELETE' }),
+  createBudget: (input: BudgetInput) => request<Budget>('/budgets', { method: 'POST', body: JSON.stringify(input) }),
+  updateBudget: (id: number, input: BudgetInput) => request<Budget>(`/budgets/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
   services: () => request<ServiceOrder[]>('/services'),
+  createService: (input: ServiceInput) => request<ServiceOrder>('/services', { method: 'POST', body: JSON.stringify(input) }),
+  updateService: (id: number, input: ServiceInput) => request<ServiceOrder>(`/services/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
+  finishService: (id: number, input: FinishServiceInput) => request<ServiceOrder>(`/services/${id}/finish`, { method: 'POST', body: JSON.stringify(input) }),
   cancelService: (id: number) => request<{ status: string }>(`/services/${id}/cancel`, { method: 'POST' }),
   expenses: () => request<ExpenseRecord[]>('/expenses'),
   documents: (relatedType: string, relatedId: number) => request<PortalDocument[]>(`/documents?relatedType=${relatedType}&relatedId=${relatedId}`),
@@ -547,13 +607,17 @@ export const api = {
     const { path } = await request<{ path: string }>(`/documents/${id}/access`);
     return `${BASE_URL.replace(/\/api$/, '')}${path}`;
   },
-  /** A file kept with a bill (the invoice, the receipt): only who pays the bills may send it. */
-  uploadDocument: (file: File, type: 'NOTA_FISCAL' | 'RECIBO' | 'BOLETO') => {
+  /**
+   * A file kept with a bill (only who pays the bills may send it), a budget or a service (the administration and the
+   * síndico). The name is what the lists show; it defaults to the file's own name.
+   */
+  uploadDocument: (file: File, type: DocumentKind, related: { type: 'PAYABLE' | 'BUDGET' | 'SERVICE'; id?: number; name?: string } = { type: 'PAYABLE' }) => {
     const form = new FormData();
     form.append('file', file, file.name);
-    form.append('name', file.name);
+    form.append('name', related.name?.trim() || file.name);
     form.append('type', type);
-    form.append('relatedType', 'PAYABLE');
+    form.append('relatedType', related.type);
+    if (related.id != null) form.append('relatedId', String(related.id));
     return request<UploadedDocument>('/documents/upload', { method: 'POST', body: form });
   },
   /** Opens a kept file in a new tab: the API answers a short-lived signed address. */

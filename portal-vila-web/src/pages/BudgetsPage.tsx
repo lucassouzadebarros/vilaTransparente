@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, ClipboardList, Search, Vote, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardList, Plus, Search, Vote, XCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { BudgetDialog } from '@/components/demandForms';
 import { budgetStatuses, StatusBadge, VotingBar } from '@/components/demands';
 import { Button, Card, Input, Skeleton } from '@/components/ui';
 import { PageHeader, Segmented } from '@/components/ui/page';
@@ -29,6 +30,7 @@ export function BudgetsPage() {
   const votings = useQuery({ queryKey: ['condo', 'votings'], queryFn: api.budgetVotings });
   const [filter, setFilter] = useState<Filter>('EM_ANALISE');
   const [search, setSearch] = useState('');
+  const [creating, setCreating] = useState(false);
 
   const all = budgets.data ?? [];
   const byBudget = useMemo(() => new Map((votings.data ?? []).map((voting) => [voting.budgetId, voting])), [votings.data]);
@@ -51,7 +53,14 @@ export function BudgetsPage() {
         crumbs={[{ label: me.condominium!.name, to: me.role === 'ADMIN' ? '/condominio' : '/condominio/contas' }, { label: 'Orçamentos' }]}
         title="Orçamentos"
         description="As propostas que as unidades votam: o andamento de cada votação e o que foi aprovado ou recusado."
+        actions={
+          <Button onClick={() => setCreating(true)}>
+            <Plus aria-hidden className="size-4" />
+            Novo orçamento
+          </Button>
+        }
       />
+      {creating && <BudgetDialog onClose={() => setCreating(false)} />}
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <Kpi icon={Vote} tone="warn" label="Em votação" value={loading ? <Skeleton className="h-7 w-16" /> : voting.length} />

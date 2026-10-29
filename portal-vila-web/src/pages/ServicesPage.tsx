@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, ClipboardList, Hammer, Search, Wallet } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardList, Hammer, Plus, Search, Wallet } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { ServiceDialog } from '@/components/demandForms';
 import { PriorityBadge, serviceStatuses, StatusBadge } from '@/components/demands';
 import { Button, Card, Input, Skeleton } from '@/components/ui';
 import { PageHeader, Segmented } from '@/components/ui/page';
@@ -36,6 +37,7 @@ export function ServicesPage() {
   const services = useQuery({ queryKey: ['condo', 'services'], queryFn: api.services });
   const [filter, setFilter] = useState<Filter>('running');
   const [search, setSearch] = useState('');
+  const [creating, setCreating] = useState(false);
 
   const all = services.data ?? [];
   const inProgress = all.filter(running);
@@ -61,7 +63,14 @@ export function ServicesPage() {
         crumbs={[{ label: me.condominium!.name, to: me.role === 'ADMIN' ? '/condominio' : '/condominio/contas' }, { label: 'Serviços' }]}
         title="Serviços"
         description="Os trabalhos feitos no condomínio: o que está planejado ou em andamento, o que foi finalizado e quanto custou."
+        actions={
+          <Button onClick={() => setCreating(true)}>
+            <Plus aria-hidden className="size-4" />
+            Novo serviço
+          </Button>
+        }
       />
+      {creating && <ServiceDialog onClose={() => setCreating(false)} />}
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <Kpi icon={Hammer} tone="warn" label="Em curso" value={loading ? <Skeleton className="h-7 w-16" /> : inProgress.length} />
