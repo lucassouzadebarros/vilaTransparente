@@ -3,10 +3,12 @@ import {
   AlertTriangle,
   Ban,
   CalendarClock,
+  Camera,
   CheckCircle2,
   FileText,
   HandCoins,
   Hourglass,
+  ImageUp,
   Info,
   Plus,
   QrCode,
@@ -22,6 +24,7 @@ import { Link } from 'react-router-dom';
 import { isoToday } from '@/components/ChargeResultDialog';
 import { FileField, MoneyInput, selectClass, Textarea } from '@/components/forms';
 import { FormAlert } from '@/components/PublicLayout';
+import { isPixCode, QrCamera, readQrFromFile } from '@/components/QrReader';
 import { Badge, Button, Card, Input, Skeleton, Spinner } from '@/components/ui';
 import { Dialog } from '@/components/ui/dialog';
 import { Field, PageHeader, Segmented } from '@/components/ui/page';
@@ -618,7 +621,7 @@ type PixMode = 'key' | 'code';
 
 const pixModes: { value: PixMode; label: string }[] = [
   { value: 'key', label: 'Chave Pix' },
-  { value: 'code', label: 'Copia e cola' }
+  { value: 'code', label: 'QR Code' }
 ];
 
 /** "Fazer um Pix", as in a bank app: to a key (the holder shown first) or by a "copia e cola" code. */
@@ -920,15 +923,45 @@ export function PixCodeDialog({ onClose, onSwitch, service: forService }: { onCl
   const [serviceId, setServiceId] = useState(forService ? String(forService.id) : '');
   const [reason, setReason] = useState('');
   const [password, setPassword] = useState('');
+  const [camera, setCamera] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
 
   const readCode = useMutation({
-    mutationFn: () => api.readPixCode(code),
+    mutationFn: (text: string) => api.readPixCode(text),
     onSuccess: (result) => {
       setRead(result);
       setAmount(result.value != null ? moneyText(result.value) : '');
       setDescription((current) => current || (result.description ?? ''));
     }
   });
+
+  /** A QR code read by the camera or from a picture: a Pix one goes straight to Asaas, like a pasted code. */
+  function scanned(text: string | null) {
+    setCamera(false);
+    if (!text) {
+      setScanError('Não achei um QR Code nessa imagem. Tente uma foto mais de perto, reta e sem reflexo, ou cole o código.');
+    } else if (!isPixCode(text)) {
+      setScanError('Esse QR Code não é de um Pix.');
+    } else {
+      setScanError(null);
+      setCode(text.trim());
+      readCode.mutate(text.trim());
+    }
+  }
+
+  async function fromPicture(file: File | undefined) {
+    if (!file) return;
+    setScanning(true);
+    setScanError(null);
+    try {
+      scanned(await readQrFromFile(file));
+    } catch {
+      setScanError('Não consegui abrir essa imagem. Tente outra foto ou cole o código.');
+    } finally {
+      setScanning(false);
+    }
+  }
 
   const value = read?.valueFixed ? Number(read.value) : parseMoney(amount);
   const status = pixStatus.data;
@@ -967,12 +1000,12 @@ export function PixCodeDialog({ onClose, onSwitch, service: forService }: { onCl
     }
   });
   const askReason = pay.isError && /justificativa/i.test(pay.error.message);
-  const busy = readCode.isPending || pay.isPending;
+  const busy = readCode.isPending || pay.isPending || scanning;
 
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!read) {
-      if (code.trim()) readCode.mutate();
+      if (code.trim()) readCode.mutate(code);
     } else if (!blocked && !errors.amount && !errors.description && password) {
       pay.mutate();
     }
@@ -984,7 +1017,7 @@ export function PixCodeDialog({ onClose, onSwitch, service: forService }: { onCl
       onClose={() => !busy && onClose()}
       icon={<QrCode aria-hidden className="size-5" />}
       title={onSwitch ? 'Fazer um Pix' : 'Pagar Pix copia e cola'}
-      description="Uma compra pela internet ou um código que o fornecedor mandou: o Pix sai da conta Asaas do condomínio."
+      description="O QR Code da maquininha ou da loja, ou o código copia e cola: o Pix sai da conta Asaas do condomínio."
       footer={
         <>
           <Button
@@ -1021,18 +1054,55 @@ export function PixCodeDialog({ onClose, onSwitch, service: forService }: { onCl
           <>
             {onSwitch && <Segmented label="Como pagar" value="code" onChange={(next) => next === 'key' && onSwitch()} options={pixModes} />}
             {readCode.isError && <FormAlert>{readCode.error.message}</FormAlert>}
-            <Field label="Código Pix copia e cola" htmlFor="pix-codigo" hint="Copie o código no site ou no app da compra e cole aqui. Nada é pago só de ler.">
-              <Textarea
-                id="pix-codigo"
-                data-autofocus
-                rows={4}
-                spellCheck={false}
-                className="font-mono text-xs"
-                placeholder="00020126..."
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-              />
-            </Field>
+            {scanError && <FormAlert>{scanError}</FormAlert>}
+            {camera ? (
+              <QrCamera onResult={scanned} onClose={() => setCamera(false)} />
+            ) : (
+              <>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setScanError(null);
+                      setCamera(true);
+                    }}
+                    disabled={busy}
+                  >
+                    <Camera aria-hidden className="size-4" />
+                    Ler com a câmera
+                  </Button>
+                  <label
+                    className={cn(
+                      'inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line-strong/60 bg-surface px-4 text-sm font-medium text-ink transition-colors hover:bg-surface-alt focus-within:ring-2 focus-within:ring-brand/25',
+                      busy && 'pointer-events-none opacity-60'
+                    )}
+                  >
+                    {scanning ? <Spinner /> : <ImageUp aria-hidden className="size-4" />}
+                    Foto ou print do QR Code
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={(e) => {
+                        fromPicture(e.target.files?.[0]);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+                <Field label="Ou cole o código copia e cola" htmlFor="pix-codigo" hint="Nada é pago só de ler: antes, o Portal mostra para quem vai e quanto.">
+                  <Textarea
+                    id="pix-codigo"
+                    rows={3}
+                    spellCheck={false}
+                    className="font-mono text-xs"
+                    placeholder="00020126..."
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                  />
+                </Field>
+              </>
+            )}
           </>
         ) : (
           <>
