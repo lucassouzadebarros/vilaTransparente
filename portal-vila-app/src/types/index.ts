@@ -398,6 +398,33 @@ export type PixCode = {
   reason: string | null;
 };
 
+export type PixKeyType = 'CPF' | 'CNPJ' | 'EMAIL' | 'PHONE' | 'EVP';
+
+/** Who holds a Pix key (the document comes masked); supplierId when a supplier of the condominium already has it. */
+export type PixKeyView = {
+  type: PixKeyType;
+  key: string;
+  ownerName: string;
+  ownerDocument: string | null;
+  bank: string | null;
+  supplierId: number | null;
+  supplierName: string | null;
+};
+
+export type PayPixKeyInput = {
+  type: PixKeyType;
+  key: string;
+  amount: number;
+  description: string;
+  category: string | null;
+  serviceOrderId: number | null;
+  exceptionReason: string | null;
+  notes: string | null;
+  saveSupplier: boolean;
+  supplierName: string | null;
+  password: string;
+};
+
 export type PayPixCodeInput = {
   code: string;
   amount: number | null;

@@ -21,9 +21,12 @@ import {
   Payable,
   PayableInput,
   PayPixCodeInput,
+  PayPixKeyInput,
   Supplier,
   PixCharge,
   PixCode,
+  PixKeyType,
+  PixKeyView,
   PixPaymentStatus,
   PortalDocument,
   ProblemReport,
@@ -314,6 +317,10 @@ export const api = {
   readPixCode: (code: string) => requestData<PixCode>(apiClient.post('/payables/pix-code/read', { code })),
   /** Records the code's bill and pays it from the condominium's Asaas account, confirmed with the person's own password. */
   payPixCode: (input: PayPixCodeInput) => requestData<Payable>(apiClient.post('/payables/pix-code', input)),
+  /** Asks who holds a Pix key (name, masked document, bank) before paying it. Nothing is paid. */
+  readPixKey: (type: PixKeyType, key: string) => requestData<PixKeyView>(apiClient.post('/payables/pix-key/read', { type, key })),
+  /** Records the bill and pays a key typed at the moment from the condominium's Asaas account, with the person's password. */
+  payPixKey: (input: PayPixKeyInput) => requestData<Payable>(apiClient.post('/payables/pix-key', input)),
   setBudgetRule: (budgetRequiredAbove: number | null) => requestData(apiClient.put('/settings/budget-rule', { budgetRequiredAbove })),
   registerPushToken: (token: string, platform: string) => requestData<{ status: string }>(apiClient.post('/push-tokens', { token, platform })),
   dashboardEventsUrl: () => `${baseURL.replace(/\/$/, '')}/events/dashboard`

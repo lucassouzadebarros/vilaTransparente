@@ -498,6 +498,26 @@ record PayableView(
 record ReadPixCodeRequest(String code) {
 }
 
+/** A Pix key typed at the moment (type: CPF, CNPJ, EMAIL, PHONE or EVP), to see who holds it before paying. */
+record ReadPixKeyRequest(String type, String key) {
+}
+
+/**
+ * Who holds a key, as the Pix directory tells it (the document masked), with the key as it will go to Asaas. supplierId:
+ * a supplier of the condominium already has this key.
+ */
+record PixKeyView(String type, String key, String ownerName, String ownerDocument, String bank, Long supplierId, String supplierName) {
+}
+
+/**
+ * Paying a key typed at the moment, as in a bank app: the bill it becomes (what it is, the category, the service, the
+ * justification when beyond what was approved), whether to keep the key as a supplier (with supplierName, or the
+ * holder's name), and the person's own password.
+ */
+record PayPixKeyRequest(String type, String key, BigDecimal amount, String description, String category, Long serviceOrderId,
+                        String exceptionReason, String notes, Boolean saveSupplier, String supplierName, String password) {
+}
+
 /**
  * What a "copia e cola" code is, as Asaas read it: who receives it, the value (valueFixed: it cannot be paid with another),
  * until when (expiresAt as Asaas writes it), and whether it can be paid now.

@@ -26,11 +26,24 @@ import { Badge, Button, Card, Input, Skeleton, Spinner } from '@/components/ui';
 import { Dialog } from '@/components/ui/dialog';
 import { Field, PageHeader, Segmented } from '@/components/ui/page';
 import { useToast } from '@/components/ui/toast';
-import { api, PIX_IN_FLIGHT, type Budget, type ExpenseRecord, type Payable, type PaymentMethod, type PixCode, type ServiceOrder } from '@/lib/api';
+import {
+  api,
+  PIX_IN_FLIGHT,
+  type Budget,
+  type ExpenseRecord,
+  type Payable,
+  type PaymentMethod,
+  type PixCode,
+  type PixKeyType,
+  type PixKeyView,
+  type PixPaymentStatus,
+  type ServiceOrder
+} from '@/lib/api';
 import { useSession } from '@/lib/auth';
 import { paymentTermsText } from '@/lib/paymentTerms';
+import { guessPixKeyType } from '@/lib/pixKeys';
 import { cn, formatDate, formatMoney, moneyText, parseMoney, plural, useDocumentTitle } from '@/lib/utils';
-import { pixKeyText, SupplierDialog } from '@/pages/SuppliersPage';
+import { pixKeyText, pixKeyTypes, SupplierDialog } from '@/pages/SuppliersPage';
 
 type Filter = 'open' | 'approval' | 'paid' | 'cancelled' | 'all';
 
@@ -601,7 +614,300 @@ function codeMoment(value: string | null) {
  * with the person's password. No supplier to register: the receiver comes from the code. When Asaas confirms it, the
  * bill is paid with the receipt, like any Pix sent here.
  */
-export function PixCodeDialog({ onClose, service: forService }: { onClose: () => void; service?: ServiceOrder }) {
+type PixMode = 'key' | 'code';
+
+const pixModes: { value: PixMode; label: string }[] = [
+  { value: 'key', label: 'Chave Pix' },
+  { value: 'code', label: 'Copia e cola' }
+];
+
+/** "Fazer um Pix", as in a bank app: to a key (the holder shown first) or by a "copia e cola" code. */
+export function PixDialog({ onClose, service }: { onClose: () => void; service?: ServiceOrder }) {
+  const [mode, setMode] = useState<PixMode>('key');
+  return mode === 'key' ? (
+    <PixKeyDialog service={service} onClose={onClose} onSwitch={() => setMode('code')} />
+  ) : (
+    <PixCodeDialog service={service} onClose={onClose} onSwitch={() => setMode('key')} />
+  );
+}
+
+/** Today's room by Pix and the account's balance, in the cards of the Pix dialogs. */
+function PixToday({ status }: { status: PixPaymentStatus | undefined }) {
+  return (
+    <div>
+      <dt className="text-xs text-muted">Hoje pelo Asaas</dt>
+      <dd className="tabular-nums">
+        {status?.dailyLimit != null ? `${formatMoney(status.usedToday)} de ${formatMoney(status.dailyLimit)}` : '—'}
+        {status?.balance != null && <span className="block text-xs text-muted">Saldo na conta: {formatMoney(status.balance)}</span>}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * A Pix to a key typed at the moment (the hardware store's CNPJ, a phone number): first the holder the Pix directory
+ * tells (name, masked document, bank), so the person sees who gets the money; then the bill is recorded, approved and
+ * paid at once, with the person's password, and the key may be kept as a supplier for the next time.
+ */
+export function PixKeyDialog({ onClose, onSwitch, service: forService }: { onClose: () => void; onSwitch: () => void; service?: ServiceOrder }) {
+  const queryClient = useQueryClient();
+  const notify = useToast();
+  const pixStatus = useQuery({ queryKey: ['condo', 'pix-status'], queryFn: api.pixStatus });
+  const services = useQuery({ queryKey: ['condo', 'services'], queryFn: api.services });
+  const suppliers = useQuery({ queryKey: ['condo', 'suppliers'], queryFn: api.suppliers });
+  const [key, setKey] = useState('');
+  const [type, setType] = useState<PixKeyType>('CPF');
+  const [typeChosen, setTypeChosen] = useState(false);
+  const [holder, setHolder] = useState<PixKeyView | null>(null);
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('Manutenção');
+  const [serviceId, setServiceId] = useState(forService ? String(forService.id) : '');
+  const [save, setSave] = useState(true);
+  const [supplierName, setSupplierName] = useState('');
+  const [reason, setReason] = useState('');
+  const [password, setPassword] = useState('');
+
+  const withKeys = (suppliers.data ?? []).filter((supplier) => supplier.active && supplier.pixKey && supplier.pixKeyType);
+  const readKey = useMutation({
+    mutationFn: (input: { type: PixKeyType; key: string }) => api.readPixKey(input.type, input.key),
+    onSuccess: (result) => {
+      setHolder(result);
+      setSupplierName(result.ownerName);
+    }
+  });
+
+  function changeKey(text: string) {
+    setKey(text);
+    if (!typeChosen && text.trim()) setType(guessPixKeyType(text));
+  }
+
+  const value = parseMoney(amount);
+  const status = pixStatus.data;
+  const left = status?.dailyLimit != null ? Number(status.dailyLimit) - Number(status.usedToday) : null;
+  const blocked = !status ? null : !status.available ? status.reason : null;
+  const overLimit =
+    left != null && value != null && !Number.isNaN(value) && value > left ? `Passa do limite de Pix de hoje: ainda dá para mandar ${formatMoney(Math.max(0, left))}.` : null;
+  const errors = {
+    amount: value == null || Number.isNaN(value) || value <= 0 ? 'Informe quanto pagar.' : overLimit,
+    description: description.trim().length < 3 ? 'Diga o que foi comprado ou pago.' : null,
+    supplierName: holder && !holder.supplierId && save && supplierName.trim().length < 2 ? 'Informe o nome do fornecedor.' : null
+  };
+  const openServices = (services.data ?? []).filter((item) => item.status !== 'CANCELADO' && item.status !== 'FINALIZADO');
+
+  const pay = useMutation({
+    mutationFn: () =>
+      api.payPixKey({
+        type: holder!.type,
+        key: holder!.key,
+        amount: value as number,
+        description: description.trim(),
+        category,
+        serviceOrderId: serviceId ? Number(serviceId) : null,
+        exceptionReason: reason.trim() || null,
+        notes: null,
+        saveSupplier: !holder!.supplierId && save,
+        supplierName: supplierName.trim() || null,
+        password
+      }),
+    onSuccess: (bill) => {
+      queryClient.invalidateQueries({ queryKey: ['condo'] });
+      notify(
+        'ok',
+        bill.pixStatus === 'AWAITING_AUTHORIZATION'
+          ? `Pix de ${formatMoney(bill.amount)} pedido. O Asaas espera a autorização com o token da conta; depois a baixa e o comprovante entram sozinhos.`
+          : `Pix de ${formatMoney(bill.amount)} enviado para ${bill.supplierName ?? 'o recebedor'}. A baixa e o comprovante entram sozinhos quando o Asaas confirmar.`
+      );
+      onClose();
+    }
+  });
+  const askReason = pay.isError && /justificativa/i.test(pay.error.message);
+  const busy = readKey.isPending || pay.isPending;
+  const ready = !blocked && !errors.amount && !errors.description && !errors.supplierName && password;
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!holder) {
+      if (key.trim()) readKey.mutate({ type, key });
+    } else if (ready) {
+      pay.mutate();
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={() => !busy && onClose()}
+      icon={<Send aria-hidden className="size-5" />}
+      title="Fazer um Pix"
+      description="Sai da conta Asaas do condomínio, com a sua senha. A conta é lançada já paga, com o comprovante."
+      footer={
+        <>
+          <Button
+            variant="secondary"
+            onClick={
+              holder
+                ? () => {
+                    setHolder(null);
+                    pay.reset();
+                  }
+                : onClose
+            }
+            disabled={busy}
+          >
+            {holder ? 'Outra chave' : 'Cancelar'}
+          </Button>
+          {holder ? (
+            <Button type="submit" form="pix-chave" disabled={busy || !ready}>
+              {pay.isPending ? <Spinner /> : <Send aria-hidden className="size-4" />}
+              {value != null && !Number.isNaN(value) && value > 0 ? `Pagar ${formatMoney(value)}` : 'Pagar'}
+            </Button>
+          ) : (
+            <Button type="submit" form="pix-chave" disabled={busy || !key.trim()}>
+              {readKey.isPending && <Spinner />}
+              Continuar
+            </Button>
+          )}
+        </>
+      }
+    >
+      <form id="pix-chave" onSubmit={submit} noValidate className="space-y-4">
+        {!holder ? (
+          <>
+            <Segmented label="Como pagar" value="key" onChange={(next) => next === 'code' && onSwitch()} options={pixModes} />
+            {readKey.isError && <FormAlert>{readKey.error.message}</FormAlert>}
+            <div className="grid gap-4 sm:grid-cols-[1fr_minmax(0,10rem)]">
+              <Field label="Chave Pix" htmlFor="pix-chave-valor" hint="CPF, CNPJ, celular com DDD, e-mail ou chave aleatória.">
+                <Input id="pix-chave-valor" data-autofocus autoComplete="off" spellCheck={false} value={key} onChange={(e) => changeKey(e.target.value)} />
+              </Field>
+              <Field label="Tipo" htmlFor="pix-chave-tipo">
+                <select
+                  id="pix-chave-tipo"
+                  value={type}
+                  onChange={(e) => {
+                    setType(e.target.value as PixKeyType);
+                    setTypeChosen(true);
+                  }}
+                  className={selectClass}
+                >
+                  {pixKeyTypes.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.value === 'PHONE' ? 'Celular' : option.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            {withKeys.length > 0 && (
+              <Field label="Ou um fornecedor cadastrado" htmlFor="pix-chave-fornecedor">
+                <select
+                  id="pix-chave-fornecedor"
+                  value=""
+                  onChange={(e) => {
+                    const chosen = withKeys.find((supplier) => String(supplier.id) === e.target.value);
+                    if (!chosen) return;
+                    setKey(pixKeyText(chosen) ?? chosen.pixKey!);
+                    setType(chosen.pixKeyType!);
+                    setTypeChosen(true);
+                    readKey.mutate({ type: chosen.pixKeyType!, key: chosen.pixKey! });
+                  }}
+                  className={selectClass}
+                >
+                  <option value="">Escolha…</option>
+                  {withKeys.map((supplier) => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.name} · {pixKeyText(supplier)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+            <p className="text-xs text-muted">Antes de pagar, o Portal mostra o nome de quem recebe, para você conferir.</p>
+          </>
+        ) : (
+          <>
+            <dl className="grid gap-3 rounded-lg border border-line p-4 text-sm sm:grid-cols-2">
+              <div className="min-w-0 sm:col-span-2">
+                <dt className="text-xs text-muted">Para</dt>
+                <dd className="break-words text-base font-semibold">{holder.ownerName}</dd>
+                <dd className="break-words text-xs text-muted">{[holder.ownerDocument, holder.bank].filter(Boolean).join(' · ')}</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-muted">Chave</dt>
+                <dd className="break-words">{pixKeyText({ pixKey: holder.key, pixKeyType: holder.type })}</dd>
+              </div>
+              <PixToday status={status} />
+              {holder.supplierId && (
+                <div className="min-w-0 sm:col-span-2">
+                  <dt className="text-xs text-muted">Fornecedor cadastrado</dt>
+                  <dd>{holder.supplierName}</dd>
+                </div>
+              )}
+            </dl>
+            {blocked ? (
+              <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{blocked}</p>
+            ) : (
+              <>
+                {pay.isError && <FormAlert>{pay.error.message}</FormAlert>}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Valor" htmlFor="pix-chave-quanto" error={amount && errors.amount ? errors.amount : null}>
+                    <MoneyInput id="pix-chave-quanto" data-autofocus value={amount} onChange={(e) => setAmount(e.target.value)} />
+                  </Field>
+                  <Field label="Categoria" htmlFor="pix-chave-categoria">
+                    <select id="pix-chave-categoria" value={category} onChange={(e) => setCategory(e.target.value)} className={selectClass}>
+                      {categories.map((name) => (
+                        <option key={name}>{name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+                <Field label="O que é" htmlFor="pix-chave-descricao" error={description && errors.description ? errors.description : null}>
+                  <Input id="pix-chave-descricao" maxLength={200} placeholder="Cimento e areia para o muro" value={description} onChange={(e) => setDescription(e.target.value)} />
+                </Field>
+                <Field label="Serviço" htmlFor="pix-chave-servico" hint="Opcional. Se o pagamento é de um serviço, ele entra na conta dele.">
+                  <select id="pix-chave-servico" value={serviceId} onChange={(e) => setServiceId(e.target.value)} className={selectClass}>
+                    <option value="">Nenhum</option>
+                    {openServices.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.title}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                {!holder.supplierId && (
+                  <div className="space-y-3 rounded-lg border border-line p-3">
+                    <label className="flex items-start gap-2 text-sm">
+                      <input type="checkbox" className="mt-0.5 size-4 accent-brand" checked={save} onChange={(e) => setSave(e.target.checked)} />
+                      <span>
+                        Salvar como fornecedor
+                        <span className="block text-xs text-muted">Da próxima vez, é só escolher na lista.</span>
+                      </span>
+                    </label>
+                    {save && (
+                      <Field label="Nome do fornecedor" htmlFor="pix-chave-nome" error={errors.supplierName}>
+                        <Input id="pix-chave-nome" maxLength={160} value={supplierName} onChange={(e) => setSupplierName(e.target.value)} />
+                      </Field>
+                    )}
+                  </div>
+                )}
+                {askReason && (
+                  <Field label="Justificativa de emergência" htmlFor="pix-chave-justificativa" hint="Pelo menos 20 letras. Aparece para todas as unidades, como nas despesas.">
+                    <Textarea id="pix-chave-justificativa" maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} />
+                  </Field>
+                )}
+                <Field label="Sua senha" htmlFor="pix-chave-senha" hint="A senha da sua conta no Portal confirma que é você mandando o dinheiro.">
+                  <Input id="pix-chave-senha" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                </Field>
+              </>
+            )}
+          </>
+        )}
+      </form>
+    </Dialog>
+  );
+}
+
+export function PixCodeDialog({ onClose, onSwitch, service: forService }: { onClose: () => void; onSwitch?: () => void; service?: ServiceOrder }) {
   const queryClient = useQueryClient();
   const notify = useToast();
   const pixStatus = useQuery({ queryKey: ['condo', 'pix-status'], queryFn: api.pixStatus });
@@ -677,7 +983,7 @@ export function PixCodeDialog({ onClose, service: forService }: { onClose: () =>
       open
       onClose={() => !busy && onClose()}
       icon={<QrCode aria-hidden className="size-5" />}
-      title="Pagar Pix copia e cola"
+      title={onSwitch ? 'Fazer um Pix' : 'Pagar Pix copia e cola'}
       description="Uma compra pela internet ou um código que o fornecedor mandou: o Pix sai da conta Asaas do condomínio."
       footer={
         <>
@@ -713,6 +1019,7 @@ export function PixCodeDialog({ onClose, service: forService }: { onClose: () =>
       <form id="pix-copia-e-cola" onSubmit={submit} noValidate className="space-y-4">
         {!read ? (
           <>
+            {onSwitch && <Segmented label="Como pagar" value="code" onChange={(next) => next === 'key' && onSwitch()} options={pixModes} />}
             {readCode.isError && <FormAlert>{readCode.error.message}</FormAlert>}
             <Field label="Código Pix copia e cola" htmlFor="pix-codigo" hint="Copie o código no site ou no app da compra e cole aqui. Nada é pago só de ler.">
               <Textarea
@@ -745,13 +1052,7 @@ export function PixCodeDialog({ onClose, service: forService }: { onClose: () =>
                   <dd>{codeMoment(read.expiresAt)}</dd>
                 </div>
               )}
-              <div>
-                <dt className="text-xs text-muted">Hoje pelo Asaas</dt>
-                <dd className="tabular-nums">
-                  {status?.dailyLimit != null ? `${formatMoney(status.usedToday)} de ${formatMoney(status.dailyLimit)}` : '—'}
-                  {status?.balance != null && <span className="block text-xs text-muted">Saldo na conta: {formatMoney(status.balance)}</span>}
-                </dd>
-              </div>
+              <PixToday status={status} />
               {read.description && (
                 <div className="min-w-0 sm:col-span-2">
                   <dt className="text-xs text-muted">Descrição no código</dt>
@@ -924,8 +1225,8 @@ export function PayablesPage() {
           me.canPay && (
             <>
               <Button variant="secondary" onClick={() => setPayingCode(true)}>
-                <QrCode aria-hidden className="size-4" />
-                Pix copia e cola
+                <Send aria-hidden className="size-4" />
+                Fazer um Pix
               </Button>
               <Button onClick={() => setCreating(true)}>
                 <Plus aria-hidden className="size-4" />
@@ -1102,7 +1403,7 @@ export function PayablesPage() {
       </Card>
 
       {creating && <NewPayableDialog onClose={() => setCreating(false)} />}
-      {payingCode && <PixCodeDialog onClose={() => setPayingCode(false)} />}
+      {payingCode && <PixDialog onClose={() => setPayingCode(false)} />}
       {paying && <PayDialog payable={paying} onClose={() => setPaying(null)} />}
       {cancelling && <CancelDialog payable={cancelling} onClose={() => setCancelling(null)} />}
     </div>

@@ -115,7 +115,7 @@ class PayableController {
 
 @Service
 class PayableService {
-    private static final Set<String> PIX_KEY_TYPES = Set.of("CPF", "CNPJ", "EMAIL", "PHONE", "EVP");
+    static final Set<String> PIX_KEY_TYPES = Set.of("CPF", "CNPJ", "EMAIL", "PHONE", "EVP");
     static final Set<String> METHODS = Set.of("PIX", "TED", "BOLETO", "DINHEIRO", "CARTAO", "OUTRO");
     private static final int MAX_INSTALLMENTS = 60;
 
@@ -212,8 +212,8 @@ class PayableService {
         return suppliers.save(supplier);
     }
 
-    /** The key as Asaas expects it: digits for CPF, CNPJ and phone, lower case for e-mail. */
-    private static String normalizedPixKey(String key, String type) {
+    /** The key as Asaas expects it: digits for CPF, CNPJ and phone, lower case for e-mail. A key that cannot be one is refused. */
+    static String normalizedPixKey(String key, String type) {
         String value = asaasPixKey(key, type);
         boolean valid = switch (type) {
             case "CPF" -> value.length() == 11;
@@ -504,24 +504,33 @@ class PayableService {
     }
 
     /**
-     * The bill of a Pix "copia e cola" paid at once through Asaas: one bill, due today, approved by whoever pays it, with no
-     * supplier (the code says who receives it), under the same spending rules as any bill. Above the approval value it
-     * would wait for a second person, and a code does not wait: that one is recorded and approved first, then paid.
+     * The bill of a Pix paid at once through Asaas (a "copia e cola" code, a key typed at the moment): one bill, due today,
+     * approved by whoever pays it, to the supplier when there is one (otherwise the receiver is the code's or the key's
+     * holder), under the same spending rules as any bill. Above the approval value it would wait for a second person, and
+     * a Pix paid at once does not wait: that one is recorded and approved first, then paid.
      */
     @Transactional
-    Payable recordForPixCode(PayableRequest request, AppUser me, String receiver) {
+    Payable recordForImmediatePix(PayableRequest request, AppUser me, String how, String receiver) {
         if (request.amount() != null && needsApproval(request.amount())) {
             BigDecimal above = settingsRepository.findAll().stream().findFirst().map(found -> found.approvalAbove).orElseThrow();
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Acima de " + AuditService.money(above)
-                + " a conta precisa da aprovação de outra pessoa antes de ser paga, e o código não espera. Lance a conta para aprovação e pague depois.");
+                + " a conta precisa da aprovação de outra pessoa antes de ser paga. Lance a conta para aprovação e pague depois.");
         }
         Payable bill = new Payable();
         apply(bill, request);
         bill.dueDate = BudgetVotingService.today();
         Payable saved = payables.save(prepared(bill, me, false, null, false));
         audit.record("PAYABLE_CREATED", "PAYABLE", saved.id, saved.description + " - " + AuditService.money(saved.amount)
-            + " - Pix copia e cola" + (receiver == null ? "" : " para " + receiver));
+            + " - " + how + (receiver == null ? "" : " para " + receiver));
         return saved;
+    }
+
+    /** The active supplier that already has this key (written the way Asaas takes it), if any. */
+    java.util.Optional<Supplier> supplierWithKey(String pixKey, String pixKeyType) {
+        return suppliers.findAllByOrderByNameAsc().stream()
+            .filter(supplier -> supplier.active && pixKeyType.equals(supplier.pixKeyType) && supplier.pixKey != null)
+            .filter(supplier -> pixKey.equals(asaasPixKey(supplier.pixKey, supplier.pixKeyType)))
+            .findFirst();
     }
 
     /** A bill whose payment can no longer go (the Pix of a code that did not go out): cancelled, with the reason, by the system. */
