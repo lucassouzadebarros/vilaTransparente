@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Ban, Camera, CheckCircle2, Eye, FileText, Info, Plus, QrCode, RefreshCw, Repeat, Send, ShieldCheck, Upload } from 'lucide-react-native';
+import { Ban, Camera, CheckCircle2, Eye, FileText, Image as ImageIcon, Info, Plus, QrCode, RefreshCw, Repeat, Send, ShieldCheck, Upload } from 'lucide-react-native';
+import { isPixCode, QrScanner, readQrFromGallery } from '../components/QrScanner';
 import { EmptyFilter, FilterBar, FilterOption } from '../components/FilterBar';
 import { Badge, Button, Card, Facts, Field, Label, Screen, Value } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
@@ -335,7 +336,7 @@ function PixModes({ mode, onSwitch }: { mode: 'KEY' | 'CODE'; onSwitch: () => vo
   return (
     <Choices label="Como pagar">
       <Choice label="Chave Pix" selected={mode === 'KEY'} onPress={() => mode !== 'KEY' && onSwitch()} />
-      <Choice label="Copia e cola" selected={mode === 'CODE'} onPress={() => mode !== 'CODE' && onSwitch()} />
+      <Choice label="QR Code" selected={mode === 'CODE'} onPress={() => mode !== 'CODE' && onSwitch()} />
     </Choices>
   );
 }
@@ -542,6 +543,7 @@ function PixCodeForm({ onDone, onClose, onSwitch }: { onDone: () => void; onClos
   const [askReason, setAskReason] = useState(false);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [camera, setCamera] = useState(false);
 
   useEffect(() => {
     api.pixStatus()
@@ -555,10 +557,32 @@ function PixCodeForm({ onDone, onClose, onSwitch }: { onDone: () => void; onClos
   const blocked = !pix ? null : !pix.available ? pix.reason : read && !read.canBePaid ? read.reason : null;
   const overLimit = left != null && value > left ? `Passa do limite de Pix de hoje: ainda dá para mandar ${formatMoneyBR(Math.max(0, left))}.` : undefined;
 
-  async function readCode() {
+  /** A QR code read by the camera or from a picture: a Pix one goes straight to Asaas, like a pasted code. */
+  function scanned(text: string | null) {
+    setCamera(false);
+    if (!text) {
+      Alert.alert('QR Code', 'Não achei um QR Code nessa imagem. Tente uma foto mais de perto, reta e sem reflexo, ou cole o código.');
+    } else if (!isPixCode(text)) {
+      Alert.alert('QR Code', 'Esse QR Code não é de um Pix.');
+    } else {
+      setCode(text.trim());
+      readCode(text.trim());
+    }
+  }
+
+  async function fromGallery() {
+    try {
+      const text = await readQrFromGallery();
+      if (text !== undefined) scanned(text);
+    } catch (error) {
+      Alert.alert('QR Code', pickerErrorMessage(error));
+    }
+  }
+
+  async function readCode(text: string = code) {
     setBusy(true);
     try {
-      const result = await api.readPixCode(code);
+      const result = await api.readPixCode(text);
       setRead(result);
       setAmount(currencyFromNumber(result.value));
       setDescription((current) => current || (result.description ?? ''));
@@ -603,17 +627,25 @@ function PixCodeForm({ onDone, onClose, onSwitch }: { onDone: () => void; onClos
       <Card>
         <Value>Fazer um Pix</Value>
         <PixModes mode="CODE" onSwitch={onSwitch} />
-        <Label>Uma compra pela internet ou um código que o fornecedor mandou: o Pix sai da conta Asaas do condomínio.</Label>
-        <Field
-          label="Código Pix copia e cola"
-          value={code}
-          onChangeText={setCode}
-          multiline
-          autoCapitalize="none"
-          placeholder="00020126..."
-          helpText="Copie o código no site ou no app da compra e cole aqui. Nada é pago só de ler."
-        />
-        <Button title={busy ? 'Lendo...' : 'Ler código'} icon={QrCode} onPress={readCode} disabled={busy || !code.trim()} />
+        {camera ? (
+          <QrScanner onResult={scanned} onClose={() => setCamera(false)} />
+        ) : (
+          <>
+            <Label>O QR Code da maquininha ou da loja, ou o código copia e cola: o Pix sai da conta Asaas do condomínio.</Label>
+            <Button title="Ler com a câmera" icon={Camera} onPress={() => setCamera(true)} disabled={busy} />
+            <Button title="Foto ou print do QR Code" icon={ImageIcon} variant="ghost" onPress={fromGallery} disabled={busy} />
+            <Field
+              label="Ou cole o código copia e cola"
+              value={code}
+              onChangeText={setCode}
+              multiline
+              autoCapitalize="none"
+              placeholder="00020126..."
+              helpText="Nada é pago só de ler: antes, aparece para quem vai e quanto."
+            />
+            <Button title={busy ? 'Lendo...' : 'Ler código'} icon={QrCode} variant="ghost" onPress={() => readCode()} disabled={busy || !code.trim()} />
+          </>
+        )}
         <Button title="Fechar" variant="ghost" onPress={onClose} />
       </Card>
     );

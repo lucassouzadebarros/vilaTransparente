@@ -30,6 +30,13 @@
           "icon": "./assets/notification-icon.png",
           "color": "#0B5C6B"
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "O Portal da Vila usa a câmera para fotografar o problema ou o comprovante e para ler o QR Code de um Pix.",
+          "recordAudioAndroid": false
+        }
       ]
     ],
     "ios": {
