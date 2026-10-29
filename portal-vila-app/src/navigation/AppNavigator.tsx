@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { DarkTheme, DefaultTheme, NavigationContainer, ParamListBase, StackActions, createNavigationContainerRef, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { BottomTabBar, BottomTabBarProps, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ClipboardList, FileText, Home, MoreHorizontal, WalletCards } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { Sidebar } from '../components/Sidebar';
@@ -169,6 +170,9 @@ const navigationTheme = {
 };
 
 function PortalTabs({ wide }: { wide: boolean }) {
+  // The phone's own buttons (or its gesture bar) are drawn over the bottom of the app: the bar grows by that much, so its
+  // labels stay above them. A fixed height here would otherwise cancel the room the tab bar leaves for them by itself.
+  const { bottom } = useSafeAreaInsets();
   return (
     <Tabs.Navigator
       // On a wide window the side menu replaces the bottom bar.
@@ -178,9 +182,9 @@ function PortalTabs({ wide }: { wide: boolean }) {
         tabBarActiveTintColor: colors.blue,
         tabBarInactiveTintColor: colors.muted,
         tabBarStyle: {
-          height: 78,
+          height: 78 + bottom,
           paddingTop: 6,
-          paddingBottom: 12,
+          paddingBottom: 12 + bottom,
           borderTopColor: colors.border
         },
         tabBarActiveBackgroundColor: 'transparent',
