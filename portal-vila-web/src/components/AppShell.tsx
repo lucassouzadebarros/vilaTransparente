@@ -14,7 +14,10 @@ import {
   Receipt,
   Settings,
   Sun,
+  TriangleAlert,
   Truck,
+  Vote,
+  Wrench,
   X,
   type LucideIcon
 } from 'lucide-react';
@@ -27,6 +30,16 @@ import { useTheme, type ThemeChoice } from '@/lib/theme';
 import { cn, initials } from '@/lib/utils';
 
 type Item = { to: string; label: string; icon: LucideIcon; badge?: boolean; end?: boolean };
+
+/** What the units reported and what was done about it: the same for the administration and the síndico. */
+const demands: { title: string; items: Item[] } = {
+  title: 'Demandas',
+  items: [
+    { to: '/condominio/problemas', label: 'Problemas', icon: TriangleAlert },
+    { to: '/condominio/orcamentos', label: 'Orçamentos', icon: Vote },
+    { to: '/condominio/servicos', label: 'Serviços', icon: Wrench }
+  ]
+};
 
 /** The menu follows the account: its own condominium if it administers one, the platform if it runs it. */
 function sectionsFor(me: Session): { title: string; items: Item[] }[] {
@@ -42,6 +55,7 @@ function sectionsFor(me: Session): { title: string; items: Item[] }[] {
         { to: '/condominio/configuracoes', label: 'Configurações', icon: Settings }
       ]
     });
+    sections.push(demands);
     sections.push({
       title: 'Contas',
       items: [
@@ -50,7 +64,7 @@ function sectionsFor(me: Session): { title: string; items: Item[] }[] {
       ]
     });
   } else if (managesCondominium(me)) {
-    // The síndico: the bills and who they are paid to.
+    // The síndico: the bills and who they are paid to, and the demands of the units.
     sections.push({
       title: 'Meu condomínio',
       items: [
@@ -58,6 +72,7 @@ function sectionsFor(me: Session): { title: string; items: Item[] }[] {
         { to: '/condominio/fornecedores', label: 'Fornecedores', icon: Truck }
       ]
     });
+    sections.push(demands);
   }
   if (me.platformAdmin) {
     sections.push({

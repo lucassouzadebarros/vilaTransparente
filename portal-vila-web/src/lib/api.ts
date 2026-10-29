@@ -107,6 +107,100 @@ export type PaymentMethod = 'PIX' | 'TED' | 'BOLETO' | 'DINHEIRO' | 'CARTAO' | '
 
 export type BudgetOption = { id: number; title: string; supplier: string; amount: number; status: string };
 
+export type Priority = 'BAIXA' | 'MEDIA' | 'ALTA' | 'URGENTE';
+
+export type ProblemReport = {
+  id: number;
+  title: string;
+  location: string;
+  category: string;
+  priority: Priority;
+  status: 'ABERTO' | 'EM_ANALISE' | 'RESOLVIDO' | 'CANCELADO';
+  description: string;
+  attachmentName: string | null;
+  serviceId: number | null;
+  photoCount: number | null;
+  residentId: number | null;
+  houseId: number | null;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ProblemEvent = { id: number; reportId: number; kind: 'CREATED' | 'STATUS' | 'SERVICE' | 'COMMENT'; author: string | null; message: string; createdAt: string };
+
+export type ServiceOrder = {
+  id: number;
+  title: string;
+  description: string;
+  category: string | null;
+  priority: Priority;
+  status: 'PLANEJADO' | 'APROVADO' | 'EM_ANDAMENTO' | 'FINALIZADO' | 'CANCELADO';
+  expectedValue: number | null;
+  finalValue: number | null;
+  supplier: string | null;
+  supplierDocument: string | null;
+  plannedDate: string | null;
+  completedDate: string | null;
+  approvedBudgetId: number | null;
+  problemReportId: number | null;
+  emergencyReason: string | null;
+  notes: string | null;
+  createdAt: string;
+};
+
+export type Budget = {
+  id: number;
+  serviceId: number | null;
+  problemReportId: number | null;
+  competes: boolean;
+  title: string;
+  supplier: string;
+  supplierDocument: string | null;
+  phone: string | null;
+  amount: number;
+  budgetDate: string | null;
+  validUntil: string | null;
+  expectedDate: string | null;
+  status: 'EM_ANALISE' | 'APROVADO' | 'REJEITADO' | 'CANCELADO';
+  documentId: number | null;
+  scope: string | null;
+  notes: string | null;
+  votingClosedAt: string | null;
+  votingDeadline: string | null;
+  createdAt: string;
+};
+
+export type BudgetVoting = {
+  budgetId: number;
+  status: Budget['status'];
+  open: boolean;
+  participatingHouses: number;
+  votesToApprove: number;
+  approveVotes: number;
+  rejectVotes: number;
+  pendingVotes: number;
+  closedAt: string | null;
+  deadline: string | null;
+  houses: { houseId: number; houseLabel: string; voted: boolean }[];
+};
+
+export type PortalDocument = { id: number; name: string; type: string; url: string; relatedType: string | null; relatedId: number | null; description: string | null; createdAt: string };
+
+export type ExpenseRecord = {
+  id: number;
+  description: string;
+  category: string | null;
+  amount: number;
+  expenseDate: string;
+  supplier: string | null;
+  paymentMethod: string | null;
+  documentId: number | null;
+  serviceOrderId: number | null;
+  budgetId: number | null;
+  exceptionReason: string | null;
+};
+
 export type UploadedDocument = { id: number; name: string; url: string };
 
 export type Movement = { date: string; type: string; description: string; amount: number; status: string };
@@ -433,6 +527,26 @@ export const api = {
     request<Payable>(`/payables/${id}/pay`, { method: 'POST', body: JSON.stringify(input) }),
   cancelPayable: (id: number, reason: string) => request<Payable>(`/payables/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
   budgets: () => request<BudgetOption[]>('/budgets'),
+  // Demands: problems the units report, the budgets voted on and the services done.
+  problems: () => request<ProblemReport[]>('/problem-reports'),
+  problemEvents: (id: number) => request<ProblemEvent[]>(`/problem-reports/${id}/events`),
+  commentProblem: (id: number, message: string) => request<ProblemEvent>(`/problem-reports/${id}/comments`, { method: 'POST', body: JSON.stringify({ message }) }),
+  updateProblem: (report: ProblemReport) => request<ProblemReport>(`/problem-reports/${report.id}`, { method: 'PUT', body: JSON.stringify(report) }),
+  cancelProblem: (id: number) => request<ProblemReport>(`/problem-reports/${id}/cancel`, { method: 'POST' }),
+  fullBudgets: () => request<Budget[]>('/budgets'),
+  budgetVotings: () => request<BudgetVoting[]>('/budgets/votes'),
+  budgetVoting: (id: number) => request<BudgetVoting>(`/budgets/${id}/votes`),
+  closeVoting: (id: number) => request<BudgetVoting>(`/budgets/${id}/close-voting`, { method: 'POST' }),
+  cancelBudget: (id: number) => request<{ status: string }>(`/budgets/${id}`, { method: 'DELETE' }),
+  services: () => request<ServiceOrder[]>('/services'),
+  cancelService: (id: number) => request<{ status: string }>(`/services/${id}/cancel`, { method: 'POST' }),
+  expenses: () => request<ExpenseRecord[]>('/expenses'),
+  documents: (relatedType: string, relatedId: number) => request<PortalDocument[]>(`/documents?relatedType=${relatedType}&relatedId=${relatedId}`),
+  /** A short-lived address a photo can be shown from: an <img> cannot send the login header. */
+  documentImageUrl: async (id: number) => {
+    const { path } = await request<{ path: string }>(`/documents/${id}/access`);
+    return `${BASE_URL.replace(/\/api$/, '')}${path}`;
+  },
   /** A file kept with a bill (the invoice, the receipt): only who pays the bills may send it. */
   uploadDocument: (file: File, type: 'NOTA_FISCAL' | 'RECIBO' | 'BOLETO') => {
     const form = new FormData();

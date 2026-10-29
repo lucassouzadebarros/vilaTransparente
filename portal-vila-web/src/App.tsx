@@ -6,12 +6,18 @@ import { administersCondominium, managesCondominium } from '@/lib/api';
 import { useAuth, useSession } from '@/lib/auth';
 import { ActivatePage } from '@/pages/ActivatePage';
 import { BillingPage } from '@/pages/BillingPage';
+import { BudgetDetailPage } from '@/pages/BudgetDetailPage';
+import { BudgetsPage } from '@/pages/BudgetsPage';
 import { CondoOverviewPage } from '@/pages/CondoOverviewPage';
 import { CondoSettingsPage } from '@/pages/CondoSettingsPage';
 import { CondominiumDetailPage } from '@/pages/CondominiumDetailPage';
 import { CondominiumsPage } from '@/pages/CondominiumsPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { PayablesPage } from '@/pages/PayablesPage';
+import { ProblemDetailPage } from '@/pages/ProblemDetailPage';
+import { ProblemsPage } from '@/pages/ProblemsPage';
+import { ServiceDetailPage } from '@/pages/ServiceDetailPage';
+import { ServicesPage } from '@/pages/ServicesPage';
 import { SuppliersPage } from '@/pages/SuppliersPage';
 import { ReadingsPage } from '@/pages/ReadingsPage';
 import { RequestPage } from '@/pages/RequestPage';
@@ -76,6 +82,12 @@ export function App() {
         <Route path="/condominio/consumo" element={<OnlyCondominium><ReadingsPage /></OnlyCondominium>} />
         <Route path="/condominio/contas" element={<OnlyManagers><PayablesPage /></OnlyManagers>} />
         <Route path="/condominio/fornecedores" element={<OnlyManagers><SuppliersPage /></OnlyManagers>} />
+        <Route path="/condominio/problemas" element={<OnlyManagers><ProblemsPage /></OnlyManagers>} />
+        <Route path="/condominio/problemas/:id" element={<OnlyManagers><ProblemDetailPage /></OnlyManagers>} />
+        <Route path="/condominio/orcamentos" element={<OnlyManagers><BudgetsPage /></OnlyManagers>} />
+        <Route path="/condominio/orcamentos/:id" element={<OnlyManagers><BudgetDetailPage /></OnlyManagers>} />
+        <Route path="/condominio/servicos" element={<OnlyManagers><ServicesPage /></OnlyManagers>} />
+        <Route path="/condominio/servicos/:id" element={<OnlyManagers><ServiceDetailPage /></OnlyManagers>} />
         <Route path="/condominio/configuracoes" element={<OnlyCondominium><CondoSettingsPage /></OnlyCondominium>} />
         <Route path="/condominios" element={<OnlyPlatform><CondominiumsPage /></OnlyPlatform>} />
         <Route path="/condominios/:id" element={<OnlyPlatform><CondominiumDetailPage /></OnlyPlatform>} />
