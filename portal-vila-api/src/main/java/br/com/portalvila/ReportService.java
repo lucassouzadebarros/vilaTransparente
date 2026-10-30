@@ -106,11 +106,12 @@ class ReportService {
             ));
         }
         for (DirectReceipt receipt : directReceipts.findByStatusOrderByReceivedAtDesc("PAID")) {
+            boolean refund = DirectReceipt.PIX_REFUND.equals(receipt.category);
             allIncomes.add(new ReportIncome(
                 receipt.receivedAt.toLocalDate(),
-                "Recebimento direto",
-                // The payer's name is for the admin only.
-                admin ? receipt.description : "Recebimento direto",
+                refund ? "Estorno de Pix" : "Recebimento direto",
+                // The payer's name is for the admin only; a Pix that came back is seen by everyone, like its expense.
+                admin || refund ? receipt.description : "Recebimento direto",
                 receipt.amount
             ));
         }

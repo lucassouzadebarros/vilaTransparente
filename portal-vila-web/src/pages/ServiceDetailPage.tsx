@@ -17,6 +17,9 @@ import { NewPayableDialog, PayDialog, PixDialog, PixInFlightBadge, serviceSpendi
 import { formatDocument } from '@/pages/SuppliersPage';
 
 function BillBadge({ bill }: { bill: Payable }) {
+  if (bill.status === 'PAID' && bill.refundedAmount) {
+    return <Badge tone="warn">{bill.refundedAmount < bill.amount ? 'Estornado em parte' : 'Estornado'}</Badge>;
+  }
   if (bill.status === 'PAID') return <Badge tone="ok">Pago</Badge>;
   if (bill.pixStatus && PIX_IN_FLIGHT.includes(bill.pixStatus)) return <PixInFlightBadge payable={bill} />;
   if (bill.status === 'PENDING_APPROVAL') return <Badge tone="warn">Aguardando aprovação</Badge>;
@@ -77,7 +80,12 @@ export function ServiceDetailPage() {
       .map((bill) => ({
         key: `conta-${bill.id}`,
         title: bill.description + (bill.installments ? ` (${bill.installment}/${bill.installments})` : ''),
-        detail: bill.status === 'PAID' ? `Pago em ${formatDate(bill.paidAt)}${bill.paymentMethod ? ` · ${bill.paymentMethod}` : ''}` : `Vence em ${formatDate(bill.dueDate)}`,
+        detail:
+          bill.status === 'PAID'
+            ? `Pago em ${formatDate(bill.paidAt)}${bill.paymentMethod ? ` · ${bill.paymentMethod}` : ''}${
+                bill.refundedAmount ? ` · ${formatMoney(bill.refundedAmount)} voltou${bill.refundedAt ? ` em ${formatDate(bill.refundedAt)}` : ''}` : ''
+              }`
+            : `Vence em ${formatDate(bill.dueDate)}`,
         amount: bill.amount,
         documentId: bill.receiptDocumentId,
         badge: <BillBadge bill={bill} />,

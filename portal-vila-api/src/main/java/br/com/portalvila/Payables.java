@@ -525,6 +525,15 @@ class PayableService {
         return saved;
     }
 
+    /** What came back of the Pix that paid this bill (the receiver gave it back); null when nothing did. */
+    BigDecimal refunded(Long payableId) {
+        BigDecimal total = pixTransfers.findByPayableId(payableId).stream()
+            .map(transfer -> transfer.refundedAmount)
+            .filter(java.util.Objects::nonNull)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return total.signum() > 0 ? total : null;
+    }
+
     /** The active supplier that already has this key (written the way Asaas takes it), if any. */
     java.util.Optional<Supplier> supplierWithKey(String pixKey, String pixKeyType) {
         return suppliers.findAllByOrderByNameAsc().stream()
@@ -633,6 +642,18 @@ class PayableService {
             bills.addAll(payables.findByBudgetId(budget.id));
         }
         paid.forEach(expense -> spent.put(expense.id, expense.amount));
+        // A Pix that came back did not take that money from the job: what was given back does not count as spent.
+        // (A bill of a service and of its budget is listed twice; it gives back once.)
+        bills.stream()
+            .filter(bill -> bill.expenseId != null && spent.containsKey(bill.expenseId))
+            .collect(java.util.stream.Collectors.toMap(bill -> bill.id, bill -> bill, (a, b) -> a))
+            .values()
+            .forEach(bill -> {
+                BigDecimal back = refunded(bill.id);
+                if (back != null) {
+                    spent.put(bill.expenseId, spent.get(bill.expenseId).subtract(back).max(BigDecimal.ZERO));
+                }
+            });
         bills.stream()
             .filter(bill -> !bill.id.equals(billId) && (Payable.PENDING_APPROVAL.equals(bill.status) || Payable.APPROVED.equals(bill.status)))
             .forEach(bill -> pending.put(bill.id, bill.amount));
@@ -764,7 +785,9 @@ class PayableService {
             canPay && Payable.PENDING_APPROVAL.equals(payable.status) && !me.email.equalsIgnoreCase(payable.createdBy),
             pix == null ? null : pix.awaitingAuthorization && PixTransfer.IN_FLIGHT.contains(pix.status) ? PayableView.AWAITING_AUTHORIZATION : pix.status,
             pix == null ? null : pix.failReason,
-            pix == null ? null : pix.kind
+            pix == null ? null : pix.kind,
+            refunded(payable.id),
+            pix == null ? null : pix.refundedAt
         );
     }
 

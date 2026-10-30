@@ -68,6 +68,9 @@ class PixTransfersTest {
     private static final Map<String, String> statuses = new ConcurrentHashMap<>();
     /** Transfers Asaas holds until someone types the account's token. */
     private static final java.util.Set<String> unauthorized = ConcurrentHashMap.newKeySet();
+    /** Pix refunds the fake lists: money given back for Pix sent here, and money this account gave back. */
+    private static final List<String> refunds = new CopyOnWriteArrayList<>();
+    private static final List<String> givenBack = new CopyOnWriteArrayList<>();
     private static final ObjectMapper READER = new ObjectMapper();
     /** The "copia e cola" codes the fake knows, and what Asaas reads in each. */
     private static final Map<String, String> codes = Map.of(
@@ -111,9 +114,14 @@ class PixTransfersTest {
             } else if (path.startsWith("/transfers/") && method.equals("GET")) {
                 String id = path.substring("/transfers/".length());
                 String status = statuses.getOrDefault(id, "PENDING");
-                String receipt = status.equals("DONE") ? ",\"transactionReceiptUrl\":\"https://www.asaas.com/comprovantes/" + id + "\",\"effectiveDate\":\"" + LocalDate.now() + "\"" : "";
+                String receipt = status.equals("DONE") ? ",\"transactionReceiptUrl\":\"https://www.asaas.com/comprovantes/" + id + "\",\"effectiveDate\":\"" + LocalDate.now()
+                    + "\",\"endToEndIdentifier\":\"E2E" + id + "\"" : "";
                 String reason = status.equals("FAILED") ? ",\"failReason\":\"Chave Pix não encontrada\"" : "";
                 answer(exchange, 200, "{\"id\":\"" + id + "\",\"status\":\"" + status + "\",\"authorized\":" + !unauthorized.contains(id) + receipt + reason + "}");
+            } else if (path.equals("/pix/transactions") && method.equals("GET")) {
+                String query = exchange.getRequestURI().getQuery();
+                List<String> listed = query.contains("type=DEBIT_REFUND") ? refunds : query.contains("type=CREDIT_REFUND") ? givenBack : List.of();
+                answer(exchange, 200, "{\"hasMore\":false,\"data\":[" + String.join(",", listed) + "]}");
             } else if (path.equals("/pix/addressKeys/external") && method.equals("GET")) {
                 String query = exchange.getRequestURI().getQuery();
                 if (query.contains("key=21987650000") && query.contains("type=PHONE")) {
@@ -183,6 +191,10 @@ class PixTransfersTest {
     @Autowired HouseRepository houses;
     @Autowired ResidentRepository residents;
     @Autowired PixTransferService pix;
+    @Autowired BudgetRepository budgets;
+    @Autowired ServiceOrderRepository services;
+    @Autowired DirectReceiptRepository directReceipts;
+    @Autowired FinancialService financial;
     @MockBean PushService push;
 
     private final List<Runnable> cleanup = new ArrayList<>();
@@ -198,6 +210,8 @@ class PixTransfersTest {
         calls.clear();
         statuses.clear();
         unauthorized.clear();
+        refunds.clear();
+        givenBack.clear();
         if (!condominiums.existsById(TenantContext.VILA)) {
             jdbc.update("insert into condominiums(id, name, slug, status, created_at) values (?, 'Vila', ?, 'ACTIVE', current_timestamp)",
                 TenantContext.VILA, "vila-" + UUID.randomUUID());
@@ -215,6 +229,9 @@ class PixTransfersTest {
                 transfers.deleteAll();
                 payables.deleteAll();
                 expenses.deleteAll();
+                directReceipts.deleteAll();
+                services.deleteAll();
+                budgets.deleteAll();
                 documents.deleteAll();
                 suppliers.deleteAll();
                 residents.deleteAll();
@@ -644,6 +661,136 @@ class PixTransfersTest {
         statuses.put(mariaTransfer, "FAILED");
         TenantContext.callAs(jardim, pix::refreshInFlight);
         assertThat(TenantContext.callAs(jardim, () -> payables.findById(mariaBill).orElseThrow().status)).isEqualTo(Payable.CANCELLED);
+    }
+
+    /** A refund as Asaas lists it: its own id and value, and the Pix it gives money back for. */
+    private static String refund(String id, String status, String value, String originalId, String endToEndId) {
+        return "{\"id\":\"" + id + "\",\"status\":\"" + status + "\",\"value\":" + value + ",\"effectiveDate\":\"" + LocalDate.now() + " 09:30:00\","
+            + "\"transactionReceiptUrl\":\"https://www.asaas.com/comprovantes/" + id + "\",\"originalTransaction\":{\"id\":\"" + originalId + "\","
+            + "\"endToEndIdentifier\":" + (endToEndId == null ? "null" : "\"" + endToEndId + "\"") + "}}";
+    }
+
+    private JsonNode listed(long billId) throws Exception {
+        for (JsonNode item : call(get("/api/payables"), admin, "", 200)) {
+            if (item.get("id").asLong() == billId) {
+                return item;
+            }
+        }
+        throw new AssertionError("conta " + billId + " fora da lista");
+    }
+
+    @Test
+    void aPixThatComesBackEntersTheCashBoxAndTheBillSaysSo() throws Exception {
+        long billId = bill("Pintura do muro", "800", withKey);
+        payByPix(billId, admin, PASSWORD, 200);
+        String transferId = TenantContext.callAs(jardim, () -> transfers.findFirstByPayableIdOrderByIdDesc(billId).orElseThrow().gatewayTransferId);
+        statuses.put(transferId, "DONE");
+        TenantContext.callAs(jardim, pix::refreshInFlight);
+        Long expenseId = TenantContext.callAs(jardim, () -> payables.findById(billId).orElseThrow().expenseId);
+
+        // Refunds of other Pix, one still on its way, and money this account gave back are not this bill's.
+        refunds.add(refund("ref_outro", "DONE", "40", "tra_999", "E2Eoutro"));
+        refunds.add(refund("ref_andando", "REQUESTED", "300", transferId, "E2E" + transferId));
+        givenBack.add(refund("ref_devolvido", "DONE", "-25", "pay_1", "E2E" + transferId + "x"));
+        assertThat(TenantContext.callAs(jardim, pix::refreshRefunds)).isZero();
+        assertThat(listed(billId).get("refundedAmount").isNull()).isTrue();
+
+        // Part of it came back: an income "Estorno do Pix" in the cash box, seen by everyone; the bill and its expense stay.
+        refunds.add(refund("ref_1", "DONE", "300", transferId, "E2E" + transferId));
+        assertThat(TenantContext.callAs(jardim, pix::refreshRefunds)).isEqualTo(1);
+        JsonNode bill = listed(billId);
+        assertThat(bill.get("status").asText()).isEqualTo(Payable.PAID);
+        assertThat(bill.get("refundedAmount").decimalValue()).isEqualByComparingTo("300");
+        assertThat(bill.get("refundedAt").isNull()).isFalse();
+        DirectReceipt income = TenantContext.callAs(jardim, () -> directReceipts.findByGatewayAndGatewayPaymentId("ASAAS", "ref_1").orElseThrow());
+        assertThat(income.category).isEqualTo(DirectReceipt.PIX_REFUND);
+        assertThat(income.description).isEqualTo("Estorno do Pix: Pintura do muro");
+        assertThat(income.amount).isEqualByComparingTo("300");
+        assertThat(income.receiptUrl).isEqualTo("https://www.asaas.com/comprovantes/ref_1");
+        Expense expense = TenantContext.callAs(jardim, () -> expenses.findById(expenseId).orElseThrow());
+        assertThat(expense.amount).isEqualByComparingTo("800");
+        assertThat(expense.notes).contains("Estornado em").contains("R$ 300,00");
+        List<MovementResponse> movements = TenantContext.callAs(jardim, () -> financial.dashboard(java.time.YearMonth.now().toString()).movements());
+        assertThat(movements).anySatisfy(movement -> {
+            assertThat(movement.type()).isEqualTo(DirectReceipt.PIX_REFUND);
+            assertThat(movement.description()).isEqualTo("Estorno do Pix: Pintura do muro");
+            assertThat(movement.amount()).isEqualByComparingTo("300");
+        });
+
+        // Asking again takes nothing twice; the rest coming back later is taken too, and then the Pix is no longer watched.
+        assertThat(TenantContext.callAs(jardim, pix::refreshRefunds)).isZero();
+        refunds.add(refund("ref_2", "DONE", "500", transferId, "E2E" + transferId));
+        assertThat(TenantContext.callAs(jardim, pix::refreshRefunds)).isEqualTo(1);
+        assertThat(listed(billId).get("refundedAmount").decimalValue()).isEqualByComparingTo("800");
+        long asked = calls.stream().filter(call -> call.path().equals("/pix/transactions")).count();
+        assertThat(TenantContext.callAs(jardim, pix::refreshRefunds)).isZero();
+        assertThat(calls.stream().filter(call -> call.path().equals("/pix/transactions")).count()).isEqualTo(asked);
+        assertThat(TenantContext.callAs(jardim, () -> directReceipts.findAll().stream()
+            .filter(found -> DirectReceipt.PIX_REFUND.equals(found.category)).count())).isEqualTo(2);
+    }
+
+    @Test
+    void aPaidCodeThatComesBackIsFoundByItsAsaasId() throws Exception {
+        long billId = payCode("CODIGO-MERCADO", "null", PASSWORD, 200).get("id").asLong();
+        String transactionId = TenantContext.callAs(jardim, () -> transfers.findFirstByPayableIdOrderByIdDesc(billId).orElseThrow().gatewayTransferId);
+        statuses.put(transactionId, "DONE");
+        TenantContext.callAs(jardim, pix::refreshInFlight);
+        refunds.add(refund("ref_codigo", "DONE", "189.90", transactionId, null));
+        assertThat(TenantContext.callAs(jardim, pix::refreshRefunds)).isEqualTo(1);
+        assertThat(listed(billId).get("refundedAmount").decimalValue()).isEqualByComparingTo("189.90");
+    }
+
+    @Test
+    void aPixSettledByANoticeWithoutItsIdIsStillFound() throws Exception {
+        long billId = bill("Jardinagem", "300", withKey);
+        payByPix(billId, admin, PASSWORD, 200);
+        String transferId = TenantContext.callAs(jardim, () -> transfers.findFirstByPayableIdOrderByIdDesc(billId).orElseThrow().gatewayTransferId);
+        mvc.perform(post("/api/webhooks/asaas/c/" + noticeRoute).header("asaas-access-token", "token-dos-avisos").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"id\":\"evt_" + UUID.randomUUID() + "\",\"event\":\"TRANSFER_DONE\",\"transfer\":{\"id\":\"" + transferId
+                + "\",\"status\":\"DONE\",\"effectiveDate\":\"" + LocalDate.now() + "\"}}"))
+            .andExpect(status().isOk());
+        assertThat(TenantContext.callAs(jardim, () -> transfers.findByGatewayTransferId(transferId).orElseThrow().endToEndId)).isNull();
+
+        // The refund names only the end-to-end id: Asaas is asked for it once, and the refund is found.
+        statuses.put(transferId, "DONE");
+        refunds.add(refund("ref_aviso", "DONE", "300", "outro-id", "E2E" + transferId));
+        assertThat(TenantContext.callAs(jardim, pix::refreshRefunds)).isEqualTo(1);
+        assertThat(TenantContext.callAs(jardim, () -> transfers.findByGatewayTransferId(transferId).orElseThrow().endToEndId)).isEqualTo("E2E" + transferId);
+    }
+
+    @Test
+    void whatCameBackDoesNotCountAgainstTheApprovedBudget() throws Exception {
+        Long serviceId = TenantContext.callAs(jardim, () -> {
+            Budget budget = new Budget();
+            budget.title = "Portão novo";
+            budget.supplier = "Pinta Bem";
+            budget.amount = new BigDecimal("1000.00");
+            budget.status = "APROVADO";
+            budget = budgets.save(budget);
+            ServiceOrder service = new ServiceOrder();
+            service.title = "Troca do portão";
+            service.description = "Portão da entrada";
+            service.approvedBudgetId = budget.id;
+            service = services.save(service);
+            budget.serviceId = service.id;
+            budgets.save(budget);
+            return service.id;
+        });
+        String forService = "{\"description\":\"Portão - pagamento\",\"amount\":1000,\"dueDate\":\"" + LocalDate.now().plusDays(5)
+            + "\",\"supplierId\":" + withKey + ",\"serviceOrderId\":" + serviceId + "}";
+        long billId = call(post("/api/payables"), admin, forService, 200).get(0).get("id").asLong();
+        payByPix(billId, admin, PASSWORD, 200);
+        String transferId = TenantContext.callAs(jardim, () -> transfers.findFirstByPayableIdOrderByIdDesc(billId).orElseThrow().gatewayTransferId);
+        statuses.put(transferId, "DONE");
+        TenantContext.callAs(jardim, pix::refreshInFlight);
+
+        // Paid in full: another bill of the same value goes beyond the budget.
+        assertThat(call(post("/api/payables"), admin, forService, 409).get("error").asText()).contains("orçamento aprovado");
+
+        // The Pix came back: that money was not spent on the job, and the bill can be paid again.
+        refunds.add(refund("ref_portao", "DONE", "1000", transferId, "E2E" + transferId));
+        assertThat(TenantContext.callAs(jardim, pix::refreshRefunds)).isEqualTo(1);
+        call(post("/api/payables"), admin, forService, 200);
     }
 
     @Test

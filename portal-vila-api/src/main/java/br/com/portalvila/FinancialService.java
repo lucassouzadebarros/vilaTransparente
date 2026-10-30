@@ -114,14 +114,18 @@ class FinancialService {
                 e.amount.negate(),
                 "PAID"
             )));
-            allDirectReceipts.forEach(receipt -> movements.add(new MovementResponse(
-                receipt.receivedAt.toLocalDate(),
-                "RECEBIMENTO_DIRETO",
-                // The payer's name is for the admin only; houses see that the money came in, not from whom.
-                includeAllContributionMovements ? receipt.description : "Recebimento direto",
-                receipt.amount,
-                receipt.status
-            )));
+            allDirectReceipts.forEach(receipt -> {
+                // A Pix the Portal sent that came back is seen by everyone, like the expense it gives back for.
+                boolean refund = DirectReceipt.PIX_REFUND.equals(receipt.category);
+                movements.add(new MovementResponse(
+                    receipt.receivedAt.toLocalDate(),
+                    refund ? DirectReceipt.PIX_REFUND : "RECEBIMENTO_DIRETO",
+                    // The payer's name is for the admin only; houses see that the money came in, not from whom.
+                    includeAllContributionMovements || refund ? receipt.description : "Recebimento direto",
+                    receipt.amount,
+                    receipt.status
+                ));
+            });
         }
         movements.sort(Comparator.comparing(MovementResponse::date).reversed());
 

@@ -489,7 +489,10 @@ record PayableView(
     String pixStatus,
     String pixFailReason,
     /** KEY (to the supplier's key) or CODE (a "copia e cola" code); null if no Pix. */
-    String pixKind
+    String pixKind,
+    /** What came back of its Pix (the receiver gave it back, in full or in part) and when; null if nothing did. */
+    BigDecimal refundedAmount,
+    LocalDateTime refundedAt
 ) {
     static final String AWAITING_AUTHORIZATION = "AWAITING_AUTHORIZATION";
 }

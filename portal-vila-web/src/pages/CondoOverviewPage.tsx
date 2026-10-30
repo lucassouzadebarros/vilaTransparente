@@ -8,7 +8,7 @@ import { api, RESIDENTS_APP_URL } from '@/lib/api';
 import { useSession } from '@/lib/auth';
 import { cn, currentMonth, formatDate, formatMoney, formatNumber, monthName, plural, useDocumentTitle } from '@/lib/utils';
 
-const INFLOWS = new Set(['PIX_ASAAS', 'PAGAMENTO_MANUAL', 'RECEBIMENTO_DIRETO']);
+const INFLOWS = new Set(['PIX_ASAAS', 'PAGAMENTO_MANUAL', 'RECEBIMENTO_DIRETO', 'ESTORNO_PIX']);
 
 function Kpi({ icon: Icon, label, value, detail, tone = 'brand' }: { icon: typeof Wallet; label: string; value: ReactNode; detail?: ReactNode; tone?: 'brand' | 'ok' | 'warn' }) {
   const tones = { brand: 'bg-brand-soft text-brand', ok: 'bg-ok-soft text-ok', warn: 'bg-warn-soft text-warn' };

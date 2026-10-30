@@ -26,7 +26,8 @@ const tabLabels: Record<Tab, string> = {
 const originLabels: Record<string, string> = {
   PIX_ASAAS: 'Contribuição via Pix',
   PAGAMENTO_MANUAL: 'Pagamento manual',
-  RECEBIMENTO_DIRETO: 'Recebimento direto'
+  RECEBIMENTO_DIRETO: 'Recebimento direto',
+  ESTORNO_PIX: 'Estorno de Pix'
 };
 
 export function CashBoxScreen() {

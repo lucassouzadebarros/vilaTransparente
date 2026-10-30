@@ -34,6 +34,7 @@ interface PayableRepository extends JpaRepository<Payable, Long> {
 interface PixTransferRepository extends JpaRepository<PixTransfer, Long> {
     Optional<PixTransfer> findByGatewayTransferId(String gatewayTransferId);
     Optional<PixTransfer> findFirstByPayableIdOrderByIdDesc(Long payableId);
+    List<PixTransfer> findByPayableId(Long payableId);
     List<PixTransfer> findByStatusIn(java.util.Collection<String> statuses);
     List<PixTransfer> findByRequestedAtGreaterThanEqual(java.time.LocalDateTime since);
     boolean existsByPayableIdAndStatusIn(Long payableId, java.util.Collection<String> statuses);

@@ -30,6 +30,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -158,6 +159,9 @@ class PixTransferService {
     private final SecretBox secrets;
     private final AuditService audit;
     private final PushService push;
+    private final DirectReceiptRepository directReceipts;
+    private final ExpenseRepository expenses;
+    private final DashboardEventService dashboardEvents;
     private final TransactionTemplate transaction;
     private final String publicApiUrl;
     private final SecureRandom random = new SecureRandom();
@@ -178,9 +182,15 @@ class PixTransferService {
         SecretBox secrets,
         AuditService audit,
         PushService push,
+        DirectReceiptRepository directReceipts,
+        ExpenseRepository expenses,
+        DashboardEventService dashboardEvents,
         PlatformTransactionManager transactionManager,
         @Value("${portal.public-api-url:http://localhost:8080}") String publicApiUrl
     ) {
+        this.directReceipts = directReceipts;
+        this.expenses = expenses;
+        this.dashboardEvents = dashboardEvents;
         this.transfers = transfers;
         this.validations = validations;
         this.payables = payables;
@@ -710,6 +720,126 @@ class PixTransferService {
         }
     }
 
+    // ---- A Pix that came back
+
+    /** How long after it was sent a Pix can still come back: the Central Bank's term for returns is 90 days. */
+    static final int REFUND_WINDOW_DAYS = 120;
+
+    /**
+     * Asaas sends no notice when a Pix sent here comes back, so its refunds are read and matched to the Pix done here by
+     * the Central Bank's end-to-end id (or Asaas's id of the Pix). Each refund is taken once.
+     */
+    int refreshRefunds() {
+        LocalDateTime since = LocalDateTime.now(ZONE).minusDays(REFUND_WINDOW_DAYS);
+        List<PixTransfer> done = transfers.findByStatusIn(Set.of(PixTransfer.DONE)).stream()
+            .filter(transfer -> !transfer.requestedAt.isBefore(since))
+            .filter(transfer -> transfer.refundedAmount == null || transfer.refundedAmount.compareTo(transfer.amount) < 0)
+            .toList();
+        if (done.isEmpty()) {
+            return 0;
+        }
+        List<GatewayRefund> received = gateway.listPixRefunds().stream()
+            .filter(refund -> refund.id() != null && refund.value() != null && refund.value().signum() > 0 && PixTransfer.DONE.equals(refund.status()))
+            .toList();
+        if (received.stream().anyMatch(refund -> original(done, refund) == null)) {
+            fillEndToEndIds(done);
+        }
+        int taken = 0;
+        for (GatewayRefund refund : received) {
+            PixTransfer original = original(done, refund);
+            if (original == null) {
+                continue;
+            }
+            Boolean took = transaction.execute(status -> takeRefund(original.id, refund));
+            if (Boolean.TRUE.equals(took)) {
+                taken++;
+            }
+        }
+        if (taken > 0) {
+            dashboardEvents.publishDashboardChanged();
+        }
+        return taken;
+    }
+
+    /** The Pix sent here a refund gives back for: by the Central Bank's end-to-end id, or by Asaas's id of the Pix. */
+    private static PixTransfer original(List<PixTransfer> done, GatewayRefund refund) {
+        return done.stream()
+            .filter(transfer -> refund.originalEndToEndId() != null && refund.originalEndToEndId().equals(transfer.endToEndId)
+                || refund.originalId() != null && refund.originalId().equals(transfer.gatewayTransferId))
+            .findFirst().orElse(null);
+    }
+
+    /** A Pix settled without its end-to-end id (a notice that did not bring it) asks Asaas for it, so its refund can be found. */
+    private void fillEndToEndIds(List<PixTransfer> done) {
+        for (PixTransfer transfer : done) {
+            if (transfer.endToEndId != null || transfer.gatewayTransferId == null) {
+                continue;
+            }
+            try {
+                GatewayTransfer answer = PixTransfer.CODE.equals(transfer.kind)
+                    ? gateway.getPixTransaction(transfer.gatewayTransferId)
+                    : gateway.getTransfer(transfer.gatewayTransferId);
+                if (answer == null || answer.endToEndId() == null) {
+                    continue;
+                }
+                transfer.endToEndId = answer.endToEndId();
+                transaction.executeWithoutResult(status -> transfers.findById(transfer.id).ifPresent(saved -> {
+                    saved.endToEndId = answer.endToEndId();
+                    transfers.save(saved);
+                }));
+            } catch (RuntimeException ex) {
+                log.warn("Nao consegui ler o identificador do Pix {}: {}", transfer.gatewayTransferId, ex.getMessage());
+            }
+        }
+    }
+
+    /**
+     * The money that came back enters the cash box (a receipt "Estorno do Pix", seen by everyone, like the expense it
+     * gives back for); the bill and its expense stay, and the bill says how much came back. Taken once per refund.
+     */
+    private boolean takeRefund(Long transferId, GatewayRefund refund) {
+        if (directReceipts.findByGatewayAndGatewayPaymentId("ASAAS", refund.id()).isPresent()) {
+            return false;
+        }
+        PixTransfer transfer = transfers.findById(transferId).orElse(null);
+        if (transfer == null) {
+            return false;
+        }
+        Payable bill = payables.findById(transfer.payableId).orElse(null);
+        String what = bill == null ? "Pix enviado pelo Portal" : bill.description;
+        LocalDate day = refund.effectiveDate() == null || refund.effectiveDate().isAfter(today()) ? today() : refund.effectiveDate();
+
+        DirectReceipt receipt = new DirectReceipt();
+        receipt.gatewayPaymentId = refund.id();
+        receipt.externalReference = "PIX-" + transfer.id;
+        receipt.category = DirectReceipt.PIX_REFUND;
+        receipt.description = trimTo("Estorno do Pix: " + what, 200);
+        receipt.amount = refund.value();
+        receipt.referenceMonth = java.time.YearMonth.from(day).toString();
+        receipt.receivedAt = day.atTime(LocalDateTime.now(ZONE).toLocalTime());
+        receipt.status = "PAID";
+        receipt.receiptUrl = refund.receiptUrl();
+        directReceipts.save(receipt);
+
+        transfer.refundedAmount = (transfer.refundedAmount == null ? BigDecimal.ZERO : transfer.refundedAmount).add(refund.value());
+        transfer.refundedAt = LocalDateTime.now();
+        transfer.updatedAt = LocalDateTime.now();
+        transfers.save(transfer);
+
+        if (bill != null && bill.expenseId != null) {
+            expenses.findById(bill.expenseId).ifPresent(expense -> {
+                String note = "Estornado em " + day.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) + ": "
+                    + AuditService.money(refund.value()) + " voltou para a conta do condomínio.";
+                expense.notes = expense.notes == null || expense.notes.isBlank() ? note : expense.notes + "\n" + note;
+                expenses.save(expense);
+            });
+        }
+        audit.record("PIX_REFUNDED", "PAYABLE", transfer.payableId, what + " - " + AuditService.money(refund.value())
+            + " voltou (estorno do Pix " + (transfer.gatewayTransferId == null ? transfer.id : transfer.gatewayTransferId) + ")");
+        notify(transfer, "Pix estornado", what + ": " + AuditService.money(refund.value()) + " voltou para a conta do condomínio.");
+        return true;
+    }
+
     private void notify(PixTransfer transfer, String title, String body) {
         users.findByEmailIgnoreCase(transfer.requestedBy)
             .ifPresent(user -> push.notifyUser(user.id, title, body, Map.of("type", "PAYABLE", "id", transfer.payableId)));
@@ -848,8 +978,12 @@ class PixTransferSchedule {
         this.credentials = credentials;
     }
 
+    private int runs;
+
+    /** Every 2 minutes the Pix on their way; every 10 minutes (and on the first run) the Pix that came back. */
     @Scheduled(fixedDelay = 120_000, initialDelay = 60_000)
     void refresh() {
+        boolean refunds = runs++ % 5 == 0;
         for (Condominium condominium : condominiums.findByStatusOrderByIdAsc(Condominium.ACTIVE)) {
             if (!credentials.connected(condominium.id)) {
                 continue;
@@ -861,6 +995,16 @@ class PixTransferSchedule {
                 }
             } catch (RuntimeException e) {
                 log.warn("Falha ao consultar os Pix do condominio {}: {}", condominium.id, e.getMessage());
+            }
+            if (refunds) {
+                try {
+                    int returned = TenantContext.callAs(condominium.id, pix::refreshRefunds);
+                    if (returned > 0) {
+                        log.info("{} estorno(s) de Pix registrados no condominio {}", returned, condominium.id);
+                    }
+                } catch (RuntimeException e) {
+                    log.warn("Falha ao consultar os estornos de Pix do condominio {}: {}", condominium.id, e.getMessage());
+                }
             }
         }
     }
