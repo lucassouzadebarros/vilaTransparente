@@ -35,6 +35,7 @@ const sum = (items: Payable[]) => items.reduce((total, item) => total + Number(i
 
 /** The status word of a bill: an approved one not yet paid is "A pagar", or "Vencida" past its due date. */
 function statusKey(payable: Payable) {
+  if (payable.status === 'PAID' && payable.refundedAmount) return Number(payable.refundedAmount) < Number(payable.amount) ? 'ESTORNADA EM PARTE' : 'ESTORNADA';
   if (payable.status === 'PAID') return 'PAGA';
   if (payable.status === 'CANCELLED') return 'CANCELADA';
   if (payable.status === 'PENDING_APPROVAL') return 'PENDING_APPROVAL';
@@ -889,6 +890,11 @@ export function PayablesScreen() {
             <Text style={styles.small}>Pix a caminho pelo Asaas: a baixa e o comprovante entram sozinhos quando ele confirmar.</Text>
           ) : isOpen(payable) && (payable.pixStatus === 'FAILED' || payable.pixStatus === 'CANCELLED') ? (
             <Text style={styles.danger}>O último Pix não saiu{payable.pixFailReason ? `: ${payable.pixFailReason}` : ''}.</Text>
+          ) : null}
+          {payable.refundedAmount ? (
+            <Text style={styles.warn}>
+              Pix estornado: {formatMoneyBR(payable.refundedAmount)} voltou para a conta{payable.refundedAt ? ` em ${formatDateBR(payable.refundedAt)}` : ''} e entrou no caixa.
+            </Text>
           ) : null}
 
           {payable.pixStatus && PIX_IN_FLIGHT.includes(payable.pixStatus) ? null : paying === payable.id ? (

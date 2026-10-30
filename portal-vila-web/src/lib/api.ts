@@ -92,6 +92,9 @@ export type Payable = {
   pixFailReason: string | null;
   /** KEY: to the supplier's key; CODE: a "copia e cola" code (supplierName is then who the code pays). */
   pixKind: 'KEY' | 'CODE' | null;
+  /** What came back of the Pix that paid it (the receiver gave it back; it entered the cash box as "Estorno do Pix"). */
+  refundedAmount: number | null;
+  refundedAt: string | null;
 };
 
 /** AWAITING_AUTHORIZATION: Asaas holds it until someone types the account's token (SMS or app). */

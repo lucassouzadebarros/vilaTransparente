@@ -12,6 +12,9 @@ import org.hibernate.annotations.TenantId;
     uniqueConstraints = @UniqueConstraint(name = "uk_direct_receipt_gateway_payment", columnNames = {"gateway", "gateway_payment_id"})
 )
 public class DirectReceipt {
+    /** Money a receiver gave back for a Pix the Portal sent: an income like the others, named "Estorno do Pix" for everyone. */
+    public static final String PIX_REFUND = "ESTORNO_PIX";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     public Long id;

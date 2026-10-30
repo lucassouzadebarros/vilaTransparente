@@ -78,6 +78,9 @@ export const methods: { value: PaymentMethod; label: string }[] = [
 ];
 
 function StatusBadge({ payable }: { payable: Payable }) {
+  if (payable.status === 'PAID' && payable.refundedAmount) {
+    return <Badge tone="warn">{payable.refundedAmount < payable.amount ? 'Estornada em parte' : 'Estornada'}</Badge>;
+  }
   if (payable.status === 'PAID') return <Badge tone="ok">Paga</Badge>;
   if (payable.status === 'CANCELLED') return <Badge>Cancelada</Badge>;
   if (payable.status === 'PENDING_APPROVAL') return <Badge tone="warn">Aguardando aprovação</Badge>;
@@ -109,15 +112,17 @@ function addMonths(iso: string, months: number) {
 }
 
 /**
- * What a service has already taken: its bills not cancelled, and expenses booked without a bill (finishing it). The
- * cap is what the units approved plus 10%; with no budget, the limit without a vote.
+ * What a service has already taken: its bills not cancelled, and expenses booked without a bill (finishing it). A Pix
+ * that came back did not take that money. The cap is what the units approved plus 10%; with no budget, the limit
+ * without a vote.
  */
 export function serviceSpending(service: ServiceOrder, bills: Payable[], spent: ExpenseRecord[], budget: Budget | null, limit: number | null) {
   const own = bills.filter((bill) => bill.serviceOrderId === service.id && bill.status !== 'CANCELLED');
   const billed = new Set(own.map((bill) => bill.expenseId).filter(Boolean));
   const loose = spent.filter((expense) => expense.serviceOrderId === service.id && !billed.has(expense.id));
-  const paid = own.filter((bill) => bill.status === 'PAID').reduce((sum, bill) => sum + Number(bill.amount), 0) + loose.reduce((sum, expense) => sum + Number(expense.amount), 0);
-  const committed = own.reduce((sum, bill) => sum + Number(bill.amount), 0) + loose.reduce((sum, expense) => sum + Number(expense.amount), 0);
+  const taken = (bill: Payable) => Math.max(0, Number(bill.amount) - Number(bill.refundedAmount ?? 0));
+  const paid = own.filter((bill) => bill.status === 'PAID').reduce((sum, bill) => sum + taken(bill), 0) + loose.reduce((sum, expense) => sum + Number(expense.amount), 0);
+  const committed = own.reduce((sum, bill) => sum + taken(bill), 0) + loose.reduce((sum, expense) => sum + Number(expense.amount), 0);
   const cap = budget ? Math.round(Number(budget.amount) * 110) / 100 : limit;
   return { bills: own, paid, committed, cap };
 }
@@ -1408,7 +1413,13 @@ export function PayablesPage() {
                           )}
                           {payable.pixStatus === 'AWAITING_AUTHORIZATION' && (
                             <p className="text-xs text-warn">O Asaas espera a autorização com o token da conta (SMS ou app do Asaas). Depois, a baixa entra sozinha.</p>
-                          )}                        </td>
+                          )}
+                          {payable.refundedAmount && (
+                            <p className="text-xs text-warn">
+                              Pix estornado: {formatMoney(payable.refundedAmount)} voltou para a conta{payable.refundedAt ? ` em ${formatDate(payable.refundedAt)}` : ''} e entrou no caixa.
+                            </p>
+                          )}
+                        </td>
                         <td className="px-4 py-3.5 text-right font-medium tabular-nums">{formatMoney(payable.amount)}</td>
                         <td className="px-4 py-3.5">
                           <StatusBadge payable={payable} />

@@ -46,6 +46,28 @@ interface PixGatewayClient {
     GatewayTransfer getPixTransaction(String gatewayTransactionId);
     /** Who holds a Pix key (name, masked CPF/CNPJ, bank), asked before sending, as a bank app shows it. Nothing is paid. */
     PixKeyOwner lookupPixKey(String pixKey, String pixKeyType);
+    /** The Pix refunds of the account, each pointing to the Pix it gives money back for. Asaas sends no notice for them. */
+    List<GatewayRefund> listPixRefunds();
+}
+
+/**
+ * Money given back for a Pix: its own id and value, and the Pix it refers to (Asaas's id and the Central Bank's
+ * end-to-end id). Only DONE ones have reached the account.
+ */
+record GatewayRefund(String id, String status, BigDecimal value, LocalDate effectiveDate, String receiptUrl, String originalId, String originalEndToEndId) {
+    static GatewayRefund from(JsonNode node) {
+        JsonNode original = node.path("originalTransaction");
+        String effective = GatewayTransfer.text(node, "effectiveDate");
+        return new GatewayRefund(
+            GatewayTransfer.text(node, "id"),
+            GatewayTransfer.text(node, "status"),
+            node.hasNonNull("value") ? node.get("value").decimalValue().abs() : null,
+            effective == null || effective.length() < 10 ? null : LocalDate.parse(effective.substring(0, 10)),
+            GatewayTransfer.text(node, "transactionReceiptUrl"),
+            GatewayTransfer.text(original, "id"),
+            GatewayTransfer.text(original, "endToEndIdentifier")
+        );
+    }
 }
 
 /** The holder of a Pix key as the Pix directory tells it: the document comes masked ("***.202.745-**"). */
@@ -692,6 +714,20 @@ class AsaasPixGatewayClient implements PixGatewayClient {
         } catch (RuntimeException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Asaas: o gateway não respondeu dentro do tempo esperado.", ex);
         }
+    }
+
+    /**
+     * Both kinds of Pix refund: the one that gives back a Pix this account sent, and the one this account gives back. Only
+     * the first can point to a Pix sent here, so asking for both does no harm and does not depend on how Asaas names them.
+     */
+    @Override
+    public List<GatewayRefund> listPixRefunds() {
+        requireVila();
+        List<GatewayRefund> refunds = new ArrayList<>();
+        for (String type : List.of("DEBIT_REFUND", "CREDIT_REFUND")) {
+            fetchAllPages("/pix/transactions", Map.of("type", type)).stream().map(GatewayRefund::from).forEach(refunds::add);
+        }
+        return refunds;
     }
 
     @Override

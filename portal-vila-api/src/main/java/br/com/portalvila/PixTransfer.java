@@ -65,6 +65,10 @@ public class PixTransfer {
     @Column(nullable = false)
     public boolean ownBill;
 
+    /** What the receiver gave back of this Pix after it was done (in full or in part), and when the last part came back. */
+    public BigDecimal refundedAmount;
+    public LocalDateTime refundedAt;
+
     public String gatewayTransferId;
 
     @Column(nullable = false)
